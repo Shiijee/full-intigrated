@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Assign Classes | Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-admin">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                        <aside class="sidebar">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Admin') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="openChangePinModal()">
+                            <i class="fas fa-shield-alt"></i> Security PIN
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
+                <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
+                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
+                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
+                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
+                <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
+                <a href="{{ url_for('admin.attendance_analytics') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.attendance_analytics' else '' }}" data-tooltip="Attendance Analytics"><i class="fas fa-chart-pie"></i><span class="nav-item-text"> Attendance Analytics</span></a>
+                <a href="{{ url_for('admin.drop_requests') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.drop_requests' else '' }}" data-tooltip="Drop Requests"><i class="fas fa-user-minus"></i><span class="nav-item-text"> Drop Requests</span></a>
+                <a href="{{ url_for('admin.audit_logs') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.audit_logs' else '' }}" data-tooltip="Audit Logs"><i class="fas fa-clipboard-list"></i><span class="nav-item-text"> Audit Logs</span></a>
+            </nav>
+            <div class="sidebar-bottom-actions">
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Assign Classes</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="mb-8">
+                    <h1 class="auth-title">Class Assignments</h1>
+                    <p class="text-muted">Link teachers to their specific subjects and sections.</p>
+                </div>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                <form method="POST" action="{{ url_for('admin.assign_classes') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Select Teacher</label>
+                        <select name="utid" class="form-control" required>
+                            <option value="">-- Choose Teacher --</option>
+                            {% for t in teachers %}
+                                <option value="{{ t.utid }}">{{ t.first_name }} {{ t.middle_name }} {{ t.last_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Select Subject</label>
+                        <select name="subject_id" class="form-control" required>
+                            <option value="">-- Choose Subject --</option>
+                            {% for s in subjects %}
+                                <option value="{{ s.subject_id }}">{{ s.subject_code }} - {{ s.subject_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Section</label>
+                        <input type="text" name="section" class="form-control" placeholder="e.g. A" required>
+                    </div>
+                    <!-- Centered Assign Button -->
+                    <div style="grid-column: 1 / -1; display: flex; justify-content: center; margin-top: 1rem;">
+                        <button type="submit" class="btn btn-primary" style="height: 45px; min-width: 150px;"><i class="fas fa-plus"></i> Assign Class</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                <form method="GET" action="{{ url_for('admin.assign_classes') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Search Assignments</label>
+                        <input type="text" name="search" class="form-control" placeholder="Code, Subject, Teacher or Section..." value="{{ search }}">
+                    </div>
+                    <div class="flex gap-2" style="margin-bottom: 0;">
+                        <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <a href="{{ url_for('admin.assign_classes', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                            <i class="fas fa-rotate"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
+            
+
+            <div class="glass-panel" style="padding: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin: 0;">Active Class Assignments</h3>
+                    <a href="{{ url_for('admin.assign_classes', view='archived') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                        <i class="fas fa-archive"></i> Archived Assignments
+                    </a>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Teacher Name</th>
+                                <th class="hide-on-mobile">Subject Code</th>
+                                <th class="hide-on-mobile">Subject Name</th>
+                                <th class="hide-on-mobile">Section</th>
+                                <th class="hide-on-desktop">Class Details</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in assignments %}
+                             <tr>
+                                <td data-label="Teacher Name"><strong>{{ a.first_name }} {{ a.last_name }}</strong></td>
+                                <td class="hide-on-mobile" data-label="Subject Code"><span class="badge badge-primary">{{ a.subject_code }}</span></td>
+                                <td class="hide-on-mobile" data-label="Subject Name">{{ a.subject_name }}</td>
+                                <td class="hide-on-mobile" data-label="Section"><strong>{{ a.section }}</strong></td>
+                                <td class="hide-on-desktop" data-label="Class Details" style="font-size: 0.9rem;">
+                                    <div style="font-weight: 600; margin-bottom: 0.25rem;">{{ a.subject_code }} • Sec: {{ a.section }}</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">{{ a.subject_name }}</div>
+                                    <div style="font-size: 0.8rem; color: var(--primary);">👨‍🏫 {{ a.first_name }} {{ a.last_name }}</div>
+                                </td>
+                                <td class="action-cell" data-label="Actions">
+                                    <button type="button" class="btn btn-warning btn-sm" style="margin-right: 0.5rem;" onclick="archiveAssignment('{{ a.assignment_id }}', '{{ a.subject_code }}')">
+                                        <i class="fas fa-archive"></i> <span class="btn-text">Archive</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">No classes assigned yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div> <!-- End main-content-inners -->
+        </main>
+    </div>
+
+
+        <nav class="bottom-nav">
+        <a href="{{ url_for('admin.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('admin.manage_students') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_students' %}active{% endif %}">
+            <i class="fas fa-user-graduate"></i>
+            <span>Students</span>
+        </a>
+        <a href="{{ url_for('admin.manage_teachers') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_teachers' %}active{% endif %}">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>Faculty</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Logs</span>
+        </a>
+    </nav>
+
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script>
+    function archiveAssignment(assignmentId, subjectCode) {
+        if (confirm(`Archive this assignment for ${subjectCode}?`)) {
+            // Send archive request to backend
+            fetch(`/admin/archive_assignment/${assignmentId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload or update the table
+                    location.reload();
+                } else {
+                    alert('Error archiving assignment: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error archiving assignment');
+            });
+        }
+    }
+</script>
+</body>
+</html>

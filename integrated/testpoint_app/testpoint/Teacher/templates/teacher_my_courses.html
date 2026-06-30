@@ -1,0 +1,177 @@
+{% extends "teacher_base.html" %}
+
+{% block title %}My Courses | TestPoint Instructor{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Card Lift & Identity */
+    .course-card {
+        border: 1px solid var(--tp-teacher-border) !important;
+        border-radius: var(--tp-teacher-radius) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .course-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(217, 48, 37, 0.08) !important;
+        border-color: var(--tp-teacher-accent-lt) !important;
+    }
+
+    /* Meta Styling */
+    .code-pill {
+        font-size: 10px;
+        letter-spacing: 1px;
+        font-weight: 800;
+        padding: 4px 10px;
+        border-radius: 6px;
+        text-transform: uppercase;
+    }
+
+    .bg-code-course { background: #f1f5f9; color: #475569; }
+    .bg-code-class { background: var(--tp-teacher-accent-lt); color: var(--tp-teacher-accent); }
+
+    /* Search Component */
+    .search-wrapper {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid var(--tp-teacher-border);
+        transition: all 0.2s;
+    }
+
+    .search-wrapper:focus-within {
+        border-color: var(--tp-teacher-accent);
+        box-shadow: 0 0 0 4px var(--tp-teacher-accent-lt);
+    }
+
+    .search-wrapper input {
+        border: none !important;
+        box-shadow: none !important;
+        font-size: 14px;
+        padding-left: 0;
+    }
+
+    /* Course Title */
+    .course-title {
+        font-family: var(--tp-serif);
+        font-size: 1.25rem;
+        color: var(--tp-teacher-ink);
+        line-height: 1.2;
+    }
+
+    .section-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b;
+        letter-spacing: 0.5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- ── HEADER SECTION ── -->
+<div class="row mb-4 align-items-end">
+    <div class="col-md-8">
+        <h1 style="font-family: var(--tp-serif); color: var(--tp-teacher-ink); font-size: 2.25rem;" class="mb-1">
+            My Assigned <span style="color: var(--tp-teacher-accent);">Courses</span>
+        </h1>
+        <p class="text-muted mb-0">Manage your active classroom enrollments and assessment triggers.</p>
+    </div>
+    <div class="col-md-4 text-md-right mt-3 mt-md-0">
+        <span class="badge px-3 py-2 rounded-pill shadow-sm bg-white border text-dark font-weight-bold" style="font-size: 12px;">
+            <i class="fas fa-layer-group text-danger mr-2"></i> {{ courses|length }} Active Classes
+        </span>
+    </div>
+</div>
+
+<!-- ── SEARCH BAR ── -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="search-wrapper d-flex align-items-center px-3 py-1">
+            <i class="fas fa-search text-muted mr-3"></i>
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by name, code, or section identifier...">
+        </div>
+    </div>
+</div>
+
+<!-- ── COURSE GRID ── -->
+<div class="row" id="courseGrid">
+    {% for course in courses %}
+    <div class="col-xl-4 col-md-6 mb-4 course-card-container">
+        <div class="card course-card h-100 shadow-sm border-0">
+            <!-- Card Header -->
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="d-flex flex-wrap" style="gap: 6px;">
+                        <span class="code-pill bg-code-course">{{ course.course_code }}</span>
+                        <span class="code-pill bg-code-class">ID: {{ course.class_code }}</span>
+                    </div>
+                    <div class="text-muted opacity-25">
+                        <i class="fas fa-bookmark fa-lg"></i>
+                    </div>
+                </div>
+
+                <h2 class="course-title mb-2">{{ course.course_name }}</h2>
+                
+                <div class="mb-3 d-flex align-items-center">
+                    <span class="section-label text-uppercase">
+                        <i class="fas fa-users-class mr-1"></i> Section: {{ course.program_name }} {{ course.block_name }}
+                    </span>
+                </div>
+
+                <p class="text-muted small mb-4" style="line-height: 1.6; min-height: 52px;">
+                    {{ course.description[:100] }}{% if course.description|length > 100 %}...{% endif %}
+                </p>
+
+                <!-- Footer Actions -->
+                <div class="mt-auto pt-3 border-top d-flex align-items-center justify-content-between">
+                    <div class="d-flex">
+                        <a href="{{ url_for('teacher.manage_enrollees', class_code=course.class_code) }}" 
+                           class="btn btn-light btn-circle-sm border mr-2" title="Manage Students">
+                            <i class="fas fa-user-graduate text-dark" style="font-size: 11px;"></i>
+                        </a>
+                        <a href="{{ url_for('teacher.manage_exams') }}" 
+                           class="btn btn-light btn-circle-sm border" title="Course Exams">
+                            <i class="fas fa-file-invoice text-dark" style="font-size: 11px;"></i>
+                        </a>
+                    </div>
+                    
+                    <a href="{{ url_for('teacher.manage_enrollees', class_code=course.class_code) }}" 
+                       class="btn btn-danger px-3 py-1 rounded-pill font-weight-bold" style="font-size: 11px;">
+                        Enter Class <i class="fas fa-chevron-right ml-1" style="font-size: 9px;"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+        <div class="py-5 bg-white rounded shadow-sm border">
+            <i class="fas fa-folder-open fa-4x text-gray-200 mb-3"></i>
+            <h4 class="font-weight-bold text-dark">No Active Assignments</h4>
+            <p class="text-muted">You are not currently assigned to any active courses.</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        // High-density filter logic
+        $('#searchInput').on('keyup', function () {
+            var query = $(this).val().toLowerCase();
+            $('.course-card-container').each(function () {
+                var content = $(this).text().toLowerCase();
+                if (content.indexOf(query) > -1) {
+                    $(this).fadeIn(200);
+                } else {
+                    $(this).fadeOut(100);
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

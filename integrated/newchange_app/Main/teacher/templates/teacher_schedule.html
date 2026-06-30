@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Schedule | Teacher</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-teacher">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('teacher.profile') }}" class="nav-item profile-nav-item" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
+                <a href="{{ url_for('teacher.dashboard') }}" class="nav-item active" data-tooltip="Teacher Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Teacher Dashboard</span></a>
+                <a href="{{ url_for('teacher.manage_students') }}" class="nav-item" data-tooltip="Manage Students"><i class="fas fa-users"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('teacher.manual_attendance') }}" class="nav-item" data-tooltip="Manual Attendance"><i class="fas fa-clipboard-check"></i><span class="nav-item-text"> Manual Attendance</span></a>
+                <a href="{{ url_for('teacher.manage_marks') }}" class="nav-item" data-tooltip="Manage Marks"><i class="fas fa-star-half-alt"></i><span class="nav-item-text"> Manage Marks</span></a>
+                <a href="{{ url_for('teacher.view_excuses') }}" class="nav-item" data-tooltip="View Excuse Letters"><i class="fas fa-envelope-open-text"></i><span class="nav-item-text"> View Excuse Letters</span></a>
+                <a href="{{ url_for('teacher.reports') }}" class="nav-item" data-tooltip="Reports"><i class="fas fa-chart-bar"></i><span class="nav-item-text"> Reports</span></a>
+            </nav>
+            
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 style="margin: 0;">My Teaching Schedule</h2>
+                </div>
+            </header>
+
+            <div class="main-content-inner">
+                <div class="flex justify-between items-center mb-6">
+                    <p style="color: var(--text-muted); margin: 0; font-size: 0.9rem;">7:00 AM - 7:00 PM</p>
+                    <div class="badge badge-primary">Faculty Schedule</div>
+                </div>
+
+            {% if not schedule %}
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i> You are not currently assigned to any classes with an assigned schedule.
+            </div>
+            {% endif %}
+            
+            <style>
+                .timetable-container {
+                    background: var(--bg-surface);
+                    border-radius: 16px;
+                    border: 1px solid var(--border-color);
+                    overflow: auto;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    position: relative;
+                    margin-bottom: 2rem;
+                }
+                .timetable-grid {
+                    display: grid;
+                    grid-template-columns: 120px repeat(7, minmax(140px, 1fr));
+                    /* 24 slots (30 mins each) from 7am to 7pm */
+                    grid-template-rows: 60px repeat(24, 50px);
+                    background: rgba(255,255,255,0.02);
+                    position: relative;
+                }
+                .grid-header {
+                    grid-row: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #1e293b; /* Solid background for sticky headers */
+                    border-bottom: 2px solid var(--primary);
+                    font-weight: 700;
+                    color: var(--primary);
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    grid-column: var(--col);
+                }
+                .grid-time-column {
+                    grid-column: 1;
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: center;
+                    padding-top: 10px;
+                    font-size: 0.65rem;
+                    color: var(--text-muted);
+                    border-right: 1px solid var(--border-color);
+                    background: #1e293b; /* Solid background for sticky columns */
+                    position: sticky;
+                    left: 0;
+                    z-index: 5;
+                    grid-row-start: var(--row);
+                }
+                .grid-row-line {
+                    grid-column: 2 / -1;
+                    border-bottom: 1px solid var(--border-color);
+                    pointer-events: none;
+                    grid-row-end: span 1;
+                    grid-row-start: var(--row);
+                }
+                .line-solid { opacity: 1; border-bottom-style: solid; }
+                .line-dashed { opacity: 0.3; border-bottom-style: dashed; }
+                .class-entry {
+                    margin: 4px;
+                    padding: 10px;
+                    border-radius: 12px;
+                    color: white;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    font-size: 0.8rem;
+                    border-left: 4px solid rgba(255,255,255,0.4);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    transition: all 0.2s ease;
+                    overflow: hidden;
+                    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+                    z-index: 2; /* Sit above lines */
+                    grid-column: var(--col);
+                    grid-row-start: var(--row-s);
+                    grid-row-end: var(--row-e);
+                }
+                .class-entry:hover {
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+                    z-index: 20;
+                }
+                .class-code { font-weight: 800; font-size: 0.85rem; letter-spacing: 0.05em; }
+                .class-room { 
+                    background: rgba(255,255,255,0.2); 
+                    padding: 2px 6px; 
+                    border-radius: 4px; 
+                    align-self: flex-start; 
+                    font-size: 0.7rem;
+                    font-weight: 600;
+                }
+                .class-teacher { font-size: 0.75rem; opacity: 0.9; margin-top: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+                /* Subject-based colors */
+                .color-1 { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+                .color-2 { background: linear-gradient(135deg, #10b981, #059669); }
+                .color-3 { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .color-4 { background: linear-gradient(135deg, #ec4899, #db2777); }
+                .color-5 { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+            </style>
+
+            <div class="timetable-container">
+                <div class="timetable-grid">
+                    <!-- Top Corner -->
+                    <div class="grid-header" style="--col: 1; border-right: 1px solid var(--border-color); left: 0; z-index: 15;">Time</div>
+                    
+                    <!-- Day Headers -->
+                    {% for day in days %}
+                    <div class="grid-header" style="--col: {{ loop.index + 1 }};">{{ day }}</div>
+                    {% endfor %}
+
+                    <!-- Time Slots & Horizontal Lines -->
+                    {% for label in time_labels %}
+                        {% set row_idx = loop.index + 1 %}
+                        <div class="grid-time-column" style="--row: {{ row_idx }};">{{ label }}</div>
+                        <div class="grid-row-line {% if loop.index0 % 2 == 0 %}line-solid{% else %}line-dashed{% endif %}" style="--row: {{ row_idx }};"></div>
+                    {% endfor %}
+
+                    <!-- Schedule Entriess -->
+                    {% for entry in schedule %}
+                        {% set color_idx = (loop.index0 % 5) + 1 %}
+                        <div class="class-entry color-{{ color_idx }}" 
+                             style="--col: {{ entry.grid_column }}; --row-s: {{ entry.grid_row_start }}; --row-e: {{ entry.grid_row_end }};">
+                            <div class="class-code">{{ entry.subject_code }}</div>
+                            <div style="font-weight: 600; font-size: 0.75rem; line-height: 1.1;">{{ entry.subject_name }}</div>
+                            <div class="class-room">{{ entry.room }}</div>
+                            <div class="class-teacher">Sec {{ entry.section }}</div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            </div>
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <nav class="bottom-nav">
+        <a href="{{ url_for('teacher.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('teacher.manual_attendance') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.manual_attendance' %}active{% endif %}">
+            <i class="fas fa-edit"></i>
+            <span>Manual</span>
+        </a>
+        <a href="{{ url_for('teacher.view_excuses') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.view_excuses' %}active{% endif %}">
+            <i class="fas fa-envelope-open-text"></i>
+            <span>Excuse</span>
+        </a>
+        <a href="{{ url_for('teacher.reports') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.reports' %}active{% endif %}">
+            <i class="fas fa-chart-bar"></i>
+            <span>Reports</span>
+        </a>
+        <a href="{{ url_for('teacher.profile') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.profile' %}active{% endif %}">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+
+
+</body>
+</html>

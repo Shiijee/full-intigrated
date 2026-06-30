@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>System Audit Logs | Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-admin">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Admin') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="openChangePinModal()">
+                            <i class="fas fa-shield-alt"></i> Security PIN
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
+                <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
+                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
+                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
+                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
+                <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
+                <a href="{{ url_for('admin.attendance_analytics') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.attendance_analytics' else '' }}" data-tooltip="Attendance Analytics"><i class="fas fa-chart-pie"></i><span class="nav-item-text"> Attendance Analytics</span></a>
+                <a href="{{ url_for('admin.drop_requests') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.drop_requests' else '' }}" data-tooltip="Drop Requests"><i class="fas fa-user-minus"></i><span class="nav-item-text"> Drop Requests</span></a>
+                <a href="{{ url_for('admin.audit_logs') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.audit_logs' else '' }}" data-tooltip="Audit Logs"><i class="fas fa-clipboard-list"></i><span class="nav-item-text"> Audit Logs</span></a>
+            </nav>
+            <div class="sidebar-bottom-actions">
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Audit Logs</h2>
+                </div>
+            </header>
+
+            <div class="main-content-inner">
+                <div class="mb-8">
+                    <h1 class="auth-title">System Audit Logs</h1>
+                    <p class="text-muted">Monitor and track administrative actions and system modifications.</p>
+                </div>
+
+                <!-- Search and Filter Bar -->
+                <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <form method="GET" action="{{ url_for('admin.audit_logs') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Search Details</label>
+                            <input type="text" name="search" class="form-control" placeholder="User, ID, or Action..." value="{{ search }}">
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Table</label>
+                            <select name="table_filter" class="form-control">
+                                <option value="">All Tables</option>
+                                {% for t in tables %}
+                                    <option value="{{ t }}" {% if t == table_filter %}selected{% endif %}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Action</label>
+                            <select name="action_filter" class="form-control">
+                                <option value="">All Actions</option>
+                                <option value="Create" {% if action_filter == 'Create' %}selected{% endif %}>Create</option>
+                                <option value="Update" {% if action_filter == 'Update' %}selected{% endif %}>Update</option>
+                                <option value="Delete" {% if action_filter == 'Delete' %}selected{% endif %}>Delete</option>
+                                <option value="Status" {% if action_filter == 'Status' %}selected{% endif %}>Status Change</option>
+                            </select>
+                        </div>
+
+                        <div class="flex gap-2" style="margin-bottom: 0;">
+                            <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <a href="{{ url_for('admin.audit_logs', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                                <i class="fas fa-rotate"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="glass-panel p-4" style="padding: 1.5rem;">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="hide-on-mobile">Timestamp</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th class="hide-on-mobile">Table/ID</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in logs %}
+                                <tr>
+                                    <td class="hide-on-mobile" style="font-size: 0.85rem; white-space: nowrap;" data-label="Timestamp">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</td>
+                                    <td data-label="User">
+                                        <div style="display: flex; flex-direction: column;">
+                                            <span style="font-weight: 600;">{{ log.performed_by_id }}</span>
+                                            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">{{ log.performed_by_role }}</span>
+                                            <span class="text-muted hide-on-desktop" style="font-size: 0.7rem; margin-top: 2px;">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</span>
+                                        </div>
+                                    </td>
+                                    <td data-label="Action">
+                                        <span class="badge {% if log.action == 'Create' %}badge-success{% elif log.action == 'Delete' %}badge-danger{% elif log.action == 'Update' %}badge-primary{% else %}badge-warning{% endif %}">
+                                            {{ log.action }}
+                                        </span>
+                                        <div class="hide-on-desktop text-muted" style="font-size: 0.7rem; margin-top: 2px;">{{ log.table_name }}</div>
+                                    </td>
+                                    <td class="hide-on-mobile" data-label="Table/ID">
+                                        <div style="display: flex; flex-direction: column;">
+                                            <span style="font-family: monospace; font-size: 0.9rem;">{{ log.table_name }}</span>
+                                            <span style="font-size: 0.7rem; color: var(--text-muted);">ID: {{ log.entity_id }}</span>
+                                        </div>
+                                    </td>
+                                    <td style="max-width: 400px; font-size: 0.9rem;" data-label="Details">
+                                        <div class="hide-on-desktop text-muted" style="font-size: 0.7rem; margin-bottom: 2px;">ID: {{ log.entity_id }}</div>
+                                        {{ log.details }}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center" style="padding: 3rem;" data-label="Timestamp">No audit logs found.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    {% if total_pages > 1 %}
+                    <div class="pagination-container mt-4" style="display: flex; justify-content: center; gap: 0.5rem; align-items: center; margin-top: 2rem;">
+                        <a href="{{ url_for('admin.audit_logs', page=current_page-1, search=search, table_filter=table_filter, action_filter=action_filter) }}" 
+                           class="btn btn-secondary {% if current_page == 1 %}disabled{% endif %}" 
+                           style="padding: 0.5rem 1rem;">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                        
+                        <div style="display: flex; gap: 0.25rem;">
+                            {% set start = [1, current_page - 2]|max %}
+                            {% set end = [total_pages, current_page + 2]|min %}
+                            
+                            {% if start > 1 %}
+                                <a href="{{ url_for('admin.audit_logs', page=1, search=search, table_filter=table_filter, action_filter=action_filter) }}" class="btn btn-secondary" style="padding: 0.5rem 1rem;">1</a>
+                                {% if start > 2 %}<span style="color: var(--text-muted);">...</span>{% endif %}
+                            {% endif %}
+
+                            {% for p in range(start, end + 1) %}
+                                {% if p == current_page %}
+                                    <span class="btn btn-primary" style="padding: 0.5rem 1rem; cursor: default;">{{ p }}</span>
+                                {% else %}
+                                    <a href="{{ url_for('admin.audit_logs', page=p, search=search, table_filter=table_filter, action_filter=action_filter) }}" 
+                                       class="btn btn-secondary" style="padding: 0.5rem 1rem; text-decoration: none;">{{ p }}</a>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if end < total_pages %}
+                                {% if end < total_pages - 1 %}<span style="color: var(--text-muted);">...</span>{% endif %}
+                                <a href="{{ url_for('admin.audit_logs', page=total_pages, search=search, table_filter=table_filter, action_filter=action_filter) }}" class="btn btn-secondary" style="padding: 0.5rem 1rem;">{{ total_pages }}</a>
+                            {% endif %}
+                        </div>
+
+                        <a href="{{ url_for('admin.audit_logs', page=current_page+1, search=search, table_filter=table_filter, action_filter=action_filter) }}" 
+                           class="btn btn-secondary {% if current_page == total_pages %}disabled{% endif %}"
+                           style="padding: 0.5rem 1rem;">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </div>
+                    <p style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem;">
+                        Showing page {{ current_page }} of {{ total_pages }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+        <nav class="bottom-nav">
+        <a href="{{ url_for('admin.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('admin.manage_students') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_students' %}active{% endif %}">
+            <i class="fas fa-user-graduate"></i>
+            <span>Students</span>
+        </a>
+        <a href="{{ url_for('admin.manage_teachers') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_teachers' %}active{% endif %}">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>Faculty</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Logs</span>
+        </a>
+    </nav>
+
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

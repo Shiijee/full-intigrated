@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Manage Marks | Attendeez</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-teacher">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ name }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Faculty Member</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('teacher.profile') }}" class="nav-item profile-nav-item" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
+                <a href="{{ url_for('teacher.dashboard') }}" class="nav-item" data-tooltip="Teacher Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Teacher Dashboard</span></a>
+                <a href="{{ url_for('teacher.manage_students') }}" class="nav-item" data-tooltip="Manage Students"><i class="fas fa-users"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('teacher.manual_attendance') }}" class="nav-item" data-tooltip="Manual Attendance"><i class="fas fa-clipboard-check"></i><span class="nav-item-text"> Manual Attendance</span></a>
+                <a href="{{ url_for('teacher.manage_marks') }}" class="nav-item active" data-tooltip="Manage Marks"><i class="fas fa-star-half-alt"></i><span class="nav-item-text"> Manage Marks</span></a>
+                <a href="{{ url_for('teacher.view_excuses') }}" class="nav-item" data-tooltip="View Excuse Letters"><i class="fas fa-envelope-open-text"></i><span class="nav-item-text"> View Excuse Letters</span></a>
+                <a href="{{ url_for('teacher.reports') }}" class="nav-item" data-tooltip="Reports"><i class="fas fa-chart-bar"></i><span class="nav-item-text"> Reports</span></a>
+                <a href="{{ url_for('teacher.daily_attendance_log') }}" class="nav-item" data-tooltip="Daily Attendance Log"><i class="fas fa-calendar-check"></i><span class="nav-item-text"> Daily Attendance Log</span></a>
+            </nav>
+            
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    {% if selected_class %}
+                    <div class="flex items-center gap-4">
+                        <a href="{{ url_for('teacher.manage_marks') }}" class="btn btn-secondary" style="padding: 0.5rem; border-radius: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;" title="Back to Selection">
+                            <i class="fas fa-chevron-left" style="margin: 0; font-size: 0.8rem;"></i>
+                        </a>
+                        <div>
+                            <h2 class="auth-title" style="font-size: 1.1rem; margin: 0;">Attendance Marks</h2>
+                            <p style="color: var(--text-muted); font-size: 0.75rem; margin: 0;">
+                                <span class="badge badge-warning" style="padding: 0.1rem 0.4rem; font-size: 0.65rem; vertical-align: middle;">{{ selected_class.subject_code }}</span>
+                                {{ selected_class.subject_name }} · Sec {{ selected_class.section }}
+                            </p>
+                        </div>
+                    </div>
+                    {% else %}
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Attendance Marks</h2>
+                    {% endif %}
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                {% if selected_class %}
+                <!-- Page Title moved to Header -->
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Search and Filter Bar -->
+            <div class="glass-panel p-4 mb-4" style="border-radius: 12px; margin-top: 1.5rem;">
+                <form method="GET" action="{{ url_for('teacher.manage_marks') }}" class="row" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                    <input type="hidden" name="subject_id" value="{{ selected_class.subject_id }}">
+                    <input type="hidden" name="section" value="{{ selected_class.section }}">
+                    
+                    <div class="form-group" style="flex: 2; min-width: 200px;">
+                        <label class="form-label" style="font-size: 0.8rem; opacity: 0.8;">Search Student</label>
+                        <div style="position: relative;">
+                            <i class="fas fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                            <input type="text" name="search" class="form-control" placeholder="Name or ID..." value="{{ search }}" style="padding-left: 2.5rem;">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label class="form-label" style="font-size: 0.8rem; opacity: 0.8;">Status</label>
+                        <select name="status_filter" class="form-control">
+                            <option value="">All Status</option>
+                            <option value="Present" {% if status_filter == 'Present' %}selected{% endif %}>Present</option>
+                            <option value="Absent" {% if status_filter == 'Absent' %}selected{% endif %}>Absent</option>
+                            <option value="Late" {% if status_filter == 'Late' %}selected{% endif %}>Late</option>
+                        </select>
+                    </div>
+
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="submit" class="btn btn-primary" style="height: 42px;">
+                            <i class="fas fa-filter mr-1"></i> Apply
+                        </button>
+                        <a href="{{ url_for('teacher.manage_marks', subject_id=selected_class.subject_id, section=selected_class.section, clear=1) }}" class="btn btn-secondary" style="height: 42px; display: flex; align-items: center; justify-content: center; text-decoration: none;" title="Clear All Filters">
+                            <i class="fas fa-sync-alt"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Unsaved attendance banner with Save button -->
+            {% if today_finalized %}
+            <div style="background:rgba(16,185,129,0.1);border:2px solid #10b981;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;">
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <i class="fas fa-lock" style="color:#10b981;font-size:1.4rem;"></i>
+                    <div>
+                        <strong style="color:#10b981;">Attendance Saved — Marks Locked</strong>
+                        <p style="margin:0.2rem 0 0 0;font-size:0.85rem;color:var(--text-muted);">Today's attendance has been finalized. All records below are read-only and cannot be edited or deleted.</p>
+                    </div>
+                </div>
+            </div>
+            {% elif today_unsaved_session_id %}
+            <div style="background:rgba(245,158,11,0.12);border:2px solid #f59e0b;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;">
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <i class="fas fa-exclamation-triangle" style="color:#f59e0b;font-size:1.4rem;"></i>
+                    <div>
+                        <strong style="color:#f59e0b;">Today's Attendance is Unsaved</strong>
+                        <p style="margin:0.2rem 0 0 0;font-size:0.85rem;color:var(--text-muted);">You can still edit marks below. Click Save to finalize — after saving, marks cannot be changed.</p>
+                    </div>
+                </div>
+                <a href="{{ url_for('teacher.review_attendance', session_id=today_unsaved_session_id) }}" class="btn btn-primary" style="background:#f59e0b;border:none;white-space:nowrap;">
+                    <i class="fas fa-save"></i> Save Attendance
+                </a>
+            </div>
+            {% endif %}
+
+            <div class="glass-panel p-4" style="padding: 1.5rem;">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Date/Time</th>
+                                <th>Status</th>
+                                <th>Validity</th>
+                                <th>Activity Flags</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in records %}
+                            <tr {% if r.is_valid == 'Invalid' or r.status == 'Flagged' %}style="background: rgba(239, 68, 68, 0.05); border-left: 3px solid var(--danger-color);"{% endif %}>
+                                <td>
+                                    {{ r.first_name }} {{ r.middle_name }} {{ r.last_name }}
+                                    {% if r.is_finalized %}
+                                    <span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:99px;font-size:0.65rem;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981;margin-left:0.4rem;">
+                                        <i class="fas fa-lock"></i> Saved
+                                    </span>
+                                    {% else %}
+                                    <span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:99px;font-size:0.65rem;font-weight:700;background:rgba(245,158,11,0.12);color:#f59e0b;margin-left:0.4rem;">
+                                        <i class="fas fa-exclamation-triangle"></i> Unsaved
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ r.scan_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    {% if r.status == 'Present' %}
+                                    <span class="badge badge-success">Present</span>
+                                    {% elif r.status == 'Flagged' %}
+                                    <span class="badge badge-warning" style="background: #ef4444; color: white;"><i class="fas fa-flag"></i> Flagged</span>
+                                    {% elif r.status == 'Absent' %}
+                                    <span class="badge" style="background:var(--danger-color);color:white;">Absent</span>
+                                    {% else %}
+                                    <span class="badge badge-warning">Late</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if r.is_valid == 'Valid' %}
+                                    <span style="color:var(--success-color);"><i class="fas fa-check-circle"></i></span>
+                                    {% else %}
+                                    <span style="color:var(--danger-color);" title="Suspicious Activity"><i class="fas fa-exclamation-triangle"></i> Invalid</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if r.behavior_flags %}
+                                        {% set flags = r.behavior_flags %}
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);">
+                                            {% if r.distance_meters %}
+                                                <div style="margin-bottom: 2px;"><i class="fas fa-map-marker-alt"></i> {{ r.distance_meters | round }}m</div>
+                                            {% endif %}
+                                            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                                {% if flags is string %}
+                                                    {{ flags }}
+                                                {% else %}
+                                                    {% for f in flags %}
+                                                        <span class="badge" style="font-size: 0.6rem; background: rgba(245, 158, 11, 0.1); color: #f59e0b;">{{ f }}</span>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span style="color: var(--text-muted); font-size: 0.75rem;">None</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if r.is_finalized %}
+                                    <!-- Finalized: editing locked -->
+                                    <span style="color:var(--text-muted);font-size:0.8rem;" title="Attendance is saved and locked">
+                                        <i class="fas fa-lock"></i> Locked
+                                    </span>
+                                    {% else %}
+                                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                                        <form method="POST" action="{{ url_for('teacher.update_mark') }}" data-inline style="display:inline-flex; gap:0.5rem; margin:0;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <input type="hidden" name="attendance_id" value="{{ r.attendance_id }}">
+                                            <input type="hidden" name="subject_id" value="{{ selected_class.subject_id }}">
+                                            <input type="hidden" name="section" value="{{ selected_class.section }}">
+                                            <select name="status" class="form-control" style="padding:0.2rem; font-size:0.8rem; width:auto;" required>
+                                                <option value="Present" {% if r.status == 'Present' %}selected{% endif %}>Present</option>
+                                                <option value="Flagged" {% if r.status == 'Flagged' %}selected{% endif %}>Flagged</option>
+                                                <option value="Absent" {% if r.status == 'Absent' %}selected{% endif %}>Absent</option>
+                                                <option value="Late" {% if r.status == 'Late' %}selected{% endif %}>Late</option>
+                                            </select>
+                                            <button type="submit" class="btn btn-primary" style="padding:0.2rem 0.5rem; font-size:0.8rem;">Update</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('teacher.delete_mark') }}" data-inline style="margin:0;" onsubmit="return confirm('Delete this attendance record? This action will be logged.');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <input type="hidden" name="attendance_id" value="{{ r.attendance_id }}">
+                                            <input type="hidden" name="subject_id" value="{{ selected_class.subject_id }}">
+                                            <input type="hidden" name="section" value="{{ selected_class.section }}">
+                                            <button type="submit" class="btn btn-danger" style="padding:0.2rem 0.5rem; font-size:0.8rem;" title="Delete Record">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center">No attendance records found for this class.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Controls -->
+                {% if total_pages > 1 %}
+                <div class="pagination-container mt-4" style="display: flex; justify-content: center; gap: 0.5rem; align-items: center; margin-top: 2rem;">
+                    <a href="{{ url_for('teacher.manage_marks', subject_id=selected_class.subject_id, section=selected_class.section, page=current_page-1, search=search, status_filter=status_filter) }}" 
+                       class="btn btn-secondary {% if current_page == 1 %}disabled{% endif %}" 
+                       style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+    
+                    
+                    <div style="display: flex; gap: 0.25rem;">
+                        {% set start = [1, current_page - 2]|max %}
+                        {% set end = [total_pages, current_page + 2]|min %}
+                        
+                        {% if start > 1 %}
+                            <a href="{{ url_for('teacher.manage_marks', subject_id=selected_class.subject_id, section=selected_class.section, page=1, search=search, status_filter=status_filter) }}" class="btn btn-secondary" style="padding: 0.5rem 1rem;">1</a>
+                            {% if start > 2 %}<span style="color: var(--text-muted);">...</span>{% endif %}
+                        {% endif %}
+
+                        {% for p in range(start, end + 1) %}
+                            {% if p == current_page %}
+                                <span class="btn btn-primary" style="padding: 0.5rem 1rem; cursor: default;">{{ p }}</span>
+                            {% else %}
+                                <a href="{{ url_for('teacher.manage_marks', subject_id=selected_class.subject_id, section=selected_class.section, page=p, search=search, status_filter=status_filter) }}" 
+                                   class="btn btn-secondary" style="padding: 0.5rem 1rem; text-decoration: none;">{{ p }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if end < total_pages %}
+                            {% if end < total_pages - 1 %}<span style="color: var(--text-muted);">...</span>{% endif %}
+                            <a href="{{ url_for('teacher.manage_marks', subject_id=selected_class.subject_id, section=selected_class.section, page=total_pages, search=search, status_filter=status_filter) }}" class="btn btn-secondary" style="padding: 0.5rem 1rem;">{{ total_pages }}</a>
+                        {% endif %}
+                    </div>
+
+                    <a href="{{ url_for('teacher.manage_marks', subject_id=selected_class.subject_id, section=selected_class.section, page=current_page+1, search=search, status_filter=status_filter) }}" 
+                       class="btn btn-secondary {% if current_page == total_pages %}disabled{% endif %}"
+                       style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+    
+                </div>
+                <p style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem;">
+                    Showing page {{ current_page }} of {{ total_pages }}
+                </p>
+                {% endif %}
+            </div>
+
+            {% else %}
+            <h2 class="mb-4">Manage Attendance Marks</h2>
+            <p style="color: var(--text-muted); margin-bottom: 2rem;">Select a class to manage and override attendance records for a specific subject and section.</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
+                {% for c in classes %}
+                <a href="{{ url_for('teacher.manage_marks', subject_id=c.subject_id, section=c.section) }}" class="glass-panel p-6" style="text-decoration: none; color: inherit; transition: all 0.3s ease; border-left: 4px solid var(--primary);">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="badge badge-warning" style="font-family: monospace;">{{ c.subject_code }}</span>
+                        <span class="badge badge-success">Section {{ c.section }}</span>
+                    </div>
+                    <h4 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-main);">{{ c.subject_name }}</h4>
+                    <div class="flex items-center" style="color: var(--primary); font-weight: 600; font-size: 0.9rem;">
+                        Manage Attendance Marks <i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.7rem;"></i>
+                    </div>
+                </a>
+                {% else %}
+                <p style="color: var(--text-muted);">No classes available.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            </div> <!-- End main-content-inners -->
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <nav class="bottom-nav">
+        <a href="{{ url_for('teacher.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('teacher.manual_attendance') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.manual_attendance' %}active{% endif %}">
+            <i class="fas fa-edit"></i>
+            <span>Manual</span>
+        </a>
+        <a href="{{ url_for('teacher.view_excuses') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.view_excuses' %}active{% endif %}">
+            <i class="fas fa-envelope-open-text"></i>
+            <span>Excuse</span>
+        </a>
+        <a href="{{ url_for('teacher.reports') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.reports' %}active{% endif %}">
+            <i class="fas fa-chart-bar"></i>
+            <span>Reports</span>
+        </a>
+        <a href="{{ url_for('teacher.profile') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.profile' %}active{% endif %}">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+
+</body>
+</html>

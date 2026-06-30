@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Manual Enrollment | Attendeez Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --bg-dark: #0f172a;
+            --surface-dark: #1e293b;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .irregular-badge {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="theme-admin">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                <aside class="sidebar">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Admin') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="openChangePinModal()">
+                            <i class="fas fa-shield-alt"></i> Security PIN
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
+                <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
+                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
+                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
+                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
+                <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
+                <a href="{{ url_for('admin.attendance_analytics') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.attendance_analytics' else '' }}" data-tooltip="Attendance Analytics"><i class="fas fa-chart-pie"></i><span class="nav-item-text"> Attendance Analytics</span></a>
+                <a href="{{ url_for('admin.drop_requests') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.drop_requests' else '' }}" data-tooltip="Drop Requests"><i class="fas fa-user-minus"></i><span class="nav-item-text"> Drop Requests</span></a>
+                <a href="{{ url_for('admin.audit_logs') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.audit_logs' else '' }}" data-tooltip="Audit Logs"><i class="fas fa-clipboard-list"></i><span class="nav-item-text"> Audit Logs</span></a>
+            </nav>
+            <div class="sidebar-bottom-actions">
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Admin Portal</h2>
+                </div>
+            </header>
+
+            <div class="main-content-inner">
+                <div class="flex flex-responsive justify-between items-center mb-8">
+                    <div>
+                        <h1 class="auth-title">Manual Enrollment</h1>
+                        <p class="text-muted">Directly enroll specific students into designated classes.</p>
+                    </div>
+                    <div id="bulk-actions" style="display: none;">
+                        <button class="btn btn-primary" onclick="openBulkSelectedModal()">
+                            <i class="fas fa-plus-circle mr-1"></i> Enroll Selected (<span id="selected-count">0</span>)
+                        </button>
+                    </div>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} mb-4">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Search and Selection Panel -->
+                <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <form method="GET" action="{{ url_for('admin.manual_enroll') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Search Student</label>
+                            <input type="text" name="search" class="form-control" placeholder="Search by ID, Name, or Email..." value="{{ search }}">
+                        </div>
+                        <div class="flex gap-2" style="margin-bottom: 0;">
+                            <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <a href="{{ url_for('admin.manual_enroll', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                                <i class="fas fa-rotate"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="glass-panel p-4" style="padding: 1.5rem;">
+                    {% set grouped_students = {} %}
+                    {% for student in students %}
+                        {% set course_year = student.course ~ ' - ' ~ student.level %}
+                        {% if course_year not in grouped_students %}
+                            {% set _ = grouped_students.update({course_year: []}) %}
+                        {% endif %}
+                        {% set _ = grouped_students[course_year].append(student) %}
+                    {% endfor %}
+
+                    {% if students %}
+                        {% for group_name in ['BSIT - 1st Year', 'BSIT - 2nd Year', 'BSIT - 3rd Year', 'BSIT - 4th Year', 'BSCS - 1st Year', 'BSCS - 2nd Year', 'BSCS - 3rd Year', 'BSCS - 4th Year', 'OTHER - 1st Year', 'OTHER - 2nd Year', 'OTHER - 3rd Year', 'OTHER - 4th Year'] %}
+                            {% if group_name in grouped_students and grouped_students[group_name]|length > 0 %}
+                            <div class="enrollment-group" style="margin-bottom: 2rem;">
+                                {% set safe_group_name = group_name|replace(' ', '_') %}
+                                <div style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer; padding: 1rem; background: rgba(99, 102, 241, 0.1); border-radius: 0.5rem; margin-bottom: 1rem;" onclick="toggleGroup('{{ safe_group_name }}')">
+                                    <i class="fas fa-chevron-down" id="icon-{{ safe_group_name }}" style="transition: transform 0.3s;"></i>
+                                    <h4 style="margin: 0; flex: 1; font-size: 1rem; color: var(--text-main);">
+                                        {% if 'BSIT' in group_name %}
+                                            <i class="fas fa-microchip" style="color: #6366f1; margin-right: 0.5rem;"></i>
+                                        {% elif 'BSCS' in group_name %}
+                                            <i class="fas fa-laptop-code" style="color: #6366f1; margin-right: 0.5rem;"></i>
+                                        {% else %}
+                                            <i class="fas fa-book" style="color: #6366f1; margin-right: 0.5rem;"></i>
+                                        {% endif %}
+                                        {{ group_name }}
+                                    </h4>
+                                    <span class="badge badge-primary" style="margin-left: auto;">{{ grouped_students[group_name]|length }} students</span>
+                                </div>
+                                <div id="group-{{ safe_group_name }}" class="table-wrapper" style="display: none;">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 40px;"><input type="checkbox" class="group-select-all" onclick="toggleGroupSelectAll('{{ safe_group_name }}', this)"></th>
+                                                <th class="hide-on-mobile">Student ID</th>
+                                                <th>Student Name</th>
+                                                <th class="hide-on-mobile">Email</th>
+                                                <th class="hide-on-mobile">Status</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for student in grouped_students[group_name] %}
+                                            <tr>
+                                                <td><input type="checkbox" class="student-checkbox group-{{ safe_group_name }}" value="{{ student.usid }}" onclick="updateBulkCount()"></td>
+
+                                                <td class="hide-on-mobile" data-label="Student ID"><span class="badge badge-secondary">{{ student.usid }}</span></td>
+                                                <td data-label="Student Name" style="font-weight: 600;">
+                                                    {{ student.first_name }} {{ student.middle_name if student.middle_name else '' }} {{ student.last_name }}
+                                                    {% if student.level == 'Irregular Student' %}
+                                                        <span class="irregular-badge" style="margin-left: 0.25rem;">Irreg</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="hide-on-mobile" data-label="Email" style="font-size: 0.9rem; color: var(--text-muted);">{{ student.email if student.email else 'N/A' }}</td>
+                                                <td class="hide-on-mobile" data-label="Status"><span class="badge badge-success">{{ student.status }}</span></td>
+                                                <td class="action-cell" data-label="Action">
+                                                    <button type="button" class="btn btn-primary btn-sm" onclick="openEnrollModal(`{{ student.usid }}`, `{{ student.first_name }} {{ student.last_name }}`)">
+                                                        <i class="fas fa-user-plus"></i> <span class="btn-text">Enroll</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                    <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                        <i class="fas fa-search" style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <p>No students found matching your search.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Enrollment Modal -->
+    <div id="enrollModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('enrollModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-2">Manual Enrollment</h3>
+            <p class="text-muted mb-4" id="enroll_student_display"></p>
+            
+            <form method="POST" action="{{ url_for('admin.manual_enroll') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="usid" id="enroll_usid">
+                
+                <div class="form-group mb-4">
+                    <label class="form-label">Select Class Assignment</label>
+                    <select name="assignment_id" class="form-control" required>
+                        <option value="">-- Choose Subject & Section --</option>
+                        {% for a in all_assignments %}
+                            <option value="{{ a.assignment_id }}">
+                                {{ a.subject_code }} - {{ a.section }} ({{ a.first_name }} {{ a.last_name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('enrollModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Confirm Enrollment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk Enrollment Modal -->
+    <div id="bulkEnrollModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('bulkEnrollModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-2">Bulk Enrollment</h3>
+            <p class="text-muted mb-4">You are about to enroll <span id="bulk_student_count">0</span> students.</p>
+            
+            <form method="POST" action="{{ url_for('admin.bulk_enroll_selected') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="selected_usids" id="bulk_usids">
+                
+                <div class="form-group mb-4">
+                    <label class="form-label">Select Class Assignment</label>
+                    <select name="assignment_id" class="form-control" required>
+                        <option value="">-- Choose Subject & Section --</option>
+                        {% for a in all_assignments %}
+                            <option value="{{ a.assignment_id }}">
+                                {{ a.subject_code }} - {{ a.section }} ({{ a.first_name }} {{ a.last_name }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('bulkEnrollModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Confirm Bulk Enrollment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleGroup(groupName) {
+            const groupElement = document.getElementById(`group-${groupName}`);
+            const iconElement = document.getElementById(`icon-${groupName}`);
+            
+            if (groupElement.style.display === 'none') {
+                groupElement.style.display = 'block';
+                iconElement.style.transform = 'rotate(0deg)';
+            } else {
+                groupElement.style.display = 'none';
+                iconElement.style.transform = 'rotate(-90deg)';
+            }
+        }
+
+        function toggleGroupSelectAll(groupName, source) {
+            document.querySelectorAll(`.group-${groupName}`).forEach(cb => cb.checked = source.checked);
+            updateBulkCount();
+        }
+
+        function openEnrollModal(usid, name) {
+            document.getElementById('enroll_usid').value = usid;
+            document.getElementById('enroll_student_display').innerText = "Enrolling: " + name + " (" + usid + ")";
+            document.getElementById('enrollModal').classList.add('active');
+        }
+
+        function toggleSelectAll(source) {
+            document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = source.checked);
+            updateBulkCount();
+        }
+
+        function updateBulkCount() {
+            const selected = document.querySelectorAll('.student-checkbox:checked');
+            const count = selected.length;
+            document.getElementById('selected-count').innerText = count;
+            document.getElementById('bulk-actions').style.display = count > 0 ? 'block' : 'none';
+        }
+
+        function openBulkSelectedModal() {
+            const selected = Array.from(document.querySelectorAll('.student-checkbox:checked')).map(cb => cb.value);
+            document.getElementById('bulk_usids').value = selected.join(',');
+            document.getElementById('bulk_student_count').innerText = selected.length;
+            document.getElementById('bulkEnrollModal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Close on escape
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal('enrollModal');
+            }
+        });
+    </script>
+
+        <nav class="bottom-nav">
+        <a href="{{ url_for('admin.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('admin.manage_students') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_students' %}active{% endif %}">
+            <i class="fas fa-user-graduate"></i>
+            <span>Students</span>
+        </a>
+        <a href="{{ url_for('admin.manage_teachers') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_teachers' %}active{% endif %}">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>Faculty</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Logs</span>
+        </a>
+    </nav>
+
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

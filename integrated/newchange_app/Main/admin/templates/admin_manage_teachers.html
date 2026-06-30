@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Manage Teachers | Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-admin">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                <aside class="sidebar">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Admin') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="openChangePinModal()">
+                            <i class="fas fa-shield-alt"></i> Security PIN
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
+                <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
+                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
+                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
+                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
+                <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
+                <a href="{{ url_for('admin.attendance_analytics') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.attendance_analytics' else '' }}" data-tooltip="Attendance Analytics"><i class="fas fa-chart-pie"></i><span class="nav-item-text"> Attendance Analytics</span></a>
+                <a href="{{ url_for('admin.drop_requests') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.drop_requests' else '' }}" data-tooltip="Drop Requests"><i class="fas fa-user-minus"></i><span class="nav-item-text"> Drop Requests</span></a>
+                <a href="{{ url_for('admin.audit_logs') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.audit_logs' else '' }}" data-tooltip="Audit Logs"><i class="fas fa-clipboard-list"></i><span class="nav-item-text"> Audit Logs</span></a>
+            </nav>
+            <div class="sidebar-bottom-actions">
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Manage Teachers</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="flex flex-responsive justify-between items-center mb-8">
+                    <div>
+                        <h1 class="auth-title">Faculty Management</h1>
+                        <p class="text-muted">Register and manage faculty members across departments.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> Add Teacher</button>
+                </div>
+            
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Search and Filter Bar -->
+                <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <form method="GET" action="{{ url_for('admin.manage_teachers') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Search Teachers</label>
+                            <input type="text" name="search" class="form-control" placeholder="ID, Name, or Email..." value="{{ search }}">
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Department</label>
+                            <select name="dept_filter" class="form-control">
+                                <option value="">All Departments</option>
+                                {% for dept in departments %}
+                                    <option value="{{ dept }}" {% if dept == dept_filter %}selected{% endif %}>{{ dept }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Status</label>
+                            <select name="status_filter" class="form-control">
+                                <option value="All" {% if status_filter == 'All' %}selected{% endif %}>All Status</option>
+                                <option value="Active" {% if status_filter == 'Active' %}selected{% endif %}>Active</option>
+                                <option value="Archived" {% if status_filter == 'Archived' %}selected{% endif %}>Archived</option>
+                            </select>
+                        </div>
+
+                        <div class="flex gap-2" style="margin-bottom: 0;">
+                            <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <a href="{{ url_for('admin.manage_teachers', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                                <i class="fas fa-rotate"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="glass-panel" style="padding: 0.75rem; margin-bottom: 2rem;">
+                    <div class="flex justify-between items-center w-full">
+                        <button class="tab-btn active" onclick="showTab('active')">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            <span>Active Faculty</span>
+                            <span class="badge badge-success">{{ total_count }}</span>
+                        </button>
+                        <button class="tab-btn" onclick="showTab('archived')">
+                            <i class="fas fa-archive"></i>
+                            <span>Archived</span>
+                            <span class="badge badge-danger">{{ teachers | selectattr('status', 'equalto', 'Archived') | list | length }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Teachers Tab -->
+                <div id="tab-active" class="tab-content">
+            
+            <div class="glass-panel p-4" style="padding: 1.5rem;">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="hide-on-mobile">Teacher ID</th>
+                                <th>Teacher Details</th>
+                                <th class="hide-on-mobile">Department</th>
+                                <th class="hide-on-mobile">Email</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for teacher in teachers if teacher.status == 'Active' %}
+                            <tr>
+                                <td class="hide-on-mobile" data-label="Teacher ID">{{ teacher.utid }}</td>
+                                <td data-label="Teacher Details">
+                                    <div style="font-weight: 600; color: var(--text-main);">{{ teacher.first_name }} {% if teacher.middle_name %}{{ teacher.middle_name }} {% endif %}{{ teacher.last_name }}</div>
+                                    <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
+                                        ID: {{ teacher.utid }} &bull; {{ teacher.department }}
+                                    </div>
+                                </td>
+                                <td class="hide-on-mobile" data-label="Department">{{ teacher.department }}</td>
+                                <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ teacher.email }}">{{ teacher.email }}</td>
+                                <td data-label="Status">
+                                    <span class="badge {% if teacher.status == 'Active' %}badge-success{% else %}badge-danger{% endif %}">
+                                        {{ teacher.status }}
+                                    </span>
+                                    {% if teacher.lockout_time and teacher.lockout_time > now %}
+                                        <span class="badge badge-danger" style="margin-top: 0.25rem; display: block;">
+                                            <i class="fas fa-lock"></i> Locked
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="action-cell" data-label="Action">
+                                        {% if teacher.lockout_time and teacher.lockout_time > now %}
+                                        <a href="{{ url_for('admin.unlock_user', user_type='teacher', user_id=teacher.utid) }}" 
+                                           class="btn btn-success" 
+                                           style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;">
+                                            <i class="fas fa-unlock"></i> <span class="btn-text">Unlock</span>
+                                        </a>
+                                        {% endif %}
+                                        {% set m_name = teacher.middle_name if teacher.middle_name else '' %}
+                                        {% set dept = teacher.department if teacher.department else '' %}
+                                         <button class="btn btn-secondary" 
+                                                  style="padding: 0.25rem 0.5rem; font-size: 0.8rem;"
+                                                  onclick="openEditModal(`{{ teacher.utid }}`, `{{ teacher.first_name }}`, `{{ m_name }}`, `{{ teacher.last_name }}`, `{{ dept }}`, `{{ teacher.email }}`, `{{ teacher.status }}`)">
+                                              <i class="fas fa-edit"></i> <span class="btn-text">Edit</span>
+                                          </button>
+                                         <a href="{{ url_for('admin.archive_teacher', utid=teacher.utid) }}" 
+                                            class="btn btn-warning" 
+                                            style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;"
+                                            onclick="return confirm('Are you sure you want to archive this teacher?')">
+                                             <i class="fas fa-archive"></i> <span class="btn-text">Archive</span>
+                                         </a>
+                                          <a href="#" 
+                                             class="btn btn-danger" 
+                                             style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;"
+                                             onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_teacher', utid=teacher.utid) }}`)">
+                                              <i class="fas fa-trash-alt"></i> <span class="btn-text">Delete</span>
+                                          </a>
+                                     </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center" data-label="Teacher ID">No teachers found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if total_pages > 1 %}
+                <div class="pagination-container mt-4" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 2rem;">
+                    {% for p in range(1, total_pages + 1) %}
+                        <a href="{{ url_for('admin.manage_teachers', page=p) }}" class="btn {% if p == current_page %}btn-primary{% else %}btn-secondary{% endif %}" style="padding: 0.5rem 1rem;">{{ p }}</a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                </div>
+
+                </div> <!-- End tab-active -->
+
+                <!-- Archived Teachers Tab -->
+                <div id="tab-archived" class="tab-content" style="display: none;">
+                    <div class="glass-panel p-4" style="padding: 1.5rem;">
+                        <h3 class="mb-4 text-danger"><i class="fas fa-archive mr-2"></i> Archived Faculty</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th class="hide-on-mobile">Teacher ID</th>
+                                        <th>Teacher Details</th>
+                                        <th class="hide-on-mobile">Email</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for teacher in teachers if teacher.status == 'Archived' %}
+                                    <tr>
+                                        <td class="hide-on-mobile" data-label="Teacher ID">{{ teacher.utid }}</td>
+                                        <td data-label="Teacher Details">
+                                            <div style="font-weight: 600; color: var(--text-main);">{{ teacher.first_name }} {{ teacher.last_name }}</div>
+                                            <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">{{ teacher.utid }}</div>
+                                        </td>
+                                        <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ teacher.email }}">{{ teacher.email }}</td>
+                                        <td class="action-cell" data-label="Action">
+                                            <a href="{{ url_for('admin.unarchive_teacher', utid=teacher.utid) }}" class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;">
+                                                <i class="fas fa-undo"></i> <span class="btn-text">Unarchive</span>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center" style="padding: 2rem;" data-label="Teacher ID">No archived faculty members.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- End main-content-inner -->
+        </main>
+    </div>
+
+    <!-- Add Teacher Modal -->
+    <div id="addTeacherModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('addTeacherModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Add New Teacher</h3>
+            <form method="POST" action="{{ url_for('admin.manage_teachers') }}" onsubmit="return validateTeacherForm(this)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label class="form-label">First Name</label>
+                    <input type="text" name="first_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Middle Name</label>
+                    <input type="text" name="middle_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Last Name</label>
+                    <input type="text" name="last_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Department</label>
+                    <input type="text" name="department" class="form-control" placeholder="e.g. Computer Science" required>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" required>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addTeacherModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Teacher</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Teacher Modal -->
+    <div id="editTeacherModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('editTeacherModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Edit Teacher</h3>
+            <form id="editTeacherForm" method="POST" onsubmit="return validateTeacherForm(this)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label class="form-label">First Name</label>
+                    <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Middle Name</label>
+                    <input type="text" name="middle_name" id="edit_middle_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Last Name</label>
+                    <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Department</label>
+                    <input type="text" name="department" id="edit_department" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" id="edit_email" class="form-control" required>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="form-label">Status</label>
+                    <select name="status" id="edit_status" class="form-control">
+                        <option value="Active">Active</option>
+                        <option value="Archived">Archived</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editTeacherModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Teacher</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Persist add form data in localStorage
+        function saveAddForm() {
+            const f = document.getElementById('addTeacherModal');
+            const data = {};
+            f.querySelectorAll('input,select').forEach(el => { if (el.name && el.name !== 'csrf_token') data[el.name] = el.value; });
+            localStorage.setItem('addTeacherForm', JSON.stringify(data));
+        }
+        function restoreAddForm() {
+            const saved = localStorage.getItem('addTeacherForm');
+            if (!saved) return;
+            const data = JSON.parse(saved);
+            const f = document.getElementById('addTeacherModal');
+            Object.keys(data).forEach(k => { const el = f.querySelector(`[name="${k}"]`); if (el) el.value = data[k]; });
+        }
+
+        function openAddModal() {
+            restoreAddForm();
+            document.getElementById('addTeacherModal').classList.add('active');
+        }
+
+        function openEditModal(tid, fname, mname, lname, dept, email, status) {
+            document.getElementById('editTeacherForm').action = "/admin/edit_teacher/" + tid;
+            document.getElementById('edit_first_name').value = fname;
+            document.getElementById('edit_middle_name').value = mname;
+            document.getElementById('edit_last_name').value = lname;
+            document.getElementById('edit_department').value = dept;
+            document.getElementById('edit_email').value = email;
+            document.getElementById('edit_status').value = status;
+            document.getElementById('editTeacherModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // On page load: if there's a flash error, reopen the add modal with saved data
+        document.addEventListener('DOMContentLoaded', () => {
+            const hasError = document.querySelector('.alert-error, .alert-danger');
+            if (hasError && localStorage.getItem('addTeacherForm')) {
+                openAddModal();
+            }
+            // Attach input listeners to save form data
+            document.getElementById('addTeacherModal').querySelectorAll('input,select').forEach(el => {
+                el.addEventListener('input', saveAddForm);
+            });
+        });
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + tabId).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        function validateTeacherForm(form) {
+            const firstName = form.querySelector('[name="first_name"]').value.trim();
+            const middleName = form.querySelector('[name="middle_name"]').value.trim();
+            const lastName = form.querySelector('[name="last_name"]').value.trim();
+            const email = form.querySelector('[name="email"]').value.trim();
+
+            if (!firstName || !middleName || !lastName || !email) {
+                alert("Please fill in all required fields.");
+                return false;
+            }
+
+            const emailPattern = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+            if (!emailPattern.test(email)) {
+                alert("Invalid email format.");
+                return false;
+            }
+
+            const namePattern = /^[A-Za-z\s\-\.']+$/;
+            if (!namePattern.test(firstName) || !namePattern.test(middleName) || !namePattern.test(lastName)) {
+                alert("Names can only contain letters, spaces, and standard symbols.");
+                return false;
+            }
+
+            // Junk Name Detection
+            const isJunk = (s) => {
+                s = s.toLowerCase();
+                if (/(.)\1\1\1/.test(s)) return true;
+                const vowels = (s.match(/[aeiou]/g) || []).length;
+                if (s.length > 5 && vowels === 0) return true;
+                if (['asdf', 'ghjk', 'xcv', 'qwer'].some(p => s.includes(p))) return true;
+                return false;
+            };
+
+            if (isJunk(firstName) || isJunk(lastName)) {
+                alert("Please enter a valid name (avoid random characters).");
+                return false;
+            }
+
+            // Email-to-Name Connectivityy
+            const emailPrefix = email.split('@')[0].toLowerCase().replace(/[\._]/g, '');
+            const fn = firstName.toLowerCase().replace(/\s/g, '');
+            const ln = lastName.toLowerCase().replace(/\s/g, '');
+            if (!emailPrefix.includes(fn.substring(0, 3)) && !emailPrefix.includes(ln.substring(0, 3)) && !fn.includes(emailPrefix) && !ln.includes(emailPrefix)) {
+                alert("The Gmail address must be connected to the teacher's name.");
+                return false;
+            }
+
+            return true;
+        }
+
+        // Clear saved form data on successful submit
+        document.querySelectorAll('form').forEach(f => {
+            f.addEventListener('submit', () => localStorage.removeItem('addTeacherForm'));
+        });
+    </script>
+
+
+        <nav class="bottom-nav">
+        <a href="{{ url_for('admin.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('admin.manage_students') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_students' %}active{% endif %}">
+            <i class="fas fa-user-graduate"></i>
+            <span>Students</span>
+        </a>
+        <a href="{{ url_for('admin.manage_teachers') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_teachers' %}active{% endif %}">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>Faculty</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Logs</span>
+        </a>
+    </nav>
+
+
+<script src="{{ url_for('static', filename='js/main.js') }}?v=1.1"></script>
+</body>
+</html>

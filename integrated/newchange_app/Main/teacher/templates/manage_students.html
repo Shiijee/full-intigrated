@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Students | Attendeez</title>
+
+    <!-- Global shared stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-teacher">
+<div class="dashboard-container">
+
+    <!-- ===================== SIDEBAR ===================== -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                <button class="burger-btn" onclick="toggleUserMenu()">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <div id="user-dropdown" class="user-dropdown">
+                    <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                        <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ name }}</p>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">Faculty Member</p>
+                    </div>
+                    <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                        <i class="fas fa-key"></i> Change Password
+                    </a>
+                    <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                </div>
+            </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('teacher.profile') }}" class="nav-item profile-nav-item" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
+                <a href="{{ url_for('teacher.dashboard') }}" class="nav-item" data-tooltip="Teacher Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Teacher Dashboard</span></a>
+                <a href="{{ url_for('teacher.manage_students') }}" class="nav-item active" data-tooltip="Manage Students"><i class="fas fa-users"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('teacher.manual_attendance') }}" class="nav-item" data-tooltip="Manual Attendance"><i class="fas fa-clipboard-check"></i><span class="nav-item-text"> Manual Attendance</span></a>
+                <a href="{{ url_for('teacher.manage_marks') }}" class="nav-item" data-tooltip="Manage Marks"><i class="fas fa-star-half-alt"></i><span class="nav-item-text"> Manage Marks</span></a>
+                <a href="{{ url_for('teacher.view_excuses') }}" class="nav-item" data-tooltip="View Excuse Letters"><i class="fas fa-envelope-open-text"></i><span class="nav-item-text"> View Excuse Letters</span></a>
+                <a href="{{ url_for('teacher.reports') }}" class="nav-item" data-tooltip="Reports"><i class="fas fa-chart-bar"></i><span class="nav-item-text"> Reports</span></a>
+                <a href="{{ url_for('teacher.daily_attendance_log') }}" class="nav-item" data-tooltip="Daily Attendance Log"><i class="fas fa-calendar-check"></i><span class="nav-item-text"> Daily Attendance Log</span></a>
+            </nav>
+            
+        </aside>
+
+    <!-- ===================== MAIN CONTENT ===================== -->
+    <main class="main-content">
+        <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+            <div class="header-left">
+                {% if selected_class %}
+                <div class="flex items-center gap-4">
+                    <a href="{{ url_for('teacher.manage_students') }}" class="btn btn-secondary" style="padding: 0.5rem; border-radius: 8px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;" title="Back to Selection">
+                        <i class="fas fa-chevron-left" style="margin: 0;"></i>
+                    </a>
+                    <div>
+                        <h2 style="margin: 0; line-height: 1.2;">My Students</h2>
+                        <p style="color: var(--text-muted); font-size: 0.8rem; margin: 0;">
+                            <span class="badge badge-warning" style="padding: 0.1rem 0.4rem; font-size: 0.65rem; vertical-align: middle;">{{ selected_class.subject_code }}</span>
+                            {{ selected_class.subject_name }} · Sec {{ selected_class.section }}
+                        </p>
+                    </div>
+                </div>
+                {% else %}
+                <h2 style="margin: 0;">My Students</h2>
+                {% endif %}
+            </div>
+            </header>
+
+        <div class="main-content-inner">
+            {% if selected_class %}
+            <!-- Page Title was moved to Header -->
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Search Bar -->
+        <div class="glass-panel p-4 mb-4" style="border-radius: 15px;">
+            <form method="GET" action="{{ url_for('teacher.manage_students') }}" style="display: flex; gap: 1rem; align-items: flex-end;">
+                <input type="hidden" name="subject_id" value="{{ selected_class.subject_id }}">
+                <input type="hidden" name="section" value="{{ selected_class.section }}">
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label" style="font-size: 0.8rem; opacity: 0.8;">Search Students</label>
+                    <div style="position: relative;">
+                        <i class="fas fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                        <input type="text" name="search" class="form-control" placeholder="Search by Name or ID..." value="{{ search }}" style="padding-left: 2.5rem;">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="submit" class="btn btn-primary" style="height: 42px;">
+                        <i class="fas fa-filter mr-1"></i> Apply
+                    </button>
+                    <a href="{{ url_for('teacher.manage_students', subject_id=selected_class.subject_id, section=selected_class.section, clear=1) }}" class="btn btn-secondary" style="height: 42px; display: flex; align-items: center; justify-content: center; text-decoration: none;" title="Clear All Filters">
+                        <i class="fas fa-sync-alt"></i>
+                    </a>
+    
+                </div>
+            </form>
+        </div>
+
+        <div class="glass-panel" style="padding:1.5rem;">
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Course &amp; Level</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students if student.status == 'Active' %}
+                        <tr>
+                            <td>
+                                <span class="badge badge-primary">{{ student.usid }}</span>
+                            </td>
+                            <td>
+                                <strong>{{ student.last_name }}</strong>, {{ student.first_name }} {{ student.middle_name }}
+                            </td>
+                            <td>{{ student.course }} — {{ student.level }}</td>
+
+                            <td>
+                                <span class="badge {% if student.status == 'Active' %}badge-success{% else %}badge-danger{% endif %}">
+                                    {{ student.status }}
+                                </span>
+                            </td>
+
+                            <td>
+                                 {% if student.status == 'Active' %}
+                                    {% if student.drop_status == 'Pending' %}
+                                    <span class="badge badge-warning">
+                                        <i class="fas fa-clock mr-1"></i> Drop Pending
+                                    </span>
+                                    {% else %}
+                                    <button class="btn btn-warning" 
+                                            style="padding: 0.25rem 0.6rem; font-size: 0.8rem;"
+                                            onclick="openDropModal('{{ student.usid }}', '{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}')">
+                                        <i class="fas fa-user-minus"></i> Request Drop
+                                    </button>
+                                    {% endif %}
+                                 {% else %}
+                                 <span class="badge badge-secondary">Archived</span>
+                                 {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">
+                                <i class="fas fa-user-slash" style="font-size:1.5rem; display:block; margin-bottom:0.5rem;"></i>
+                                No students enrolled in this class yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% else %}
+        <h2 class="mb-4">My Students</h2>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">Select a class to manage students enrolled in that specific subject and section.</p>
+        
+        <!-- Flash messages (for global context) -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
+            {% for c in classes %}
+            <a href="{{ url_for('teacher.manage_students', subject_id=c.subject_id, section=c.section) }}" class="glass-panel p-6" style="text-decoration: none; color: inherit; transition: all 0.3s ease; border-left: 4px solid var(--primary);">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="badge badge-warning" style="font-family: monospace;">{{ c.subject_code }}</span>
+                    <span class="badge badge-success">Section {{ c.section }}</span>
+                </div>
+                <h4 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-main);">{{ c.subject_name }}</h4>
+                <div class="flex items-center" style="color: var(--primary); font-weight: 600; font-size: 0.9rem;">
+                    Manage Enrolled Students <i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.7rem;"></i>
+                </div>
+            </a>
+            {% else %}
+            <p style="color: var(--text-muted);">No classes assigned yet.</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+        </div> <!-- End main-content-inner -->
+
+        <!-- Drop Request Modals -->
+        <div id="dropModal" class="modal-overlay">
+            <div class="glass-panel" style="width: 450px; padding: 2rem; position: relative;">
+                <button onclick="closeModal('dropModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+                <h3 class="mb-4">Request to Drop Student</h3>
+                <form method="POST" data-inline>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <input type="hidden" name="action" value="request_drop">
+                    <input type="hidden" name="usid" id="drop_usid">
+                    <input type="hidden" name="subject_id" value="{{ selected_class.subject_id if selected_class else '' }}">
+                    <input type="hidden" name="section" value="{{ selected_class.section if selected_class else '' }}">
+                    
+                    <p style="font-size: 0.9rem; margin-bottom: 1rem;">Student: <strong id="drop_student_name"></strong></p>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Reason for Request</label>
+                        <textarea name="reason" class="form-control" rows="3" placeholder="e.g. Excessive absences, Student dropped the course, etc." required></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('dropModal')">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function openDropModal(sid, name) {
+                document.getElementById('drop_usid').value = sid;
+                document.getElementById('drop_student_name').innerText = name;
+                document.getElementById('dropModal').classList.add('active');
+            }
+            function closeModal(id) {
+                document.getElementById(id).classList.remove('active');
+            }
+        </script>
+    </main>
+</div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <nav class="bottom-nav">
+        <a href="{{ url_for('teacher.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('teacher.manual_attendance') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.manual_attendance' %}active{% endif %}">
+            <i class="fas fa-edit"></i>
+            <span>Manual</span>
+        </a>
+        <a href="{{ url_for('teacher.view_excuses') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.view_excuses' %}active{% endif %}">
+            <i class="fas fa-envelope-open-text"></i>
+            <span>Excuse</span>
+        </a>
+        <a href="{{ url_for('teacher.reports') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.reports' %}active{% endif %}">
+            <i class="fas fa-chart-bar"></i>
+            <span>Reports</span>
+        </a>
+        <a href="{{ url_for('teacher.profile') }}" class="bottom-nav-item {% if request.endpoint == 'teacher.profile' %}active{% endif %}">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+
+</body>
+</html>

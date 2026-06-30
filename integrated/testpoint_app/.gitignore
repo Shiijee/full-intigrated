@@ -1,0 +1,15 @@
+testpoint/Student/__pycache__/student.cpython-314.pyc
+testpoint/Teacher/__pycache__/teacher.cpython-314.pyc
+testpoint/Admin/__pycache__/admin.cpython-314.pyc
+testpoint/Auth/__pycache__/login.cpython-314.pyc
+testpoint/__pycache__/__init__.cpython-314.pyc
+__pycache__/app.cpython-314.pyc
+templates/searchTemplate.html
+testpoint/__init__.py
+testpoint/passwordDB.env
+passwordDB.env
+.vscode/settings.json
+
+testpoint/static/uploads/verifications/VERIFY_1777465895_jp2soccemm.pdf
+testpoint/static/uploads/verifications/VERIFY_1777465892_jp2soccemm.pdf
+testpoint/static/uploads/verifications/VERIFY_1777465867_jp2soccemm.pdf

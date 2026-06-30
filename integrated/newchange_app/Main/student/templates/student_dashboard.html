@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Student Dashboard | Attendeez</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body class="theme-student" data-mark-read-url="{{ url_for('user.mark_notifications_read') }}">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div
+                            style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{
+                                session.get('name', 'Student') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Student</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('user.profile') }}" class="nav-item profile-nav-item"><i class="fas fa-user-circle"></i> My Profile</a>
+                <a href="{{ url_for('user.dashboard') }}" class="nav-item active"><i class="fas fa-house"></i> Student
+                    Dashboard </a>
+                
+                <div class="nav-accordion">
+                    <button class="nav-item-btn accordion-trigger" onclick="toggleAccordion(this)">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>My Classes</span>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </button>
+                    <div class="accordion-content">
+                        {% for s in subjects %}
+                        <a href="{{ url_for('user.subject_performance', subject_id=s.subject_id) }}" class="nav-item" title="{{ s.subject_name }}" style="position: relative;">
+                            <i class="fas fa-book"></i> {{ s.subject_code }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <a href="{{ url_for('user.timetable') }}" class="nav-item"><i class="fas fa-calendar-alt"></i> Class
+                    Timetable </a>
+                <a href="{{ url_for('user.notifications_page') }}" class="nav-item"><i class="fas fa-bell"></i>
+                    Notifications {% if unread_count > 0 %}<span id="notif-badge-sidebar" class="badge badge-danger"
+                        style="margin-left: auto;">{{ unread_count }}</span>{% endif %}</a>
+                <a href="{{ url_for('user.submit_excuse') }}" class="nav-item"><i class="fas fa-envelope-open-text"></i>
+                    Excuse Letters </a>
+            </nav>
+
+            
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Student Dashboard</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="mb-8">
+                    <h1 class="auth-title" style="margin-bottom: 0.5rem;">Welcome back, {{ name }}!</h1>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="text-muted" style="font-size: 1rem;">Overall Attendance:</span>
+                        <span style="font-weight: 700; color: var(--accent); font-size: 1.1rem;">{{ attendance_pct
+                            }}%</span>
+                    </div>
+                </div>
+
+                {% if low_attendance %}
+                <div class="alert alert-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <strong>Warning!</strong> Your attendance is below 75%. Please attend more classes to maintain
+                        eligibility.
+                    </div>
+                </div>
+                {% endif %}
+
+                <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;">
+                    <!-- Left: Charts and Subject Grids -->
+                    <div>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">Present</div>
+                                <div class="stat-value" style="color: var(--accent);">{{ stats.get('Present', 0) }}
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Absent</div>
+                                <div class="stat-value" style="color: var(--danger);">{{ stats.get('Absent', 0) }}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Late</div>
+                                <div class="stat-value" style="color: var(--warning);">{{ stats.get('Late', 0) }}</div>
+                            </div>
+                        </div>
+
+                        <div class="glass-panel" style="padding: 2rem; margin-bottom: 2rem;">
+                            <h3 style="font-size: 1.1rem; margin-bottom: 1.5rem;">Performance Breakdown</h3>
+                            <div style="height: 300px;">
+                                <canvas id="performanceChart"></canvas>
+                            </div>
+                        </div>
+
+                        <h3 style="font-size: 1.25rem; margin-bottom: 1.5rem;">Current Subjects</h3>
+                        <div
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
+                            {% for s in subjects %}
+                            <a href="{{ url_for('user.subject_performance', subject_id=s.subject_id) }}"
+                                class="glass-panel clickable-panel"
+                                style="padding: 1.5rem; display: block; color: inherit; text-decoration: none;">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <div style="font-weight: 700; color: var(--primary); font-size: 0.8rem;">{{ s.subject_code }}</div>
+                                        <h4 style="font-size: 1rem; margin: 0.25rem 0;">{{ s.subject_name }}</h4>
+                                        <div style="font-size: 0.8rem; color: var(--text-muted);"><i class="fas fa-chalkboard-teacher"></i> {{ s.teacher_first }} {{ s.teacher_last }}</div>
+                                    </div>
+                                    <div
+                                        class="badge {% if s.attendance_pct >= 75 %}badge-success{% else %}badge-danger{% endif %}">
+                                        {{ s.attendance_pct }}%
+                                    </div>
+                                </div>
+                                <div class="flex gap-4 mb-4 text-muted text-sm">
+                                    <span>P: {{ s.stats.get('Present', 0) }}</span>
+                                    <span>A: {{ s.stats.get('Absent', 0) }}</span>
+                                    <span>L: {{ s.stats.get('Late', 0) }}</span>
+                                </div>
+                                <div class="btn btn-outline-primary btn-sm w-full">View Progress</div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        const statsData = JSON.parse('{{ stats | tojson }}');
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Present', 'Absent', 'Late'],
+                datasets: [{
+                    data: [statsData['Present'] || 0, statsData['Absent'] || 0, statsData['Late'] || 0],
+                    backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '80%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#a1a1aa',
+                            padding: 20,
+                            font: { family: 'Inter', size: 12 }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+
+    <nav class="bottom-nav">
+        <a href="{{ url_for('user.dashboard') }}"
+            class="nav-item {% if request.endpoint == 'user.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('user.timetable') }}"
+            class="nav-item {% if request.endpoint == 'user.timetable' %}active{% endif %}">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Schedule</span>
+        </a>
+        <a href="{{ url_for('user.submit_excuse') }}"
+            class="nav-item {% if request.endpoint == 'user.submit_excuse' %}active{% endif %}">
+            <i class="fas fa-envelope-open-text"></i>
+            <span>Excuse</span>
+        </a>
+        <a href="{{ url_for('user.notifications_page') }}"
+            class="nav-item {% if request.endpoint == 'user.notifications_page' %}active{% endif %}">
+            <i class="fas fa-bell"></i>
+            <span>Notifications</span>
+        </a>
+        <a href="{{ url_for('user.profile') }}"
+            class="nav-item {% if request.endpoint == 'user.profile' %}active{% endif %}">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+
+
+
+</body>
+
+</html>

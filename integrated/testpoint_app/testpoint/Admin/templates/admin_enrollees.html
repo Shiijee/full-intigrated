@@ -1,0 +1,192 @@
+{% extends "admin_base.html" %}
+{% block title %}Manage Enrollees - {{ class_info.class_code }}{% endblock %}
+
+{% block head %}
+<style>
+    .card { border: none; border-radius: var(--tp-admin-radius) !important; }
+    .btn-circle-sm { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; transition: all 0.2s; border: 1.5px solid var(--tp-admin-border); background: #fff; }
+    .btn-circle-sm:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .tp-pill { border-radius: 50px !important; font-weight: 600; font-size: 12px; padding: 8px 24px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- HEADER & ACTIONS -->
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);">
+            Enrollees: <span class="text-primary">{{ class_info.class_code }}</span>
+        </h1>
+        <p class="text-muted small mb-0">Managing individual students for <strong>{{ class_info.course_name }}</strong>.</p>
+    </div>
+    <button class="btn btn-dark shadow-sm tp-pill" data-toggle="modal" data-target="#enrollModal">
+        <i class="fas fa-user-plus mr-2"></i> Enroll Student
+    </button>
+</div>
+
+<!-- BREADCRUMBS -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb bg-white shadow-sm small" style="border-radius: 12px;">
+        <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_dashboard') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('admin.manage_classes') }}">Classes</a></li>
+        <li class="breadcrumb-item active">{{ class_info.class_code }}</li>
+    </ol>
+</nav>
+
+<!-- FILTER -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body py-3">
+        <div class="input-group">
+            <div class="input-group-prepend">
+                <span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-gray-400 small"></i></span>
+            </div>
+            <input type="text" id="enrolleeSearch" class="form-control border-left-0" placeholder="Search by name, student ID, or email...">
+        </div>
+    </div>
+</div>
+
+<!-- TABLE -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header py-3 bg-white border-0">
+        <h6 class="m-0 font-weight-bold text-gray-800 text-uppercase small" style="letter-spacing: 0.5px;">Active Enrollment List ({{ enrollees|length }})</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="enrollTable">
+                <thead class="bg-light">
+                    <tr style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <th class="border-0 px-4">Student ID</th>
+                        <th class="border-0">Full Name</th>
+                        <th class="border-0">Email Address</th>
+                        <th class="border-0">Date Enrolled</th>
+                        <th class="border-0 text-center px-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for enrollee in enrollees %}
+                    <tr class="enrollee-row">
+                        <td class="px-4"><span class="font-weight-bold text-gray-800">{{ enrollee.student_id }}</span></td>
+                        <td class="text-capitalize font-weight-bold text-gray-700">{{ enrollee.firstname }} {{ enrollee.lastname }}</td>
+                        <td class="text-muted">{{ enrollee.email }}</td>
+                        <td class="small text-muted">{{ enrollee.enrolled_at }}</td>
+                        <td class="text-center px-4">
+                            <button type="button" class="btn btn-circle-sm" data-toggle="modal" data-target="#confirmUnenrollModal" data-enrollment="{{ enrollee.enrollment_id }}" data-name="{{ enrollee.firstname }} {{ enrollee.lastname }}" title="Unenroll Student">
+                                <i class="fas fa-user-minus text-danger"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center py-5 text-muted font-italic small">No students are currently enrolled.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer bg-white border-0 py-3">
+            <nav aria-label="Enrollee pagination"><ul class="pagination pagination-sm justify-content-center mb-0" id="enrollee-pagination"></ul></nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- ENROLL STUDENT MODAL -->
+<div class="modal fade" id="enrollModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 pb-0 pt-4 px-4">
+                <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-user-plus mr-2 text-primary"></i>Manual Enrollment</h5>
+                <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
+            </div>
+            <form action="{{ url_for('admin.enroll_student') }}" method="POST">
+                <div class="modal-body p-4">
+                    <input type="hidden" name="class_code" value="{{ class_info.class_code }}">
+                    <div class="form-group mb-0">
+                        <label class="small font-weight-bold">Verified Students</label>
+                        <select name="student_id" class="form-control" required>
+                            <option value="">-- Select student --</option>
+                            {% for s in all_students %}
+                            <option value="{{ s.student_id }}">{{ s.firstname }} {{ s.lastname }} ({{ s.student_id }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="mt-3 p-2 px-3 bg-light rounded text-muted" style="font-size: 11px; border: 1.5px dashed var(--tp-admin-border);">
+                            Only verified students not currently in this class are listed.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button class="btn btn-light px-4" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-dark px-4 font-weight-bold" type="submit">Complete Enrollment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- UNENROLL MODAL -->
+<div class="modal fade" id="confirmUnenrollModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 pb-0 pt-4 px-4 text-center">
+                <h5 class="modal-title w-100 font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-user-minus mr-2 text-danger"></i>Unenroll Student</h5>
+            </div>
+            <form id="unenrollForm" method="POST">
+                <div class="modal-body text-center p-4">
+                    <p class="text-gray-600 mb-0">Remove <strong id="studentNameDisplay" class="text-dark"></strong> from this class? Access to future exams will be revoked.</p>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4 pt-0 justify-content-center">
+                    <button class="btn btn-light px-4" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger px-4 font-weight-bold" type="submit">Confirm Removal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('admin.static', filename='js/paginator.js') }}"></script>
+<script>
+    $(document).ready(function() {
+        "use strict";
+
+        // 1. Initialize Pagination and Search Logic
+        const rows = Array.from(document.querySelectorAll('#enrollTable tbody tr.enrollee-row'));
+        let filtered = [...rows];
+        
+        const paginator = createPaginator({
+            tableBodySelector: '#enrollTable tbody',
+            paginationSelector: '#enrollee-pagination',
+            rowsPerPage: 10,
+            getVisibleRows: () => filtered
+        });
+        paginator.render();
+
+        // 2. Real-time Search Filter
+        $('#enrolleeSearch').on('keyup', function() {
+            const val = $(this).val().toLowerCase();
+            filtered = rows.filter(r => r.textContent.toLowerCase().includes(val));
+            paginator.reset();
+        });
+
+        // 3. Dynamic URL Generation for Unenrollment Modal
+        $('#confirmUnenrollModal').on('show.bs.modal', function (e) {
+            var btn = $(e.relatedTarget);
+            var enrollmentId = btn.data('enrollment');
+            var studentName = btn.data('name');
+            var classCode = "{{ class_info.class_code }}"; // e.g., "#104"
+
+            $('#studentNameDisplay').text(studentName);
+
+            var encodedClassCode = encodeURIComponent(classCode);
+            
+            var actionUrl = '{{ url_for("admin.unenroll_student", enrollment_id=0, class_code="_code_") }}'
+                .replace('0', enrollmentId)
+                .replace('_code_', encodedClassCode);
+
+            $(this).find('form').attr('action', actionUrl);
+        });
+
+        $('#enrollModal, #confirmUnenrollModal').appendTo('body');
+    });
+</script>
+{% endblock %}

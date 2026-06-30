@@ -1,0 +1,221 @@
+{% extends "admin/base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('admin.static', filename='css/profile.css') }}" rel="stylesheet"/>
+<style>
+  .pform-hint { font-size:0.76rem; margin-top:5px; min-height:16px; display:flex; align-items:center; gap:5px; }
+  .pform-hint.error { color:#c62828; }
+  .pform-hint.ok    { color:#2e7d32; }
+
+  .strength-wrapper { margin-top:8px; }
+  .strength-bar-track { display:flex; gap:4px; margin-bottom:5px; }
+  .strength-bar-track .seg { flex:1; height:4px; border-radius:3px; background:#ddd; transition:background .3s; }
+  .seg.weak   { background:#e53935; }
+  .seg.medium { background:#f9a825; }
+  .seg.strong { background:#2e7d32; }
+
+  .strength-label { font-size:0.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; min-height:14px; }
+  .strength-label.weak   { color:#e53935; }
+  .strength-label.medium { color:#f9a825; }
+  .strength-label.strong { color:#2e7d32; }
+
+  .req-grid { display:grid; grid-template-columns:1fr 1fr; gap:3px 12px; margin-top:8px; }
+  .req-item { display:flex; align-items:center; gap:5px; font-size:0.74rem; color:#999; transition:color .25s; }
+  .req-item .dot { width:6px; height:6px; border-radius:50%; background:#ddd; flex-shrink:0; transition:background .25s; }
+  .req-item.met { color:#2e7d32; }
+  .req-item.met .dot { background:#2e7d32; }
+
+  #pwSubmitBtn:disabled { opacity:.45; cursor:not-allowed; pointer-events:none; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+
+<div class="profile-layout">
+
+  <!-- ── Left: Avatar card ── -->
+  <div class="profile-sidebar">
+    <div class="profile-avatar-card">
+      <div class="profile-avatar-ring">
+        <div class="profile-avatar-letter">{{ admin.firstname[0]|upper if admin.firstname else 'A' }}</div>
+      </div>
+      <div class="profile-avatar-name">{{ admin.firstname }} {{ admin.surname }}</div>
+      <div class="profile-avatar-role">
+        <i class="bi bi-shield-fill-check me-1"></i>
+        {{ 'Super Admin' if admin.role == 'superadmin' else 'Administrator' }}
+      </div>
+      {% if admin.college_name %}
+      <div class="profile-avatar-college">
+        <i class="bi bi-building me-1"></i>{{ admin.college_name }}
+      </div>
+      {% endif %}
+      <div class="profile-avatar-divider"></div>
+      <div class="profile-meta-row">
+        <i class="bi bi-envelope-fill"></i>
+        <span>{{ admin.email or '—' }}</span>
+      </div>
+      <div class="profile-meta-row">
+        <i class="bi bi-calendar3"></i>
+        <span>Joined {{ admin.created_at.strftime('%b %d, %Y') if admin.created_at else '—' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right: Forms ── -->
+  <div class="profile-main">
+
+    <!-- ── Personal Info (read-only) ── -->
+    <div class="card-panel profile-card">
+      <div class="profile-card-header">
+        <div class="profile-card-title"><i class="bi bi-person-fill me-2"></i>Personal Information</div>
+        <div class="profile-card-subtitle">Your personal details on record.</div>
+      </div>
+      <form class="profile-form">
+        <div class="pform-row">
+          <div class="pform-group">
+            <label class="pform-label">First Name</label>
+            <input type="text" class="pform-input" value="{{ admin.firstname or '' }}" readonly
+                   style="background:#f5f5f5;cursor:not-allowed;color:#888;"/>
+          </div>
+          <div class="pform-group">
+            <label class="pform-label">Middle Name <span class="pform-optional">(optional)</span></label>
+            <input type="text" class="pform-input" value="{{ admin.middlename or '' }}" readonly
+                   style="background:#f5f5f5;cursor:not-allowed;color:#888;"/>
+          </div>
+          <div class="pform-group">
+            <label class="pform-label">Surname</label>
+            <input type="text" class="pform-input" value="{{ admin.surname or '' }}" readonly
+                   style="background:#f5f5f5;cursor:not-allowed;color:#888;"/>
+          </div>
+        </div>
+        <div class="pform-row">
+          <div class="pform-group pform-group-wide">
+            <label class="pform-label">Email Address</label>
+            <input type="text" class="pform-input" value="{{ admin.email or '' }}" readonly
+                   style="background:#f5f5f5;cursor:not-allowed;color:#888;"/>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- ── Change Password ── -->
+    <div class="card-panel profile-card">
+      <div class="profile-card-header">
+        <div class="profile-card-title"><i class="bi bi-lock-fill me-2"></i>Change Password</div>
+        <div class="profile-card-subtitle">Use a strong password you don't use elsewhere.</div>
+      </div>
+      <form method="POST" action="{{ url_for('admin.update_profile') }}" class="profile-form" id="pwForm">
+        <input type="hidden" name="form_type" value="password"/>
+        <div class="pform-row">
+
+          <!-- Current password -->
+          <div class="pform-group">
+            <label class="pform-label">Current Password</label>
+            <div class="pform-pw-wrap">
+              <input type="password" name="current_password" id="cur_pw" class="pform-input"
+                     placeholder="Enter current password"
+                     value="{{ pw_error_restore.current_password if pw_error_restore else '' }}"
+                     oninput="syncPwBtn()"/>
+              <button type="button" class="pform-pw-eye" onclick="togglePw('cur_pw','eye0')">
+                <i class="bi bi-eye-fill" id="eye0"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- New password + strength -->
+          <div class="pform-group">
+            <label class="pform-label">New Password</label>
+            <div class="pform-pw-wrap">
+              <input type="password" name="new_password" id="new_pw" class="pform-input"
+                     placeholder="Min. 8 characters"
+                     value="{{ pw_error_restore.new_password if pw_error_restore else '' }}"
+                     oninput="updateStrength()"/>
+              <button type="button" class="pform-pw-eye" onclick="togglePw('new_pw','eye1')">
+                <i class="bi bi-eye-fill" id="eye1"></i>
+              </button>
+            </div>
+            <div class="strength-wrapper" id="strengthWrapper" style="display:none;">
+              <div class="strength-bar-track">
+                <div class="seg" id="seg1"></div>
+                <div class="seg" id="seg2"></div>
+                <div class="seg" id="seg3"></div>
+              </div>
+              <div class="strength-label" id="strengthLabel"></div>
+              <div class="req-grid">
+                <div class="req-item" id="req-len"><span class="dot"></span>8+ characters</div>
+                <div class="req-item" id="req-upper"><span class="dot"></span>Uppercase letter</div>
+                <div class="req-item" id="req-lower"><span class="dot"></span>Lowercase letter</div>
+                <div class="req-item" id="req-num"><span class="dot"></span>Number</div>
+                <div class="req-item" id="req-special"><span class="dot"></span>Special char</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Confirm password -->
+          <div class="pform-group">
+            <label class="pform-label">Confirm New Password</label>
+            <div class="pform-pw-wrap">
+              <input type="password" name="confirm_password" id="conf_pw" class="pform-input"
+                     placeholder="Repeat new password"
+                     value="{{ pw_error_restore.confirm_password if pw_error_restore else '' }}"
+                     oninput="updateMatch()"/>
+              <button type="button" class="pform-pw-eye" onclick="togglePw('conf_pw','eye2')">
+                <i class="bi bi-eye-fill" id="eye2"></i>
+              </button>
+            </div>
+            <div class="pform-hint" id="hintMatch"></div>
+          </div>
+
+        </div>
+        <div class="pform-actions">
+          <button type="submit" class="btn btn-primary-custom" id="pwSubmitBtn" disabled>
+            <i class="bi bi-shield-lock-fill me-2"></i>Update Password
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ── Account Details (read-only) ── -->
+    <div class="card-panel profile-card">
+      <div class="profile-card-header">
+        <div class="profile-card-title"><i class="bi bi-info-circle-fill me-2"></i>Account Details</div>
+        <div class="profile-card-subtitle">Your system account information — read only.</div>
+      </div>
+      <div class="profile-details-grid">
+        <div class="profile-detail-item">
+          <div class="profile-detail-label">Account ID</div>
+          <div class="profile-detail-value">{{ admin.student_id }}</div>
+        </div>
+        <div class="profile-detail-item">
+          <div class="profile-detail-label">Role</div>
+          <div class="profile-detail-value">
+            <span class="role-badge">{{ 'Super Admin' if admin.role == 'superadmin' else 'Administrator' }}</span>
+          </div>
+        </div>
+        <div class="profile-detail-item">
+          <div class="profile-detail-label">College / Department</div>
+          <div class="profile-detail-value">{{ admin.college_name or 'All Colleges' }}</div>
+        </div>
+        <div class="profile-detail-item">
+          <div class="profile-detail-label">Account Status</div>
+          <div class="profile-detail-value">
+            <span class="status-active"><i class="bi bi-circle-fill me-1" style="font-size:7px;"></i>Active</span>
+          </div>
+        </div>
+        <div class="profile-detail-item">
+          <div class="profile-detail-label">Date Registered</div>
+          <div class="profile-detail-value">{{ admin.created_at.strftime('%B %d, %Y') if admin.created_at else '—' }}</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('admin.static', filename='js/profile.js') }}"></script>
+{% endblock %}

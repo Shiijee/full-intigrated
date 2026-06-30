@@ -1,0 +1,86 @@
+<ul class="navbar-nav sidebar sidebar-dark accordion" id="accordionSidebar" style="min-height: 100vh;">
+
+    <!-- Brand -->
+    <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{url_for('admin.admin_dashboard')}}">
+        <div class="sidebar-brand-icon" style="color: #fff;"><i class="fas fa-shield-alt"></i></div>
+        <div class="sidebar-brand-text mx-2" style="font-family: var(--tp-serif); font-weight: 400;">
+            TestPoint.
+        </div>
+    </a>
+
+    <hr class="sidebar-divider my-0" style="opacity: 0.05;">
+
+    <!-- Dashboard -->
+    <li class="nav-item">
+        <a class="nav-link" href="{{url_for('admin.admin_dashboard')}}">
+            <i class="fas fa-fw fa-th-large"></i>
+            <span>Dashboard</span>
+        </a>
+    </li>
+
+    <!-- Section 1: Users -->
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseUsers"
+           aria-expanded="false" aria-controls="collapseUsers">
+            <i class="fas fa-fw fa-users"></i>
+            <span>Users</span>
+        </a>
+        <div id="collapseUsers" class="collapse" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{url_for('admin.manage_accounts')}}">Account Manager</a>
+                <a class="collapse-item" href="{{url_for('admin.view_verifications')}}">Verifications</a>
+            </div>
+        </div>
+    </li>
+
+    <!-- Section 2: Academic -->
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseAcademic"
+           aria-expanded="false" aria-controls="collapseAcademic">
+            <i class="fas fa-fw fa-graduation-cap"></i>
+            <span>Academic</span>
+        </a>
+        <div id="collapseAcademic" class="collapse" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{url_for('admin.manage_programs')}}">Programs</a>
+                <a class="collapse-item" href="{{url_for('admin.manage_blocks')}}">Blocks</a>
+                <a class="collapse-item" href="{{url_for('admin.manage_courses')}}">Courses</a>
+            </div>
+        </div>
+    </li>
+
+    <!-- Section 3: Operations -->
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseOperations"
+           aria-expanded="false" aria-controls="collapseOperations">
+            <i class="fas fa-fw fa-stream"></i>
+            <span>Operations</span>
+        </a>
+        <div id="collapseOperations" class="collapse" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{url_for('admin.manage_classes')}}">Active Classes</a>
+                <a class="collapse-item" href="{{url_for('admin.oversee_exams')}}">Exam Monitor</a>
+            </div>
+        </div>
+    </li>
+
+    {% if session.get('role') == 'super_admin' %}
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseMaintenance"
+           aria-expanded="false" aria-controls="collapseMaintenance">
+            <i class="fas fa-fw fa-terminal"></i>
+            <span>Maintenance</span>
+        </a>
+        <div id="collapseMaintenance" class="collapse" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" href="{{url_for('admin.user_logs')}}">Activity Logs</a>
+            </div>
+        </div>
+    </li>
+    {% endif %}
+
+    <!-- Sidebar Toggler -->
+    <div class="text-center d-none d-md-inline mt-auto mb-4">
+        <button class="rounded-circle border-0" id="sidebarToggle" style="background: rgba(255,255,255,0.05);"></button>
+    </div>
+</ul>

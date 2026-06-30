@@ -1,0 +1,116 @@
+{% extends "admin/base.html" %}
+{% block title %}Audit Logs{% endblock %}
+{% block page_title %}Audit Logs{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('admin.static', filename='css/logs.css') }}" rel="stylesheet"/>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-heading">Audit Log System</h2>
+    <p class="page-subheading">A complete record of all administrative actions and system events.</p>
+  </div>
+  <div class="log-summary-chips">
+    <span class="log-chip log-chip-total" id="logEventCount"><i class="bi bi-journal-text"></i> {{ logs|length }} Events</span>
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar mb-3">
+  <div class="d-flex gap-2 align-items-center flex-wrap w-100">
+    <div class="search-input-wrap flex-grow-1">
+      <i class="bi bi-search search-icon"></i>
+      <input type="text" class="form-control form-control-custom search-input" id="logSearchInput"
+             placeholder="Search actions, details, users…"
+             value="{{ search }}"/>
+    </div>
+    <select class="form-select form-control-custom w-auto" id="logActionSelect">
+      <option value="">All Actions</option>
+      {% for action_type in action_types %}
+      <option value="{{ action_type }}" {% if action_filter == action_type %}selected{% endif %}>
+        {{ action_type.replace('_', ' ').title() }}
+      </option>
+      {% endfor %}
+    </select>
+    <button type="button" class="btn btn-primary-custom" id="logFilterBtn">Filter</button>
+  </div>
+</div>
+
+<div class="card-panel">
+  <div class="card-panel-body p-0">
+    {% if logs %}
+    <div class="table-responsive">
+      <table class="table-custom" id="logsTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Timestamp</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="logsTableBody">
+          {% for log in logs %}
+          {% set action = log.action | lower if log.action else '' %}
+          <tr class="log-table-row"
+              data-action="{{ log.action | lower if log.action else '' }}"
+              data-text="{{ ((log.user_name or 'System') ~ ' ' ~ (log.action or '') ~ ' ' ~ (log.details or '')) | lower }}">
+            <td class="text-muted-sm">{{ log.id }}</td>
+            <td class="text-muted-sm text-nowrap">{{ log.created_at.strftime('%b %d, %Y %I:%M %p') if log.created_at else '—' }}</td>
+            <td>
+              <div class="voter-cell">
+                <div class="voter-avatar-sm voter-avatar-xs">
+                  {{ (log.user_name or 'S')[0] | upper }}
+                </div>
+                <span class="text-muted-sm">{{ log.user_name if log.user_name and log.user_name.strip() else 'System' }}</span>
+              </div>
+            </td>
+            <td>
+              {% if 'login' in action %}
+                <span class="log-action-badge log-action-green">{{ log.action.replace('_',' ') if log.action else '—' }}</span>
+              {% elif 'logout' in action %}
+                <span class="log-action-badge log-action-gray">{{ log.action.replace('_',' ') if log.action else '—' }}</span>
+              {% elif 'delete' in action or 'remove' in action %}
+                <span class="log-action-badge log-action-red">{{ log.action.replace('_',' ') if log.action else '—' }}</span>
+              {% elif 'create' in action or 'add' in action %}
+                <span class="log-action-badge log-action-blue">{{ log.action.replace('_',' ') if log.action else '—' }}</span>
+              {% elif 'update' in action or 'edit' in action %}
+                <span class="log-action-badge log-action-amber">{{ log.action.replace('_',' ') if log.action else '—' }}</span>
+              {% else %}
+                <span class="log-action-badge log-action-gray">{{ log.action.replace('_',' ') if log.action else '—' }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="text-muted-sm">
+                {{ log.details[:120] if log.details else '—' }}{% if log.details and log.details|length > 120 %}…{% endif %}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-wrapper" id="paginationWrapper">
+      <div class="pagination-info" id="paginationInfo"></div>
+      <ul class="pagination-custom" id="paginationList"></ul>
+    </div>
+
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-journal-x"></i>
+      <h5>No Logs Found</h5>
+      <p>No activity has been logged yet.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('admin.static', filename='js/logs.js') }}"></script>
+{% endblock %}

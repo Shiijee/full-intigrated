@@ -1,0 +1,107 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Account Settings - TestPoint Admin{% endblock %}
+
+{% block head %}
+<style>
+    .card { border: none; border-radius: var(--tp-admin-radius) !important; }
+    .profile-header-img { width: 110px; height: 110px; object-fit: cover; border: 4px solid #fff; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+    
+    .form-control { height: 44px !important; border-radius: 8px !important; border: 1.5px solid var(--tp-admin-border) !important; font-size: 14.5px !important; }
+    .form-control:focus { border-color: var(--tp-admin-ink) !important; box-shadow: 0 0 0 4px rgba(15,14,17,0.05) !important; }
+    
+    .tp-pill { border-radius: 50px !important; font-weight: 600; font-size: 13px; padding: 10px 32px; transition: all 0.2s; }
+    .tp-pill:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+    .info-box { background: var(--tp-admin-bg); border: 1px solid var(--tp-admin-border); border-radius: 10px; padding: 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);">Account Settings</h1>
+    <p class="text-muted small">Update your administrative profile and security credentials.</p>
+</div>
+
+<div class="row">
+    <!-- Profile Sidebar -->
+    <div class="col-xl-4 col-lg-5">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-center py-5">
+                <img src="https://startbootstrap.github.io/startbootstrap-sb-admin-2/img/undraw_profile.svg" class="rounded-circle profile-header-img mb-4">
+                <h4 class="font-weight-bold text-gray-800 mb-1" style="font-family: var(--tp-serif);">{{ user.firstname }} {{ user.lastname }}</h4>
+                <div class="mb-4">
+                    <span class="badge badge-dark px-3 py-1 rounded-pill small uppercase" style="letter-spacing: 1px; font-size: 10px;">{{ user.role }}</span>
+                </div>
+                
+                <div class="info-box text-left">
+                    <div class="mb-2">
+                        <label class="small text-muted font-weight-bold text-uppercase mb-0" style="font-size: 10px; letter-spacing: 0.5px;">User Identifier</label>
+                        <div class="small font-weight-bold text-gray-800">{{ user.user_id }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small text-muted font-weight-bold text-uppercase mb-0" style="font-size: 10px; letter-spacing: 0.5px;">Email Address</label>
+                        <div class="small font-weight-bold text-gray-800">{{ user.email }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small text-muted font-weight-bold text-uppercase mb-0" style="font-size: 10px; letter-spacing: 0.5px;">Member Since</label>
+                        <div class="small font-weight-bold text-gray-800">{{ user.created_at.strftime('%B %d, %Y') if user.created_at else 'N/A' }}</div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="small text-muted font-weight-bold text-uppercase mb-0" style="font-size: 10px; letter-spacing: 0.5px;">Primary Location</label>
+                        <div class="small font-weight-bold text-gray-800">{{ user.city }}, {{ user.province }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Form -->
+    <div class="col-xl-8 col-lg-7">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header py-3 bg-white border-0">
+                <h6 class="m-0 font-weight-bold text-gray-800 text-uppercase small" style="letter-spacing: 1px;">Institutional Profile</h6>
+            </div>
+            <div class="card-body p-4 pt-0">
+                <form action="{{ url_for('admin.profile') }}" method="POST">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="small font-weight-bold text-muted">First Name</label>
+                            <input type="text" class="form-control" name="firstname" value="{{ user.firstname }}" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="small font-weight-bold text-muted">Middle Name</label>
+                            <input type="text" class="form-control" name="middlename" value="{{ user.middlename }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="small font-weight-bold text-muted">Last Name</label>
+                            <input type="text" class="form-control" name="lastname" value="{{ user.lastname }}" required>
+                        </div>
+                    </div>
+
+                    <hr class="my-4" style="opacity: 0.05;">
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold text-gray-800 text-uppercase small" style="letter-spacing: 1px;">Security & Password</h6>
+                        <p class="small text-muted">Only fill these out if you wish to change your current password.</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="small font-weight-bold text-muted">New Password</label>
+                            <input type="password" class="form-control" name="password" placeholder="Leave blank to keep current">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="small font-weight-bold text-muted">Confirm New Password</label>
+                            <input type="password" class="form-control" name="confirm_password" placeholder="Repeat new password">
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 text-right">
+                        <button type="submit" class="btn btn-dark shadow-sm tp-pill">Update Profile</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

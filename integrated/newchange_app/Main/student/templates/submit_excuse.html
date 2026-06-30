@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Submit Excuse | Attendeez</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Specific enhancements for the excuse form while maintaining global layout */
+        .excuse-form-card {
+            max-width: 600px;
+            margin: 0 auto 3rem;
+            width: 100%;
+        }
+        
+        .upload-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-zone i {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+
+        .upload-zone p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        @media (max-width: 768px) {
+            .excuse-form-card {
+                max-width: 100%;
+            }
+            .actions-center {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+        
+        /* Centralizing buttons on mobile */
+        .actions-center {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body class="theme-student" data-mark-read-url="{{ url_for('user.mark_notifications_read') }}">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Student') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Student</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('user.profile') }}" class="nav-item profile-nav-item"><i class="fas fa-user-circle"></i> My Profile</a>
+                <a href="{{ url_for('user.dashboard') }}" class="nav-item"><i class="fas fa-house"></i> Student Dashboard </a>
+                <div class="nav-accordion">
+                    <button class="nav-item-btn accordion-trigger" onclick="toggleAccordion(this)">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>My Classes</span>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </button>
+                    <div class="accordion-content">
+                        {% for s in subjects %}
+                        <a href="{{ url_for('user.subject_performance', subject_id=s.subject_id) }}" class="nav-item">
+                            <i class="fas fa-book"></i> {{ s.subject_code }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <a href="{{ url_for('user.timetable') }}" class="nav-item"><i class="fas fa-calendar-alt"></i> Class Timetable </a>
+                <a href="{{ url_for('user.notifications_page') }}" class="nav-item"><i class="fas fa-bell"></i> Notifications {% if unread_count > 0 %}<span id="notif-badge-sidebar" class="badge badge-danger" style="margin-left: auto;">{{ unread_count }}</span>{% endif %}</a>
+                <a href="{{ url_for('user.submit_excuse') }}" class="nav-item active"><i class="fas fa-envelope-open-text"></i> Excuse Letters </a>
+            </nav>
+            
+            
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Submit Excuse Letter</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="mb-8 text-center">
+                    <p style="color: var(--text-muted); margin: 0;">Send a formal excuse to your teacher for missing a class.</p>
+                </div>
+
+                <!-- Form Section -->
+                <div class="glass-panel p-6 excuse-form-card">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} mb-6">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form action="{{ url_for('user.submit_excuse') }}" method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <div class="form-group">
+                            <label for="class_id" class="form-label">Target Class / Subject</label>
+                            <select name="class_id" id="class_id" class="form-control" required>
+                                <option value="" disabled selected>-- Select Class --</option>
+                                {% for c in enrollments %}
+                                <option value="{{ c.subject_id }}|{{ c.utid }}">{{ c.subject_code }} - {{ c.subject_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="message" class="form-label">Reason <span class="text-xs text-muted">(Max 600)</span></label>
+                            <textarea name="message" id="message" class="form-control" rows="5" placeholder="Explain your absence..." required maxlength="600" oninput="document.getElementById('count').innerText = this.value.length"></textarea>
+                            <div class="text-end mt-1">
+                                <small class="text-xs text-muted"><span id="count">0</span> / 600</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Supporting Document</label>
+                            <div class="upload-zone" onclick="document.getElementById('excuse_file').click()">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p id="file-label">Tap to upload file (PDF, Image, Word)</p>
+                                <input type="file" name="excuse_file" id="excuse_file" style="display: none;" onchange="if(this.files[0]) document.getElementById('file-label').innerText = this.files[0].name">
+                            </div>
+                        </div>
+
+                        <div class="actions-center">
+                            <button type="submit" class="btn btn-primary" style="min-width: 180px;">
+                                <i class="fas fa-paper-plane mr-2"></i> Send Excuse
+                            </button>
+                            <a href="{{ url_for('user.dashboard') }}" class="btn btn-secondary" style="min-width: 120px;">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- History Section -->
+                <div class="mt-12">
+                    <h3 class="text-center mb-6">Previous Submissions</h3>
+                    <div class="table-wrapper table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date Submitted</th>
+                                    <th>Subject</th>
+                                    <th>Status</th>
+                                    <th>Attachment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for letter in previous_letters %}
+                                <tr>
+                                    <td class="font-semibold">{{ letter.created_at.strftime('%Y-%m-%d %H:%M') if letter.created_at else 'N/A' }}</td>
+                                    <td>{{ letter.subject_code }}</td>
+                                    <td>
+                                        <span class="badge {% if letter.status == 'Approved' %}badge-success{% elif letter.status == 'Rejected' %}badge-danger{% else %}badge-warning{% endif %}">
+                                            {{ letter.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if letter.file_path %}
+                                        <a href="{{ url_for('static', filename='uploads/excuses/' + letter.file_path.split('/')[-1]) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-download"></i> View
+                                        </a>
+                                        {% else %}
+                                        <span class="text-muted">No file</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center p-12 text-muted">No history found.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Bottom Nav for Mobilee -->
+    <nav class="bottom-nav">
+        <a href="{{ url_for('user.dashboard') }}" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('user.timetable') }}" class="nav-item">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Schedule</span>
+        </a>
+        <a href="{{ url_for('user.submit_excuse') }}" class="nav-item active">
+            <i class="fas fa-envelope-open-text"></i>
+            <span>Excuse</span>
+        </a>
+        <a href="{{ url_for('user.notifications_page') }}" class="nav-item">
+            <i class="fas fa-bell"></i>
+            <span>Alerts</span>
+        </a>
+        <a href="{{ url_for('user.profile') }}" class="nav-item profile-nav-item">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

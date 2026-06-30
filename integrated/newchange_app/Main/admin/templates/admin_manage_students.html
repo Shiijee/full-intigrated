@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Manage Students | Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-admin">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                        <aside class="sidebar">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Admin') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="openChangePinModal()">
+                            <i class="fas fa-shield-alt"></i> Security PIN
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
+                <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
+                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
+                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
+                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
+                <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
+                <a href="{{ url_for('admin.attendance_analytics') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.attendance_analytics' else '' }}" data-tooltip="Attendance Analytics"><i class="fas fa-chart-pie"></i><span class="nav-item-text"> Attendance Analytics</span></a>
+                <a href="{{ url_for('admin.drop_requests') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.drop_requests' else '' }}" data-tooltip="Drop Requests"><i class="fas fa-user-minus"></i><span class="nav-item-text"> Drop Requests</span></a>
+                <a href="{{ url_for('admin.audit_logs') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.audit_logs' else '' }}" data-tooltip="Audit Logs"><i class="fas fa-clipboard-list"></i><span class="nav-item-text"> Audit Logs</span></a>
+            </nav>
+            <div class="sidebar-bottom-actions">
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Manage Students</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="flex flex-responsive justify-between items-center mb-8">
+                    <div>
+                        <h1 class="auth-title">Student Management</h1>
+                        <p class="text-muted">Register, enroll, and manage student accounts across the system.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button class="btn btn-secondary" onclick="openBulkModal()"><i class="fas fa-users-cog"></i> Bulk Enroll</button>
+                        <button class="btn btn-success" onclick="openUploadModal()"><i class="fas fa-file-excel"></i> Upload Students</button>
+                        <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add Student</button>
+                    </div>
+                </div>
+            
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Search and Filter Bar -->
+                <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <form method="GET" action="{{ url_for('admin.manage_students') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Search Students</label>
+                            <input type="text" name="search" class="form-control" placeholder="ID, Name, or Email..." value="{{ search }}">
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Course</label>
+                            <select name="course_filter" class="form-control">
+                                <option value="">All Courses</option>
+                                {% for course in courses %}
+                                    <option value="{{ course }}" {% if course == course_filter %}selected{% endif %}>{{ course }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Status</label>
+                            <select name="status_filter" class="form-control">
+                                <option value="All" {% if status_filter == 'All' %}selected{% endif %}>All Status</option>
+                                <option value="Active" {% if status_filter == 'Active' %}selected{% endif %}>Active</option>
+                                <option value="Archived" {% if status_filter == 'Archived' %}selected{% endif %}>Archived</option>
+                            </select>
+                        </div>
+
+                        <div class="flex gap-2" style="margin-bottom: 0;">
+                            <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <a href="{{ url_for('admin.manage_students', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                                <i class="fas fa-rotate"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Subject Tabs -->
+                <div class="glass-panel" style="padding: 0.5rem; margin-bottom: 2rem; border-radius: var(--radius-md);">
+                    <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem;">
+                        <button class="tab-btn active" onclick="showTab('all')">
+                            All Students <span class="badge badge-secondary" style="margin-left: 0.5rem;">{{ total_count }}</span>
+                        </button>
+                        {% for subject in subjects %}
+                            <button class="tab-btn" onclick="showTab('sub-{{ subject.assignment_id }}')">
+                                {{ subject.subject_code }} - {{ subject.section }}
+                                <span class="badge {% if subject.student_count == 0 %}badge-danger{% else %}badge-success{% endif %}" style="margin-left: 0.5rem;">
+                                    {{ subject.student_count }}
+                                </span>
+                                <small style="display: block; font-size: 0.65rem; opacity: 0.8;">{{ subject.teacher_name }}</small>
+                            </button>
+                        {% endfor %}
+                        <button class="tab-btn" onclick="showTab('unassigned')" style="border: 1px dashed var(--primary); color: var(--primary);">
+                            <i class="fas fa-user-plus mr-1"></i> Manual Enroll
+                            <span class="badge badge-primary" style="margin-left: 0.5rem;">{{ unassigned_students|length }}</span>
+                        </button>
+                        <button class="tab-btn" onclick="showTab('archived')" style="margin-left: auto; color: var(--danger);">
+                            <i class="fas fa-archive"></i> Archived
+                        </button>
+                    </div>
+                </div>
+            
+            <!-- All Students Tab -->
+            <div id="tab-all" class="tab-content active">
+                <div class="glass-panel p-4" style="padding: 1.5rem;">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="hide-on-mobile">Student ID</th>
+                                    <th>Student Details</th>
+                                    <th class="hide-on-mobile">Course & Level</th>
+                                    <th class="hide-on-mobile">Email</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student in students if student.status == 'Active' %}
+                                <tr>
+                                    <td class="hide-on-mobile" data-label="Student ID">{{ student.usid }}</td>
+                                    <td data-label="Student Details">
+                                        <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
+                                        <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
+                                            ID: {{ student.usid }} &bull; {{ student.course }} - {{ student.level }}
+                                        </div>
+                                    </td>
+                                    <td class="hide-on-mobile" data-label="Course & Level">{{ student.course }} - {{ student.level }}</td>
+                                    <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ student.email }}">{{ student.email }}</td>
+                                    <td data-label="Status">
+                                        <span class="badge {% if student.status == 'Active' %}badge-success{% else %}badge-danger{% endif %}">
+                                            {{ student.status }}
+                                        </span>
+                                        {% if student.lockout_time and student.lockout_time > now %}
+                                            <span class="badge badge-danger" style="margin-top: 0.25rem; display: block;">
+                                                <i class="fas fa-lock"></i> Locked
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="action-cell" data-label="Action">
+                                        <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                                        {% if student.lockout_time and student.lockout_time > now %}
+                                        <a href="{{ url_for('admin.unlock_user', user_type='student', user_id=student.usid) }}" 
+                                           class="btn btn-success" 
+                                           style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;" title="Unlock">
+                                            <i class="fas fa-unlock"></i>
+                                        </a>
+                                        {% endif %}
+                                        <button class="btn btn-secondary" 
+                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
+                                                title="Edit"
+                                                onclick="openEditModal(`{{ student.usid }}`, `{{ student.first_name }}`, `{{ student.middle_name }}`, `{{ student.last_name }}`, `{{ student.email }}`, `{{ student.course }}`, `{{ student.level }}`, `{{ student.section }}`, `{{ student.status }}`)">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-primary" 
+                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
+                                                title="Enroll"
+                                                onclick="openEnrollModal(`{{ student.usid }}`, `{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}`)">
+                                            <i class="fas fa-user-plus"></i>
+                                        </button>
+                                        <a href="{{ url_for('admin.archive_student', usid=student.usid) }}" 
+                                           class="btn btn-warning" 
+                                           style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
+                                           title="Archive"
+                                           onclick="return confirm('Are you sure you want to archive this student?')">
+                                            <i class="fas fa-archive"></i>
+                                        </a>
+                                        <a href="#" 
+                                           class="btn btn-danger" 
+                                           style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
+                                           title="Delete"
+                                           onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_student', usid=student.usid) }}`)">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center" data-label="Student ID">No students found.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    {% if total_pages > 1 %}
+                    <div class="pagination-container mt-4" style="display: flex; justify-content: center; gap: 0.5rem; align-items: center; margin-top: 2rem;">
+                        <a href="{{ url_for('admin.manage_students', page=current_page-1, search=search, course_filter=course_filter, status_filter=status_filter) }}" 
+                           class="btn btn-secondary {% if current_page == 1 %}disabled{% endif %}" 
+                           style="padding: 0.5rem 1rem;">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+    
+                        
+                        <div style="display: flex; gap: 0.25rem;">
+                            {% for p in range(1, total_pages + 1) %}
+                                {% if p == current_page %}
+                                    <span class="btn btn-primary" style="padding: 0.5rem 1rem; cursor: default;">{{ p }}</span>
+                                {% else %}
+                                    <a href="{{ url_for('admin.manage_students', page=p, search=search, course_filter=course_filter, status_filter=status_filter) }}" 
+                                       class="btn btn-secondary" style="padding: 0.5rem 1rem; text-decoration: none;">{{ p }}</a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                        <a href="{{ url_for('admin.manage_students', page=current_page+1, search=search, course_filter=course_filter, status_filter=status_filter) }}" 
+                           class="btn btn-secondary {% if current_page == total_pages %}disabled{% endif %}"
+                           style="padding: 0.5rem 1rem;">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+    
+                    </div>
+                    <p style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem;">
+                        Showing page {{ current_page }} of {{ total_pages }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Subject Specific Tabs -->
+            {% for subject in subjects %}
+            <div id="tab-sub-{{ subject.assignment_id }}" class="tab-content" style="display: none;">
+                <div class="glass-panel p-4" style="padding: 1.5rem;">
+                    <div class="flex justify-between items-center mb-3">
+                        <div>
+                            <h4 style="margin: 0;">{{ subject.subject_name }} ({{ subject.subject_code }})</h4>
+                            <div class="flex gap-4 mt-1">
+                                <p style="font-size: 0.85rem; color: var(--text-main);">
+                                    <i class="fas fa-chalkboard-teacher mr-1" style="color: var(--primary);"></i> 
+                                    <strong>Instructor:</strong> {{ subject.teacher_name }}
+                                </p>
+                                <p style="font-size: 0.85rem; color: var(--text-main);">
+                                    <i class="fas fa-users mr-1" style="color: var(--primary);"></i> 
+                                    <strong>Section:</strong> {{ subject.section }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="hide-on-mobile">Student ID</th>
+                                    <th>Student Details</th>
+                                    <th class="hide-on-mobile">Section</th>
+                                    <th class="hide-on-mobile">Email</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set ns = namespace(found=false) %}
+                                {% for estudent in enrolled_students %}
+                                    {% if estudent.assignment_id == subject.assignment_id %}
+                                    {% set ns.found = true %}
+                                    <tr>
+                                        <td class="hide-on-mobile" data-label="Student ID">{{ estudent.usid }}</td>
+                                        <td data-label="Student Details">
+                                            <div style="font-weight: 600; color: var(--text-main);">{{ estudent.first_name }} {{ estudent.middle_name }} {{ estudent.last_name }}</div>
+                                            <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
+                                                ID: {{ estudent.usid }} &bull; Sec: {{ estudent.section }}
+                                            </div>
+                                        </td>
+                                        <td class="hide-on-mobile" data-label="Section">{{ estudent.section }}</td>
+                                        <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ estudent.email }}">{{ estudent.email }}</td>
+                                        <td data-label="Status">
+                                            <span class="badge {% if estudent.status == 'Active' %}badge-success{% else %}badge-danger{% endif %}">
+                                                {{ estudent.status }}
+                                            </span>
+                                        </td>
+                                        <td class="action-cell" data-label="Action">
+                                            <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                                            <button class="btn btn-secondary" 
+                                                    style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
+                                                    title="Edit"
+                                                    onclick="openEditModal('{{ estudent.usid }}', '{{ estudent.first_name }}', '{{ estudent.middle_name }}', '{{ estudent.last_name }}', '{{ estudent.email }}', '{{ estudent.course }}', '{{ estudent.level }}', '{{ estudent.section }}', '{{ estudent.status }}')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <a href="{{ url_for('admin.archive_student', usid=estudent.usid) }}" 
+                                               class="btn btn-warning" 
+                                               style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
+                                               title="Archive"
+                                               onclick="return confirm('Are you sure you want to archive this student?')">
+                                                <i class="fas fa-archive"></i>
+                                            </a>
+                                            <a href="{{ url_for('admin.remove_enrollment', enrollment_id=estudent.enrollment_id if estudent.enrollment_id else 0) }}" 
+                                               class="btn btn-secondary" 
+                                               style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
+                                               title="Unenroll"
+                                               onclick="return confirm('Remove this student from this subject?')">
+                                                <i class="fas fa-user-minus"></i>
+                                            </a>
+                                            <a href="#" 
+                                               class="btn btn-danger" 
+                                               style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
+                                               title="Delete"
+                                               onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_student', usid=estudent.usid) }}`)">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if not ns.found %}
+                                <tr>
+                                    <td colspan="6" class="text-center" style="padding: 3rem 1rem;" data-label="Student ID">
+                                        <div style="opacity: 0.5;">
+                                            <i class="fas fa-users-slash" style="font-size: 3rem; margin-bottom: 1rem; display: block;"></i>
+                                            <p>No students enrolled in <strong>{{ subject.subject_name }}</strong> yet.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Unassigned Students (Manual Enroll) Tab -->
+            <div id="tab-unassigned" class="tab-content" style="display: none;">
+                <div class="glass-panel p-4" style="padding: 1.5rem;">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 style="margin: 0; color: var(--primary);">Manual Enrollment</h3>
+                            <p class="text-muted" style="font-size: 0.85rem;">Showing students who are not yet enrolled in any subjects or sections.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="hide-on-mobile">Student ID</th>
+                                    <th>Student Details</th>
+                                    <th class="hide-on-mobile">Course & Year</th>
+                                    <th class="hide-on-mobile">Email Address</th>
+                                    <th class="text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student in unassigned_students %}
+                                <tr>
+                                    <td class="hide-on-mobile" style="font-weight: 600;" data-label="Student ID">{{ student.usid }}</td>
+                                    <td data-label="Student Details">
+                                        <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
+                                        <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
+                                            ID: {{ student.usid }} &bull; {{ student.course }} - {{ student.level }}
+                                        </div>
+                                    </td>
+                                    <td class="hide-on-mobile" data-label="Course & Year">{{ student.course }} - {{ student.level }}</td>
+                                    <td class="hide-on-mobile" data-label="Email Address" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ student.email }}">{{ student.email }}</td>
+                                    <td class="text-center action-cell" style="justify-content: center;" data-label="Action">
+                                        <button class="btn btn-primary" 
+                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
+                                                title="Enroll Now"
+                                                onclick="openEnrollModal(`{{ student.usid }}`, `{{ student.first_name }} {{ student.last_name }}`)">
+                                            <i class="fas fa-plus-circle"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center" style="padding: 4rem 1rem;" data-label="Student ID">
+                                        <div style="opacity: 0.6;">
+                                            <i class="fas fa-check-double" style="font-size: 3rem; margin-bottom: 1rem; color: var(--success); display: block;"></i>
+                                            <p>All active students are currently enrolled in at least one subject!</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Archived Students Tab -->
+            <div id="tab-archived" class="tab-content" style="display: none;">
+                <div class="glass-panel p-4" style="padding: 1.5rem;">
+                    <h3 class="mb-4 text-danger"><i class="fas fa-archive mr-2"></i> Archived Students</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="hide-on-mobile">Student ID</th>
+                                    <th>Student Details</th>
+                                    <th class="hide-on-mobile">Course & Level</th>
+                                    <th class="hide-on-mobile">Email</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student in students if student.status == 'Archived' %}
+                                <tr>
+                                    <td class="hide-on-mobile" data-label="Student ID">{{ student.usid }}</td>
+                                    <td data-label="Student Details">
+                                        <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
+                                        <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
+                                            ID: {{ student.usid }} &bull; {{ student.course }} - {{ student.level }}
+                                        </div>
+                                    </td>
+                                    <td class="hide-on-mobile" data-label="Course & Level">{{ student.course }} - {{ student.level }}</td>
+                                    <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ student.email }}">{{ student.email }}</td>
+                                    <td class="action-cell" data-label="Action">
+                                        <a href="{{ url_for('admin.unarchive_student', usid=student.usid) }}" 
+                                           class="btn btn-success" 
+                                           style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
+                                           title="Unarchive">
+                                            <i class="fas fa-undo"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center" style="padding: 2rem;" data-label="Student ID">No archived students.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            </div> <!-- End main-content-inner -->
+        </main>
+    </div>
+
+    <style>
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .tab-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: var(--primary);
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+    </style>
+
+    <!-- Add Student Modal -->
+    <div id="addStudentModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('addStudentModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Add New Student</h3>
+            <form method="POST" action="{{ url_for('admin.manage_students') }}" onsubmit="return validateStudentForm(this)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label class="form-label">First Name</label>
+                    <input type="text" name="first_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Middle Name</label>
+                    <input type="text" name="middle_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Last Name</label>
+                    <input type="text" name="last_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" required>
+                </div>
+                <div class="row" style="display: flex; gap: 1rem;">
+                    <div class="form-group mb-3" style="flex: 1;">
+                        <label class="form-label">Course</label>
+                        <input type="text" name="course" class="form-control" placeholder="e.g. BSIT" required>
+                    </div>
+                    <div class="form-group mb-3" style="flex: 1;">
+                        <label class="form-label">Level / Year</label>
+                        <select name="level" class="form-control" required>
+                            <option value="">-- Select Year --</option>
+                            <option value="1st Year">1st Year</option>
+                            <option value="2nd Year">2nd Year</option>
+                            <option value="3rd Year">3rd Year</option>
+                            <option value="4th Year">4th Year</option>
+                            <option value="Irregular Student">Irregular Student</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="form-label">Section</label>
+                    <input type="text" name="section" class="form-control" placeholder="e.g. A" required>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addStudentModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Student</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Student Modal -->
+    <div id="editStudentModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('editStudentModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Edit Student</h3>
+            <form id="editStudentForm" method="POST" onsubmit="return validateStudentForm(this)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label class="form-label">First Name</label>
+                    <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Middle Name</label>
+                    <input type="text" name="middle_name" id="edit_middle_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Last Name</label>
+                    <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" id="edit_email" class="form-control" required>
+                </div>
+                <div class="row" style="display: flex; gap: 1rem;">
+                    <div class="form-group mb-3" style="flex: 1;">
+                        <label class="form-label">Course</label>
+                        <input type="text" name="course" id="edit_course" class="form-control" required>
+                    </div>
+                    <div class="form-group mb-3" style="flex: 1;">
+                        <label class="form-label">Level / Year</label>
+                        <select name="level" id="edit_level" class="form-control" required>
+                            <option value="1st Year">1st Year</option>
+                            <option value="2nd Year">2nd Year</option>
+                            <option value="3rd Year">3rd Year</option>
+                            <option value="4th Year">4th Year</option>
+                            <option value="Irregular Student">Irregular Student</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row" style="display: flex; gap: 1rem;">
+                    <div class="form-group mb-4" style="flex: 1;">
+                        <label class="form-label">Section</label>
+                        <input type="text" name="section" id="edit_section" class="form-control" required>
+                    </div>
+                    <div class="form-group mb-4" style="flex: 1;">
+                        <label class="form-label">Status</label>
+                        <select name="status" id="edit_status" class="form-control">
+                            <option value="Active">Active</option>
+                            <option value="Archived">Archived</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editStudentModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Student</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Enroll Student Modal -->
+    <div id="enrollStudentModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('enrollStudentModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Enroll <span id="enroll_student_name"></span></h3>
+            <form method="POST" action="{{ url_for('admin.enroll_student') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="usid" id="enroll_usid">
+                <div class="form-group mb-4">
+                    <label class="form-label">Select Subject & Section</label>
+                    <select name="assignment_id" class="form-control" required>
+                        <option value="">-- Choose Class --</option>
+                        {% for a in all_assignments %}
+                            <option value="{{ a.assignment_id }}">{{ a.subject_code }} - {{ a.section }} ({{ a.first_name }} {{ a.middle_name }} {{ a.last_name }})</option>
+                        {% endfor %}
+                    </select>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">Only classes with assigned teachers are shown.</p>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('enrollStudentModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Enroll Student</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Upload Students Modal -->
+    <div id="uploadStudentsModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('uploadStudentsModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Upload List of Students</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Upload an Excel file (.xlsx) containing student information. Students will be added to the system but not yet enrolled in any classes.</p>
+            <form method="POST" action="{{ url_for('admin.upload_students_excel') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-4">
+                    <label class="form-label">Excel File</label>
+                    <input type="file" name="excel_file" class="form-control" accept=".xlsx, .xls" required style="padding: 0.5rem;">
+                </div>
+                <div class="form-group mb-4">
+                    <a href="{{ url_for('admin.download_student_template') }}" style="color: var(--primary); font-size: 0.85rem; text-decoration: underline;"><i class="fas fa-download mr-1"></i> Download Excel Template</a>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('uploadStudentsModal')">Cancel</button>
+                    <button type="submit" class="btn btn-success">Upload and Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk Enroll Modal -->
+    <div id="bulkEnrollModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('bulkEnrollModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Quick Bulk Enrollment</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Automatically enroll a specific number of students into a class.</p>
+            
+            <form method="POST" action="{{ url_for('admin.bulk_enroll') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label class="form-label">Target Class</label>
+                    <select name="assignment_id" class="form-control" required>
+                        <option value="">-- Select Class --</option>
+                        {% for a in all_assignments %}
+                            <option value="{{ a.assignment_id }}">{{ a.subject_code }} - {{ a.section }} ({{ a.first_name }} {{ a.middle_name }} {{ a.last_name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label class="form-label">Number of Students</label>
+                    <input type="number" name="count" class="form-control" placeholder="e.g. 30" min="1" required>
+                </div>
+                
+                <div class="form-group mb-4">
+                    <label class="form-label">Filter by Course (Optional)</label>
+                    <select name="course_filter" class="form-control">
+                        <option value="">-- All Courses --</option>
+                        {% for course in courses %}
+                            <option value="{{ course }}">{{ course }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('bulkEnrollModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Start Enrollment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabId) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // Deactivate all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show the selected tab
+            document.getElementById('tab-' + tabId).style.display = 'block';
+            
+            // Activate the clicked button
+            event.currentTarget.classList.add('active');
+        }
+
+        function openModal() {
+            restoreAddForm();
+            document.getElementById('addStudentModal').classList.add('active');
+        }
+
+        // Save/restore add student form
+        function saveAddForm() {
+            const f = document.getElementById('addStudentModal');
+            const data = {};
+            f.querySelectorAll('input,select').forEach(el => { if (el.name && el.name !== 'csrf_token') data[el.name] = el.value; });
+            localStorage.setItem('addStudentForm', JSON.stringify(data));
+        }
+        function restoreAddForm() {
+            const saved = localStorage.getItem('addStudentForm');
+            if (!saved) return;
+            const data = JSON.parse(saved);
+            const f = document.getElementById('addStudentModal');
+            Object.keys(data).forEach(k => { const el = f.querySelector(`[name="${k}"]`); if (el) el.value = data[k]; });
+        }
+        
+        function openEditModal(sid, fname, mname, lname, email, course, level, section, status) {
+            document.getElementById('editStudentForm').action = "/admin/edit_student/" + sid;
+            document.getElementById('edit_first_name').value = fname;
+            document.getElementById('edit_middle_name').value = mname;
+            document.getElementById('edit_last_name').value = lname;
+            document.getElementById('edit_email').value = email;
+            document.getElementById('edit_course').value = course;
+            document.getElementById('edit_level').value = level;
+            document.getElementById('edit_section').value = section;
+            document.getElementById('edit_status').value = status;
+            
+            document.getElementById('editStudentModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function openEnrollModal(sid, name) {
+            document.getElementById('enroll_usid').value = sid;
+            document.getElementById('enroll_student_name').innerText = name;
+            document.getElementById('enrollStudentModal').classList.add('active');
+        }
+
+        function openBulkModal() {
+            document.getElementById('bulkEnrollModal').classList.add('active');
+        }
+
+        function openUploadModal() {
+            document.getElementById('uploadStudentsModal').classList.add('active');
+        }
+
+        // On page load: reopen add modal if error + saved data
+        document.addEventListener('DOMContentLoaded', () => {
+            const hasError = document.querySelector('.alert-error, .alert-danger');
+            if (hasError && localStorage.getItem('addStudentForm')) {
+                openModal();
+            }
+            document.getElementById('addStudentModal').querySelectorAll('input,select').forEach(el => {
+                el.addEventListener('input', saveAddForm);
+            });
+        });
+
+        // Clear on submit
+        document.querySelectorAll('form').forEach(f => {
+            f.addEventListener('submit', () => localStorage.removeItem('addStudentForm'));
+        });
+
+
+        /**
+         * Comprehensive Student Form Validation
+         * Includes checks for required fields, email format, junk input, and email-to-name connectivity.
+         */
+        function validateStudentForm(form) {
+            const firstName = form.querySelector('[name="first_name"]').value.trim();
+            const middleName = form.querySelector('[name="middle_name"]').value.trim();
+            const lastName = form.querySelector('[name="last_name"]').value.trim();
+            const email = form.querySelector('[name="email"]').value.trim();
+
+            // 1. Basic Required Fields check
+            if (!firstName || !middleName || !lastName || !email) {
+                alert("Please fill in all required fields (First, Middle, Last Name, and Email).");
+                return false;
+            }
+
+            // 2. Strict Email Format Validation
+            const emailPattern = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+            if (!emailPattern.test(email)) {
+                alert("Invalid email format. Please enter a valid Gmail or work address.");
+                return false;
+            }
+
+            // 3. Name Character Validation (Only letters and common name symbols)
+            const namePattern = /^[A-Za-z\s\-\.']+$/;
+            if (!namePattern.test(firstName) || !namePattern.test(middleName) || !namePattern.test(lastName)) {
+                alert("Names can only contain letters, spaces, hyphens, periods, and apostrophes.");
+                return false;
+            }
+
+            // 4. Junk Name / Keyboard Mashing Detection
+            const isJunk = (str) => {
+                const s = str.toLowerCase();
+                // Check for 4+ identical consecutive characters (e.g., "aaaa")
+                if (/(.)\1\1\1/.test(s)) return true;
+                // Check for very few vowels in long names (keyboard mashing usually lacks vowels)
+                const vowels = (s.match(/[aeiou]/g) || []).length;
+                if (s.length > 5 && vowels === 0) return true;
+                // Check for common keyboard mashing patterns
+                const patterns = ['asdf', 'ghjk', 'xcv', 'qwer', 'dfgh'];
+                if (patterns.some(p => s.includes(p))) return true;
+                return false;
+            };
+
+            if (isJunk(firstName) || isJunk(lastName)) {
+                alert("The name provided appears to be invalid or 'keyboard mashing' (e.g., asdfgh). Please enter a real name.");
+                return false;
+            }
+
+            // 5. Email-to-Name Connectivity Validation
+            // Ensures the email prefix contains some portion of the student's name
+            const emailPrefix = email.split('@')[0].toLowerCase().replace(/[\._]/g, '');
+            const fnPart = firstName.toLowerCase().replace(/\s/g, '');
+            const lnPart = lastName.toLowerCase().replace(/\s/g, '');
+            
+            // Check if email prefix contains at least 3 chars of first or last name
+            const hasConnection = emailPrefix.includes(fnPart.substring(0, 3)) || 
+                                  emailPrefix.includes(lnPart.substring(0, 3)) ||
+                                  fnPart.includes(emailPrefix) ||
+                                  lnPart.includes(emailPrefix);
+
+            if (!hasConnection) {
+                alert("The Gmail address must be connected to the student's name (e.g., 'john.doe@gmail.com' for John Doe). Random emails are not allowed.");
+                return false;
+            }
+
+            return true; // ALL validations passsed
+        }
+
+    </script>
+
+
+        <nav class="bottom-nav">
+        <a href="{{ url_for('admin.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('admin.manage_students') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_students' %}active{% endif %}">
+            <i class="fas fa-user-graduate"></i>
+            <span>Students</span>
+        </a>
+        <a href="{{ url_for('admin.manage_teachers') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_teachers' %}active{% endif %}">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>Faculty</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Logs</span>
+        </a>
+    </nav>
+
+
+<script src="{{ url_for('static', filename='js/main.js') }}?v=1.1"></script>
+</body>
+</html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edukado | Sign In</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #080D1A;
+            --surface:   #0F1829;
+            --surface-2: #162035;
+            --border:    rgba(255,255,255,0.07);
+            --border-focus: rgba(79,142,247,0.5);
+            --accent:    #4F8EF7;
+            --accent-2:  #7C5CFC;
+            --danger:    #F75F7A;
+            --text:      #E2E8F0;
+            --muted:     #64748B;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* ── Ambient orbs ── */
+        .orb {
+            position: fixed;
+            width: 560px;
+            height: 560px;
+            border-radius: 50%;
+            filter: blur(110px);
+            opacity: 0.13;
+            pointer-events: none;
+            animation: drift 14s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+        .orb-1 { background: var(--accent);   top: -200px; left: -150px; }
+        .orb-2 { background: var(--accent-2); bottom: -200px; right: -150px; animation-delay: -7s; }
+
+        @keyframes drift {
+            from { transform: translate(0,0) scale(1); }
+            to   { transform: translate(40px,30px) scale(1.08); }
+        }
+
+        /* ── Split layout ── */
+        .login-wrapper {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            width: 880px;
+            min-height: 520px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+        }
+
+        /* Left branding panel */
+        .brand-panel {
+            width: 340px;
+            flex-shrink: 0;
+            background: linear-gradient(145deg, #0d1a36 0%, #111827 100%);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 44px 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .brand-panel::before {
+            content: '';
+            position: absolute;
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            opacity: 0.06;
+            top: -80px;
+            right: -80px;
+            pointer-events: none;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+
+        .logo-mark {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            display: grid;
+            place-items: center;
+            font-size: 17px;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .logo-name {
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+        }
+
+        .brand-body { margin-top: auto; margin-bottom: auto; }
+
+        .brand-tagline {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.7px;
+            line-height: 1.25;
+            margin-bottom: 14px;
+        }
+
+        .brand-tagline span {
+            background: linear-gradient(90deg, var(--accent), var(--accent-2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-sub {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        .brand-footer {
+            font-size: 11px;
+            color: var(--muted);
+            opacity: 0.6;
+        }
+
+        /* Right form panel */
+        .form-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 48px 44px;
+        }
+
+        .form-heading {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+
+        .form-sub {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 32px;
+        }
+
+        .field-group {
+            margin-bottom: 20px;
+        }
+
+        .field-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.9px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .input-wrap {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        .field-input {
+            width: 100%;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            padding: 13px 14px 13px 40px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            color: var(--text);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .field-input::placeholder { color: var(--muted); }
+
+        .field-input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(79,142,247,0.1);
+        }
+
+        .btn-signin {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            border: none;
+            border-radius: 11px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: opacity 0.2s, transform 0.15s;
+            letter-spacing: 0.2px;
+        }
+
+        .btn-signin:hover { opacity: 0.88; transform: translateY(-1px); }
+        .btn-signin:active { transform: translateY(0); }
+
+        .form-note {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        /* ── Error toast ── */
+        .error-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #1e0f14;
+            border: 1px solid rgba(247,95,122,0.3);
+            border-left: 3px solid var(--danger);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: var(--text);
+            z-index: 100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            animation: slideIn 0.3s ease;
+        }
+
+        .error-toast i { color: var(--danger); font-size: 15px; }
+
+        .toast-close {
+            margin-left: 12px;
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 2px;
+            transition: color 0.2s;
+        }
+        .toast-close:hover { color: var(--text); }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 780px) {
+            .login-wrapper { flex-direction: column; width: 94vw; min-height: unset; border-radius: 18px; }
+            .brand-panel { width: 100%; padding: 32px 28px 28px; border-right: none; border-bottom: 1px solid var(--border); }
+            .brand-body { margin: 18px 0; }
+            .brand-tagline { font-size: 20px; }
+            .brand-footer { display: none; }
+            .form-panel { padding: 32px 28px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .orb { animation: none; }
+            .btn-signin { transition: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="login-wrapper">
+
+    <!-- Left: Branding -->
+    <div class="brand-panel">
+        <div class="brand-logo">
+            <div class="logo-mark">E</div>
+            <span class="logo-name">Edukado</span>
+        </div>
+
+        <div class="brand-body">
+            <h2 class="brand-tagline">Your campus,<br><span>one portal.</span></h2>
+            <p class="brand-sub">Attendance, exams, and elections — all in one unified system built for students and faculty.</p>
+        </div>
+
+        <div class="brand-footer">IT 3012 System Integration Project &copy; 2024</div>
+    </div>
+
+    <!-- Right: Form -->
+    <div class="form-panel">
+        <h1 class="form-heading">Welcome back</h1>
+        <p class="form-sub">Sign in to access your campus portal.</p>
+
+        <form action="/login" method="POST">
+            <input type="hidden" name="next" value="{{ next }}">
+            <div class="field-group">
+                <label class="field-label" for="username">Username</label>
+                <div class="input-wrap">
+                    <i class="fa-solid fa-user input-icon"></i>
+                    <input id="username" type="text" name="username" class="field-input" placeholder="e.g. admin" required autocomplete="username">
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label" for="password">Password</label>
+                <div class="input-wrap">
+                    <i class="fa-solid fa-lock input-icon"></i>
+                    <input id="password" type="password" name="password" class="field-input" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+            </div>
+
+            <button type="submit" class="btn-signin">Sign In</button>
+        </form>
+
+        <p class="form-note">Authorized personnel only.<br>Contact your administrator if you need access.</p>
+    </div>
+
+</div>
+
+<!-- Error toast -->
+{% if error %}
+<div class="error-toast" id="errorToast">
+    <i class="fa-solid fa-circle-exclamation"></i>
+    Invalid username or password. Please try again.
+    <button class="toast-close" onclick="document.getElementById('errorToast').remove()" aria-label="Dismiss">
+        <i class="fa-solid fa-xmark"></i>
+    </button>
+</div>
+{% endif %}
+
+</body>
+</html>

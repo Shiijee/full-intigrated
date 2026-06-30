@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Timetable | Attendeez</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-student">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Student') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Student Portal</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('user.profile') }}" class="nav-item profile-nav-item"><i class="fas fa-user-circle"></i> My Profile</a>
+                <a href="{{ url_for('user.dashboard') }}" class="nav-item"><i class="fas fa-house"></i> Student Dashboard </a>
+                <div class="nav-accordion">
+                    <button class="nav-item-btn accordion-trigger" onclick="toggleAccordion(this)">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>My Classes</span>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </button>
+                    <div class="accordion-content">
+                        {% for s in subjects %}
+                        <a href="{{ url_for('user.subject_performance', subject_id=s.subject_id) }}" class="nav-item">
+                            <i class="fas fa-book"></i> {{ s.subject_code }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <a href="{{ url_for('user.timetable') }}" class="nav-item active"><i class="fas fa-calendar-alt"></i> Class Timetable </a>
+                <a href="{{ url_for('user.notifications_page') }}" class="nav-item"><i class="fas fa-bell"></i> Notifications {% if unread_count > 0 %}<span id="notif-badge-sidebar" class="badge badge-danger" style="margin-left: auto;">{{ unread_count }}</span>{% endif %}</a>
+                <a href="{{ url_for('user.submit_excuse') }}" class="nav-item"><i class="fas fa-envelope-open-text"></i> Excuse Letters </a>
+            </nav>
+            
+            
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Weekly Schedule</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="flex flex-responsive justify-between items-center mb-8">
+                    <div>
+                        <h1 class="auth-title">My Timetable</h1>
+                        <p class="text-muted">Weekly class schedule and classroom assignments.</p>
+                    </div>
+                    <div class="badge badge-secondary">Academic Year 2024-2025</div>
+                </div>
+
+            {% if not schedule %}
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i> You are not currently enrolled in any classes with an assigned schedule.
+            </div>
+            {% endif %}
+            
+            <style>
+                .timetable-container {
+                    background: var(--bg-surface);
+                    border-radius: 16px;
+                    border: 1px solid var(--border-color);
+                    overflow: auto;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                    position: relative;
+                    margin-bottom: 2rem;
+                }
+                .timetable-grid {
+                    display: grid;
+                    grid-template-columns: 120px repeat(7, minmax(160px, 1fr));
+                    /* 24 slots (30 mins each) from 7am to 7pm */
+                    grid-template-rows: 60px repeat(24, 70px);
+                    background: rgba(255,255,255,0.01);
+                    position: relative;
+                }
+                .grid-header {
+                    grid-row: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #0f172a; /* Solid background */
+                    border-bottom: 2px solid var(--primary);
+                    font-weight: 700;
+                    color: #ffffff;
+                    position: sticky;
+                    top: 0;
+                    z-index: 20;
+                    grid-column: var(--col);
+                    text-transform: uppercase;
+                    font-size: 0.8rem;
+                    letter-spacing: 0.05em;
+                }
+                .grid-time-column {
+                    grid-column: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 0.7rem;
+                    color: var(--text-muted);
+                    border-right: 1px solid var(--border-color);
+                    background: #0f172a;
+                    position: sticky;
+                    left: 0;
+                    z-index: 15;
+                    grid-row-start: var(--row);
+                    font-weight: 600;
+                }
+                .grid-row-line {
+                    grid-column: 2 / -1;
+                    border-bottom: 1px solid var(--border-color);
+                    pointer-events: none;
+                    grid-row-end: span 1;
+                    grid-row-start: var(--row);
+                }
+                .line-solid { opacity: 0.8; border-bottom-style: solid; }
+                .line-dashed { opacity: 0.2; border-bottom-style: dashed; }
+                
+                .class-entry {
+                    margin: 2px;
+                    padding: 10px 8px;
+                    border-radius: 10px;
+                    color: white;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                    gap: 2px;
+                    font-size: 0.8rem;
+                    border-left: 4px solid rgba(255,255,255,0.4);
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                    transition: all 0.3s ease;
+                    overflow: hidden;
+                    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+                    z-index: 2;
+                    grid-column: var(--col);
+                    grid-row-start: var(--row-s);
+                    grid-row-end: var(--row-e);
+                    backdrop-filter: blur(4px);
+                    word-break: break-word;
+                }
+                .class-entry:hover {
+                    transform: scale(1.01);
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+                    z-index: 50;
+                }
+                .class-code { 
+                    font-weight: 800; 
+                    font-size: 0.85rem; 
+                    line-height: 1;
+                }
+                .class-room { 
+                    background: rgba(0,0,0,0.2); 
+                    padding: 2px 6px; 
+                    border-radius: 4px; 
+                    align-self: flex-start; 
+                    font-size: 0.65rem;
+                    font-weight: 700;
+                    margin: 2px 0;
+                }
+                .class-teacher { 
+                    font-size: 0.7rem; 
+                    opacity: 0.9; 
+                    line-height: 1.1;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 1;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+
+                /* Vibrant Subject Gradients */
+                .color-1 { background: linear-gradient(135deg, #4f46e5, #3730a3); }
+                .color-2 { background: linear-gradient(135deg, #059669, #065f46); }
+                .color-3 { background: linear-gradient(135deg, #d97706, #92400e); }
+                .color-4 { background: linear-gradient(135deg, #db2777, #9d174d); }
+                .color-5 { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
+
+                @media (max-width: 768px) {
+                    .timetable-container {
+                        max-height: 70vh;
+                        border-radius: 8px;
+                    }
+                    .timetable-grid {
+                        grid-template-columns: 80px repeat(7, 120px);
+                    }
+                    .grid-header {
+                        font-size: 0.75rem;
+                        height: 50px;
+                    }
+                    .grid-time-column {
+                        width: 80px;
+                        font-size: 0.6rem;
+                    }
+                }
+            </style>
+
+            <div class="timetable-container">
+                <div class="timetable-grid">
+                    <!-- Top Corner -->
+                    <div class="grid-header" style="--col: 1; border-right: 1px solid var(--border-color); left: 0; z-index: 15;">Time</div>
+                    
+                    <!-- Day Headers -->
+                    {% for day in days %}
+                    <div class="grid-header" style="--col: {{ loop.index + 1 }};">{{ day }}</div>
+                    {% endfor %}
+
+                    <!-- Time Slots & Horizontal Lines -->
+                    {% for label in time_labels %}
+                        {% set row_idx = loop.index + 1 %}
+                        <div class="grid-time-column" style="--row: {{ row_idx }};">{{ label }}</div>
+                        <div class="grid-row-line {% if loop.index0 % 2 == 0 %}line-solid{% else %}line-dashed{% endif %}" style="--row: {{ row_idx }};"></div>
+                    {% endfor %}
+
+                    <!-- Schedule Entries -->
+                    {% for entry in schedule %}
+                        {% set color_idx = (loop.index0 % 5) + 1 %}
+                        <div class="class-entry color-{{ color_idx }}" 
+                             style="--col: {{ entry.grid_column }}; --row-s: {{ entry.grid_row_start }}; --row-e: {{ entry.grid_row_end }};">
+                            <div class="class-code">{{ entry.subject_code }}</div>
+                            <div style="font-weight: 600; font-size: 0.75rem; line-height: 1.1;">{{ entry.subject_name }}</div>
+                            <div class="class-room">{{ entry.room }}</div>
+                            <div class="class-teacher">Prof. {{ entry.last_name }}</div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div> <!-- End main-content-inners -->
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    
+    <nav class="bottom-nav">
+        <a href="{{ url_for('user.dashboard') }}" class="nav-item {% if request.endpoint == 'user.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('user.timetable') }}" class="nav-item {% if request.endpoint == 'user.timetable' %}active{% endif %}">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Schedule</span>
+        </a>
+        <a href="{{ url_for('user.submit_excuse') }}" class="nav-item {% if request.endpoint == 'user.submit_excuse' %}active{% endif %}">
+            <i class="fas fa-envelope-open-text"></i>
+            <span>Excuse</span>
+        </a>
+        <a href="{{ url_for('user.notifications_page') }}" class="nav-item {% if request.endpoint == 'user.notifications_page' %}active{% endif %}">
+            <i class="fas fa-bell"></i>
+            <span>Alerts</span>
+        </a>
+        <a href="{{ url_for('user.profile') }}" class="nav-item {% if request.endpoint == 'user.profile' %}active{% endif %}">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+    
+    
+
+</body>
+</html>

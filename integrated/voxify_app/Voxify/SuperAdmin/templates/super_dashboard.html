@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('super_admin.static', filename='css/super_dashboard.css') }}" rel="stylesheet"/>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-heading">Super Admin Dashboard</h2>
+    <p class="page-subheading">System-wide overview and administrative controls.</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('super_admin.manage_admins') }}" class="btn-primary-custom">
+      <i class="bi bi-person-plus-fill"></i> Add Admin
+    </a>
+  </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card stat-card-purple">
+    <div class="stat-icon"><i class="bi bi-building"></i></div>
+    <div class="stat-info">
+      <span class="stat-number">{{ total_colleges or 0 }}</span>
+      <span class="stat-label">Colleges</span>
+      <span class="stat-sub">Registered colleges</span>
+    </div>
+  </div>
+  <div class="stat-card stat-card-blue">
+    <div class="stat-icon"><i class="bi bi-person-gear"></i></div>
+    <div class="stat-info">
+      <span class="stat-number">{{ total_admins or 0 }}</span>
+      <span class="stat-label">Active Admins</span>
+      <span class="stat-sub">College administrators</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Content Row -->
+<div class="row g-4 mt-1">
+  <!-- Recent Admins -->
+  <div class="col-lg-7">
+    <div class="card-panel">
+      <div class="card-panel-header">
+        <h5 class="card-panel-title"><i class="bi bi-person-gear me-2"></i>Recent Admins</h5>
+        <a href="{{ url_for('super_admin.manage_admins') }}" class="btn-link-subtle">View all</a>
+      </div>
+      <div class="card-panel-body p-0">
+        {% if recent_admins %}
+        <div class="table-responsive">
+          <table class="table-custom">
+            <thead>
+              <tr>
+                <th>Admin</th>
+                <th>College</th>
+                <th>Status</th>
+                <th>Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for admin in recent_admins %}
+              <tr>
+                <td>
+                  <div class="admin-cell">
+                    <div class="admin-avatar-sm">{{ admin.firstname[0] }}</div>
+                    <div>
+                      <div class="fw-600">{{ admin.firstname }} {{ admin.surname }}</div>
+                      <div class="text-muted-sm">{{ admin.email or admin.username }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {% if admin.college_name %}
+                    <span class="badge-status badge-super">{{ admin.college_name }}</span>
+                  {% else %}
+                    <span class="text-muted-sm">— Unassigned —</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if admin.is_active %}
+                    <span class="badge-status badge-active"><i class="bi bi-circle-fill me-1" style="font-size:6px"></i>Active</span>
+                  {% else %}
+                    <span class="badge-status badge-warning"><i class="bi bi-circle-fill me-1" style="font-size:6px"></i>Inactive</span>
+                  {% endif %}
+                </td>
+                <td class="text-muted-sm" style="white-space: nowrap;">{{ admin.created_at.strftime('%b %d, %Y, %I:%M:%S %p') if admin.created_at else '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state-sm">
+          <i class="bi bi-person-x"></i>
+          <p>No admins found. <a href="{{ url_for('super_admin.manage_admins') }}">Add one</a></p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Logs -->
+  <div class="col-lg-5">
+    <div class="card-panel">
+      <div class="card-panel-header">
+        <h5 class="card-panel-title"><i class="bi bi-activity me-2"></i>Recent Activity</h5>
+        <a href="{{ url_for('super_admin.system_logs') }}" class="btn-link-subtle">View all</a>
+      </div>
+      <div class="card-panel-body">
+        {% if recent_logs %}
+        <div class="activity-feed">
+          {% for log in recent_logs %}
+          <div class="activity-item">
+            <div class="activity-dot activity-dot-purple"></div>
+            <div class="activity-content">
+              <span class="activity-action">{{ log.action.replace('_', ' ').title() if log.action else 'System Event' }}</span>
+              <span class="activity-detail">
+                {% if log.firstname %}{{ log.firstname }} {{ log.surname }}{% if log.role %} · {{ log.role.title() }}{% endif %}{% else %}—{% endif %}
+              </span>
+            </div>
+            <span class="activity-time" style="white-space: nowrap;">{{ log.created_at.strftime('%b %d, %Y, %I:%M:%S %p') if log.created_at else '—' }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state-sm">
+          <i class="bi bi-journal-x"></i>
+          <p>No activity logged yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{% endblock %}

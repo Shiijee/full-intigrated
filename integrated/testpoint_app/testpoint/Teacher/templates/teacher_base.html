@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{% block title %}Instructor Portal — TestPoint{% endblock %}</title>
+    
+    <!-- ── CSS Stack ── -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/startbootstrap-sb-admin-2/4.1.4/css/sb-admin-2.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/testpoint.svg') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        :root {
+            --tp-teacher-accent: #d93025;
+            --tp-teacher-accent-lt: rgba(217, 48, 37, 0.1);
+            --tp-teacher-ink: #0f0e11;
+            --tp-teacher-gray: #1e1e24;
+            --tp-teacher-bg: #f8f9fa;
+            --tp-teacher-border: rgba(0,0,0,0.06);
+            --tp-teacher-radius: 12px;
+            --tp-font: 'DM Sans', sans-serif;
+            --tp-serif: 'DM Serif Display', serif;
+        }
+
+        body { font-family: var(--tp-font); background: var(--tp-teacher-bg) !important; color: var(--tp-teacher-ink); }
+
+        #wrapper { display: flex; min-height: 100vh; }
+
+        /* ── SIDEBAR ── */
+        .sidebar { 
+            background: var(--tp-teacher-gray) !important;
+            background-image: none !important;
+            position: sticky; top: 0; height: 100vh; z-index: 1020;
+            overflow-y: auto; overflow-x: hidden;
+            transition: width 0.2s ease-in-out !important; 
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .sidebar .nav-item .nav-link { font-weight: 500; padding: 1rem; color: rgba(255,255,255,0.6) !important; }
+        .sidebar .nav-item .nav-link:hover, .sidebar .nav-item.active .nav-link { color: #fff !important; }
+        .sidebar .nav-item.active .nav-link i { color: var(--tp-teacher-accent) !important; opacity: 1 !important; }
+        .sidebar .nav-item .nav-link i { font-size: 0.9rem; margin-right: 0.75rem; opacity: 0.5; }
+        .sidebar .sidebar-brand { height: 4.375rem; text-transform: none; font-family: var(--tp-serif); font-size: 1.25rem; letter-spacing: -0.5px; }
+
+        /* ── CONTENT WRAPPER ── */
+        #content-wrapper { background: var(--tp-teacher-bg); }
+
+        .topbar { 
+            background: #fff !important; border-bottom: 1px solid var(--tp-teacher-border);
+            box-shadow: none !important; position: sticky; top: 0; z-index: 1030;
+        }
+
+        /* ── CARDS ── */
+        .card { 
+            border: 1px solid var(--tp-teacher-border) !important; 
+            border-radius: var(--tp-teacher-radius) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important;
+        }
+        .card-header { background: transparent !important; border-bottom: 1px solid var(--tp-teacher-border) !important; padding: 1.25rem !important; }
+
+        .btn-circle-sm { width: 32px; height: 32px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; }
+        
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+
+        @media (max-width: 768px) {
+            .sidebar { overflow-y: visible !important; overflow-x: visible !important; }
+        }
+        {% block extra_css %}{% endblock %}
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body id="page-top">
+    <div id="wrapper">
+        
+        {% include 'teacher_sidebar.html' %}
+
+        <div id="content-wrapper" class="d-flex flex-column">
+            <div id="content">
+                
+                {% include 'teacher_navbar.html' %}
+
+             <div class="container-fluid animate__animated animate__fadeIn">
+                    <!-- ── FLASH MESSAGES (THE FIX) ── -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm mb-4 animate__animated animate__fadeInDown"
+                        role="alert" style="border-radius: 12px; border-left: 5px solid;">
+                        <div class="d-flex align-items-center">
+                            <div class="mr-3">
+                                {% if category == 'success' %}
+                                <i class="fas fa-check-circle fa-lg text-success"></i>
+                                {% elif category == 'danger' %}
+                                <i class="fas fa-exclamation-circle fa-lg text-danger"></i>
+                                {% elif category == 'warning' %}
+                                <i class="fas fa-exclamation-triangle fa-lg text-warning"></i>
+                                {% else %}
+                                <i class="fas fa-info-circle fa-lg text-info"></i>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <span class="font-weight-bold">{{ message }}</span>
+                            </div>
+                        </div>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+
+                    {% block content %}{% endblock %}
+                    
+                </div>
+            </div>
+            <footer class="sticky-footer bg-white border-top">
+                <div class="container my-auto text-center">
+                    <span class="small font-weight-bold text-muted">TestPoint &copy; 2026</span>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Logout Modal -->
+    <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 16px;">
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif); font-size: 1.5rem;">
+                        <i class="fas fa-sign-out-alt mr-2 text-danger"></i> Ready to Leave?
+                    </h5>
+                    <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
+                </div>
+                <div class="modal-body text-gray-600 px-4 mt-2">
+                    Select "Sign Out" below if you are ready to end your current session.
+                </div>
+                <div class="modal-footer border-0 pt-3 pb-4 px-4">
+                    <button class="btn btn-light px-4 rounded-pill" type="button" data-dismiss="modal">Cancel</button>
+                    <form action="{{ url_for('auth.logout') }}" method="POST" class="d-inline">
+                        <button type="submit" class="btn btn-danger px-4 rounded-pill">Sign Out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
+    <script>
+        (function($) {
+            "use strict";
+            $("#sidebarToggle, #sidebarToggleTop").on('click', function(e) {
+                $("body").toggleClass("sidebar-toggled");
+                $(".sidebar").toggleClass("toggled");
+                localStorage.setItem('tp_sidebar_state', $(".sidebar").hasClass("toggled") ? 'toggled' : 'expanded');
+            });
+            // Preserve sidebar state
+            if (localStorage.getItem('tp_sidebar_state') === 'toggled') {
+                $("body").addClass("sidebar-toggled");
+                $(".sidebar").addClass("toggled");
+            }
+        })(jQuery);
+    </script>
+    {% block scripts %}{% endblock %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

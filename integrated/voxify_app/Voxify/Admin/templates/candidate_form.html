@@ -1,0 +1,144 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ 'Edit' if action == 'edit' else 'Add' }} Candidate{% endblock %}
+{% block page_title %}{{ 'Edit' if action == 'edit' else 'Add' }} Candidate{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('admin.static', filename='css/candidate_form.css') }}" rel="stylesheet"/>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-heading">{{ 'Edit Candidate' if action == 'edit' else 'Add New Candidate' }}</h2>
+    <p class="page-subheading">{{ 'Update candidate information.' if action == 'edit' else 'Fill in the candidate details below.' }}</p>
+  </div>
+  <a href="{{ url_for('admin.view_candidates') }}" class="btn btn-outline-custom">
+    <i class="bi bi-arrow-left me-2"></i>Back to Candidates
+  </a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card-panel">
+      <div class="card-panel-header">
+        <h5 class="card-panel-title"><i class="bi bi-person-badge-fill me-2"></i>Candidate Information</h5>
+      </div>
+      <div class="card-panel-body">
+        <form method="POST" action="{{ url_for('admin.edit_candidate', candidate_id=candidate.id) if action == 'edit' else url_for('admin.create_candidate') }}" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label-custom">Election</label>
+            <select id="electionSelect" class="form-select form-control-custom">
+              <option value="">Select election…</option>
+              {% for election in elections %}
+              <option value="{{ election.id }}" {% if candidate and candidate.election_id == election.id %}selected{% endif %}>
+                {{ election.title }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label-custom">Position</label>
+            <select id="positionSelect" name="position_id" class="form-select form-control-custom" required>
+              <option value="">Select position…</option>
+              {% for position in positions %}
+              <option value="{{ position.position_id }}" data-election-id="{{ position.election_id }}" {% if candidate and candidate.position_id == position.position_id %}selected{% endif %}>
+                {{ position.position_title }} ({{ position.election_title }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label-custom">First Name</label>
+              <input type="text" name="firstname" class="form-control form-control-custom"
+                     value="{{ candidate.firstname if candidate else '' }}" required/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label-custom">Middle Name</label>
+              <input type="text" name="middlename" class="form-control form-control-custom"
+                     value="{{ candidate.middlename if candidate else '' }}"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label-custom">Last Name</label>
+              <input type="text" name="surname" class="form-control form-control-custom"
+                     value="{{ candidate.surname if candidate else '' }}" required/>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label-custom">Partylist / Party Affiliation</label>
+            <input type="text" name="partylist" class="form-control form-control-custom"
+                   value="{{ candidate.partylist if candidate and candidate.partylist else '' }}"
+                   placeholder="e.g. STEPS, KABILIN, Independent…"/>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label-custom">Platform / Campaign Statement</label>
+            <textarea name="platform" class="form-control form-control-custom" rows="4"
+                      placeholder="Candidate's platform, goals, and advocacy…">{{ candidate.platform if candidate else '' }}</textarea>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label-custom">Candidate Photo</label>
+            <div id="uploadArea" class="card border-dashed p-4 text-center upload-area" style="cursor: pointer; border: 2px dashed #dee2e6; border-radius: 8px;">
+              <div id="uploadPlaceholder">
+                <i class="bi bi-cloud-upload" style="font-size: 2rem; color: #6c757d;"></i>
+                <p class="mt-3 mb-1 text-muted">Drag and drop your photo here</p>
+                <p class="text-muted" style="font-size: 0.9rem;">or click to select a file</p>
+                <small class="text-muted">PNG, JPG, JPEG, GIF - Max 5MB</small>
+              </div>
+              <img id="photoPreview" src="" alt="Photo Preview" class="d-none" style="max-width: 200px; max-height: 200px; border-radius: 8px;"/>
+              <input type="file" id="photoInput" name="photo" class="d-none" accept="image/*"/>
+            </div>
+            {% if action == 'edit' and candidate.photo %}
+            <div class="mt-3">
+              <p class="text-muted small">Current photo:</p>
+              <img src="{{ url_for('admin.static', filename='uploads/candidates/' + candidate.photo) }}" alt="Current Photo" style="max-width: 150px; border-radius: 8px;"/>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="form-actions">
+            <a href="{{ url_for('admin.view_candidates') }}" class="btn btn-outline-custom">Cancel</a>
+            <button type="submit" class="btn btn-primary-custom">
+              <i class="bi bi-{{ 'save' if action == 'edit' else 'person-plus-fill' }} me-2"></i>
+              {{ 'Save Changes' if action == 'edit' else 'Add Candidate' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card-panel">
+      <div class="card-panel-header">
+        <h5 class="card-panel-title"><i class="bi bi-info-circle-fill me-2"></i>Guidelines</h5>
+      </div>
+      <div class="card-panel-body">
+        <div class="tips-list">
+          <div class="tip-item">
+            <i class="bi bi-image text-blue"></i>
+            <p>Use a clear, professional headshot photo for the candidate (max 5MB).</p>
+          </div>
+          <div class="tip-item">
+            <i class="bi bi-card-text text-green"></i>
+            <p>The biography should highlight the candidate's qualifications and platform.</p>
+          </div>
+          <div class="tip-item">
+            <i class="bi bi-sort-numeric-down text-amber"></i>
+            <p>Display order determines the sequence candidates appear on the ballot.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('admin.static', filename='js/candidate_form.js') }}"></script>
+{% endblock %}

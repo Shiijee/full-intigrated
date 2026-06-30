@@ -1,0 +1,255 @@
+{% extends "teacher_base.html" %}
+{% block title %}Results: {{ exam.title }} | TestPoint{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ── PERFORMANCE TABLE STYLING ── */
+    .results-card {
+        border: 1px solid var(--tp-teacher-border) !important;
+        border-radius: var(--tp-teacher-radius) !important;
+    }
+
+    .table thead th {
+        background: #f8f9fa;
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-weight: 800;
+        border-top: none;
+        padding: 1rem 1.25rem;
+    }
+
+    .student-row { transition: background-color 0.2s ease; }
+    .student-row:hover { background-color: rgba(217, 48, 37, 0.02); }
+
+    .score-val { font-size: 15px; font-weight: 800; color: var(--tp-teacher-ink); }
+    .percent-pilled {
+        font-size: 11px;
+        font-weight: 800;
+        padding: 4px 10px;
+        border-radius: 6px;
+    }
+    
+    .status-pill {
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        padding: 5px 12px;
+        border-radius: 6px;
+        text-transform: uppercase;
+    }
+
+    /* Summary Mini Cards */
+    .summary-box {
+        background: #fff;
+        border: 1px solid var(--tp-teacher-border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        height: 100%;
+    }
+
+    .summary-label {
+        font-size: 10px;
+        font-weight: 800;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 5px;
+    }
+
+    .summary-val {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--tp-teacher-ink);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- ── HEADER SECTION ── -->
+<div class="row mb-4 align-items-end">
+    <div class="col-md-7">
+        <h1 style="font-family: var(--tp-serif); color: var(--tp-teacher-ink); font-size: 2.25rem;" class="mb-1">
+            Performance <span style="color: var(--tp-teacher-accent);">Audit</span>
+        </h1>
+        <p class="text-muted mb-0">Detailed scoring for: <span class="font-weight-bold text-dark">{{ exam.title }}</span></p>
+    </div>
+    <div class="col-md-5 text-md-right mt-3 mt-md-0">
+        <button class="btn btn-light border px-3 rounded-pill font-weight-bold shadow-sm" data-toggle="modal" data-target="#timeModal" style="font-size: 12px;">
+            <i class="fas fa-calendar-alt text-danger mr-2"></i> Adjust Schedule
+        </button>
+        <a href="{{ url_for('teacher.manage_exams') }}" class="btn btn-dark px-3 rounded-pill font-weight-bold shadow-sm ml-1" style="font-size: 12px;">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Exams
+        </a>
+    </div>
+</div>
+
+<!-- ── SUMMARY INFO ── -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3 mb-md-0">
+        <div class="summary-box shadow-sm border-left-danger" style="border-left: 4px solid var(--tp-teacher-accent) !important;">
+            <div class="summary-label">Class Schedule & Duration</div>
+            <div class="summary-val">
+                <i class="far fa-clock text-danger mr-2"></i>
+                {{ exam.date_time.strftime('%b %d, %Y • %I:%M %p') if exam.date_time else 'Not set' }}
+                <span class="text-muted font-weight-normal mx-2">|</span>
+                {{ exam.duration_minutes }} Minutes
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="summary-box shadow-sm">
+            <div class="summary-label">Course Mapping</div>
+            <div class="summary-val">
+                <i class="fas fa-university text-muted mr-2"></i>
+                {{ exam.course_name }} 
+                <span class="badge badge-light border ml-2 px-2" style="font-size: 11px;">ID: {{ exam.class_code }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── RESULTS TABLE ── -->
+<div class="card results-card shadow-sm border-0">
+    <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between" style="border-bottom: 1.5px solid var(--tp-teacher-border) !important;">
+        <h6 class="m-0 font-weight-bold text-dark text-uppercase small" style="letter-spacing: 1px;">Student Tracking List</h6>
+        <span class="badge badge-light border text-muted px-3 py-2 rounded-pill font-weight-bold" style="font-size: 10px;">{{ results|length }} Candidates</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0" id="resultsTable">
+                <thead>
+                    <tr>
+                        <th class="pl-4">Examinee</th>
+                        <th class="text-center">Raw Score</th>
+                        <th class="text-center">Performance</th>
+                        <th class="text-center">Violations</th>
+                        <th>Status</th>
+                        <th class="text-center">Quick Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-dark">
+                    {% for r in results %}
+                    {% set percent = ((r.score / exam.question_limit) * 100)|round(1) if r.attempt_id and exam.question_limit > 0 else 0 %}
+                    <tr class="student-row {% if r.attempt_status == 'blocked' %}bg-light opacity-75{% endif %}">
+                        <td class="pl-4 py-3 align-middle">
+                            <div class="d-flex align-items-center">
+                                <img src="https://ui-avatars.com/api/?name={{ r.firstname }}+{{ r.lastname }}&background=f1f5f9&color=64748b&bold=true" 
+                                     class="rounded-circle mr-3 shadow-sm border" style="width: 32px; height: 32px;">
+                                <div>
+                                    <div class="font-weight-bold" style="font-size: 14px;">{{ r.lastname }}, {{ r.firstname }}</div>
+                                    <div class="text-muted" style="font-size: 11px; font-family: monospace;">{{ r.student_id }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-center align-middle">
+                            {% if r.attempt_id %}
+                                <span class="score-val">{{ r.score }}</span> <span class="text-muted small">/ {{ exam.question_limit }}</span>
+                            {% else %}
+                                <span class="text-gray-300">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center align-middle">
+                            {% if r.attempt_id %}
+                                <span class="percent-pilled {% if percent >= exam.pass_percentage %}bg-success text-white{% else %}bg-danger text-white{% endif %}">
+                                    {{ percent }}%
+                                </span>
+                            {% else %}
+                                <span class="text-gray-300">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center align-middle">
+                            {% if r.attempt_id %}
+                                <span class="badge rounded-pill px-2 py-1 {% if r.tab_switches > 0 %}badge-warning border border-warning text-dark{% else %}badge-light border{% endif %}" style="font-size: 11px;">
+                                    <i class="fas fa-exclamation-circle mr-1 {% if r.tab_switches == 0 %}text-gray-300{% endif %}"></i> {{ r.tab_switches }}
+                                </span>
+                            {% else %}
+                                <span class="text-gray-300">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="align-middle">
+                            {% if r.attempt_id %}
+                                <span class="status-pill {% if r.attempt_status == 'finished' %}bg-success text-white{% elif r.attempt_status == 'blocked' %}bg-dark text-white{% else %}bg-primary text-white{% endif %}">
+                                    {{ r.attempt_status }}
+                                </span>
+                            {% else %}
+                                {% if is_past_due %}
+                                    <span class="status-pill bg-danger text-white">No Show</span>
+                                {% else %}
+                                    <span class="status-pill bg-light border text-muted">Pending</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="text-center align-middle">
+                            <div class="d-flex justify-content-center" style="gap: 6px;">
+                                {% if r.attempt_id and r.attempt_status != 'blocked' %}
+                                    <form action="{{ url_for('teacher.reset_exam', attempt_id=r.attempt_id, exam_id=exam.exam_id) }}" method="POST" onsubmit="return confirm('Reset student progress? This cannot be undone.')">
+                                        <button type="submit" class="btn btn-light btn-circle-sm border" title="Reset Attempt">
+                                            <i class="fas fa-redo text-danger" style="font-size: 10px;"></i>
+                                        </button>
+                                    </form>
+                                    <a href="{{ url_for('teacher.review_student_attempt', attempt_id=r.attempt_id) }}" class="btn btn-light btn-circle-sm border" title="Review Attempt">
+                                        <i class="fas fa-search text-primary" style="font-size: 10px;"></i>
+                                    </a>
+                                {% endif %}
+
+                                {% if r.attempt_status != 'finished' %}
+                                    <form action="{{ url_for('teacher.toggle_block_student', student_id=r.student_id, exam_id=exam.exam_id) }}" method="POST">
+                                        <button type="submit" class="btn btn-circle-sm border shadow-sm {% if r.attempt_status == 'blocked' %}btn-success{% else %}btn-dark{% endif %}" 
+                                                title="{% if r.attempt_status == 'blocked' %}Unblock Student{% else %}Block Student{% endif %}">
+                                            <i class="fas {% if r.attempt_status == 'blocked' %}fa-user-check{% else %}fa-user-slash{% endif %}" style="font-size: 10px;"></i>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL CONTAINER ── -->
+<div class="modal-source-container">
+    <div class="modal fade" id="timeModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);">Adjust Exam Schedule</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <form action="{{ url_for('teacher.update_exam_schedule', exam_id=exam.exam_id) }}" method="POST">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="small font-weight-bold text-muted text-uppercase">New Start Date & Time</label>
+                            <input type="datetime-local" name="new_time" class="form-control rounded-pill border"
+                                value="{{ exam.date_time.strftime('%Y-%m-%dT%H:%M') if exam.date_time else '' }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="small font-weight-bold text-muted text-uppercase">Duration (Minutes)</label>
+                            <input type="number" name="new_duration" class="form-control rounded-pill border"
+                                value="{{ exam.duration_minutes }}" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="submit" class="btn btn-danger btn-block rounded-pill font-weight-bold">Save Schedule Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Fix backdrop issue by moving modal to body
+        $('.modal').appendTo('body');
+    });
+</script>
+{% endblock %}

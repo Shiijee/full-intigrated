@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/x-icon" href="{{ url_for('admin.static', filename='favicon.ico') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Admin Panel{% endblock %} — Voxify</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link href="{{ url_for('admin.static', filename='css/admin.css') }}" rel="stylesheet"/>
+  <link href="{{ url_for('admin.static', filename='css/enhancements.css') }}" rel="stylesheet"/>
+  {% block extra_css %}{% endblock %}
+  <style>
+    .sidebar-init-collapsed #sidebar { width: 64px !important; transition: none !important; }
+    .sidebar-init-collapsed #mainWrapper { margin-left: 64px !important; transition: none !important; }
+  </style>
+  <script>
+    if (localStorage.getItem('sidebarCollapsed') === 'true' && window.innerWidth > 768) {
+      document.documentElement.classList.add('sidebar-init-collapsed');
+    }
+  </script>
+</head>
+<body>
+
+<!-- ── Sidebar ─────────────────────────────── -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">
+      <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 2L33 10.5V25.5L18 34L3 25.5V10.5L18 2Z" fill="#C9A84C"/>
+        <path d="M11 18L15.5 22.5L25 13" stroke="#1a2744" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-name">Voxify</span>
+      <span class="brand-sub">Admin Panel</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="{{ url_for('admin.dashboard') }}"
+       class="nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}"
+       data-label="Dashboard">
+      <i class="bi bi-grid-1x2-fill"></i>
+      <span>Dashboard</span>
+    </a>
+
+    <div class="nav-section-label">Management</div>
+    <a href="{{ url_for('admin.view_elections') }}"
+       class="nav-item {% if request.endpoint in ['admin.view_elections', 'admin.create_election', 'admin.edit_election', 'admin.election_positions'] %}active{% endif %}"
+       data-label="Elections">
+      <i class="bi bi-calendar2-event-fill"></i>
+      <span>Elections</span>
+    </a>
+    <a href="{{ url_for('admin.view_positions') }}"
+       class="nav-item {% if request.endpoint in ['admin.view_positions', 'admin.create_position', 'admin.edit_position'] %}active{% endif %}"
+       data-label="Positions">
+      <i class="bi bi-layout-three-columns"></i>
+      <span>Positions</span>
+    </a>
+    <a href="{{ url_for('admin.view_candidates') }}"
+       class="nav-item {% if request.endpoint in ['admin.view_candidates', 'admin.create_candidate', 'admin.edit_candidate'] %}active{% endif %}"
+       data-label="Candidates">
+      <i class="bi bi-person-badge-fill"></i>
+      <span>Candidates</span>
+    </a>
+    <a href="{{ url_for('admin.view_voters') }}"
+       class="nav-item {% if request.endpoint in ['admin.view_voters', 'admin.create_voter', 'admin.edit_voter'] %}active{% endif %}"
+       data-label="Voters">
+      <i class="bi bi-people-fill"></i>
+      <span>Voters</span>
+    </a>
+
+    <div class="nav-section-label">Reports</div>
+    <a href="{{ url_for('admin.view_results') }}"
+       class="nav-item {% if request.endpoint == 'admin.view_results' %}active{% endif %}"
+       data-label="Results">
+      <i class="bi bi-bar-chart-fill"></i>
+      <span>Results</span>
+    </a>
+    <a href="{{ url_for('admin.view_logs') }}"
+       class="nav-item {% if request.endpoint == 'admin.view_logs' %}active{% endif %}"
+       data-label="Audit Logs">
+      <i class="bi bi-journal-text"></i>
+      <span>Audit Logs</span>
+    </a>
+
+    <div class="nav-section-label">Account</div>
+    <a href="{{ url_for('admin.view_profile') }}"
+       class="nav-item {% if request.endpoint == 'admin.view_profile' %}active{% endif %}"
+       data-label="My Profile">
+      <i class="bi bi-person-circle"></i>
+      <span>My Profile</span>
+    </a>
+   <a href="{{ url_for('auth.logout') }}"
+      class="nav-item nav-item-danger"
+      data-label="Logout"
+      onclick="return vxConfirm(event, 'Logout', 'Are you sure you want to logout?')">
+      <i class="bi bi-box-arrow-left"></i>
+      <span>Logout</span>
+   </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="admin-avatar">{{ session.get('fullname', 'A')[0]|upper }}</div>
+    <div class="admin-info">
+      <span class="admin-name">{{ session.get('fullname', 'Administrator') }}</span>
+      <span class="admin-role">{{ 'Super Admin' if session.get('role') == 'superadmin' else 'Administrator' }}</span>
+    </div>
+  </div>
+</div>
+<script>
+  // Runs synchronously the moment #sidebar is in the DOM — before any paint
+  (function() {
+    if (localStorage.getItem('sidebarCollapsed') === 'true' && window.innerWidth > 768) {
+      var s = document.getElementById('sidebar');
+      if (s) { s.classList.add('collapsed'); s.style.transition = 'none'; }
+    }
+  })();
+</script>
+
+<!-- ── Main Content ────────────────────────── -->
+<div class="main-wrapper" id="mainWrapper">
+<script>
+  // Runs synchronously the moment #mainWrapper is in the DOM — before any paint
+  (function() {
+    if (localStorage.getItem('sidebarCollapsed') === 'true' && window.innerWidth > 768) {
+      var w = document.getElementById('mainWrapper');
+      if (w) { w.classList.add('sidebar-collapsed'); w.style.transition = 'none'; }
+    }
+  })();
+</script>
+  <!-- Top bar -->
+  <header class="topbar">
+    <button class="sidebar-toggle" id="sidebarToggle" type="button">
+      <i class="bi bi-list"></i>
+    </button>
+    <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+    <div class="topbar-right">
+      <span class="topbar-time" id="topbarTime"></span>
+
+      <a href="{{ url_for('admin.view_profile') }}" class="topbar-admin topbar-admin-link" title="My Profile">
+        <div class="topbar-avatar">{{ session.get('fullname', 'A')[0]|upper }}</div>
+        <span class="topbar-name d-none d-md-inline">{{ session.get('fullname', 'Administrator') }}</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Page Content -->
+  <main class="page-content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<!-- Page-level modals slot (outside .main-wrapper to avoid stacking context) -->
+{% block modals %}{% endblock %}
+
+<!-- Voxify Confirm Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+    <div class="modal-content" style="border:none;border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(13,17,23,0.28);">
+      <!-- Header with navy + gold accent bar -->
+      <div class="modal-header" style="background:var(--navy);padding:20px 24px 18px;border:none;position:relative;">
+        <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold),var(--navy-mid));"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div id="confirmModalIcon" style="width:38px;height:38px;border-radius:10px;background:rgba(212,168,67,0.18);display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:1.15rem;flex-shrink:0;">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+          </div>
+          <h5 class="modal-title" style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#fff;margin:0;" id="confirmModalTitle">Confirm Action</h5>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" style="filter:invert(1) brightness(2);opacity:0.7;margin:0;"></button>
+      </div>
+      <!-- Body -->
+      <div class="modal-body" style="padding:24px 24px 20px;color:var(--ink);font-size:0.92rem;line-height:1.6;background:#fff;" id="confirmModalBody">
+        Are you sure?
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer" style="padding:14px 24px 20px;border-top:1px solid var(--border);background:#fff;gap:10px;justify-content:flex-end;">
+        <button type="button" class="btn" data-bs-dismiss="modal"
+          style="padding:9px 22px;border-radius:8px;font-weight:500;font-size:0.88rem;background:var(--paper);color:var(--ink);border:1px solid var(--border);transition:all 0.18s;">
+          Cancel
+        </button>
+        <button type="button" class="btn" id="confirmModalBtn"
+          style="padding:9px 22px;border-radius:8px;font-weight:600;font-size:0.88rem;background:var(--accent);color:#fff;border:none;transition:all 0.18s;">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Global vxConfirm helper (available on every page) ── */
+function vxConfirm(e, title, message, opts) {
+  e.preventDefault();
+  var href = (e.currentTarget && e.currentTarget.href) ? e.currentTarget.href : null;
+  var options = opts || {};
+
+  /* title & message */
+  var titleEl = document.getElementById('confirmModalTitle');
+  var bodyEl  = document.getElementById('confirmModalBody');
+  var iconEl  = document.getElementById('confirmModalIcon');
+  var btn     = document.getElementById('confirmModalBtn');
+
+  if (titleEl) titleEl.textContent = title || 'Confirm Action';
+  if (bodyEl)  bodyEl.textContent  = message || 'Are you sure?';
+
+  /* icon: danger = red shield, warn = yellow !, default = exclamation */
+  var danger = options.danger || /delete|remove|permanently/i.test(title + ' ' + message);
+  var warn   = options.warn   || /archive|logout|close|move/i.test(title + ' ' + message);
+  if (iconEl) {
+    if (danger) {
+      iconEl.style.background = 'rgba(200,57,43,0.12)';
+      iconEl.style.color      = 'var(--accent)';
+      iconEl.innerHTML        = '<i class="bi bi-shield-exclamation"></i>';
+    } else if (warn) {
+      iconEl.style.background = 'rgba(212,168,67,0.18)';
+      iconEl.style.color      = 'var(--gold)';
+      iconEl.innerHTML        = '<i class="bi bi-exclamation-triangle-fill"></i>';
+    } else {
+      iconEl.style.background = 'rgba(26,58,92,0.12)';
+      iconEl.style.color      = 'var(--navy)';
+      iconEl.innerHTML        = '<i class="bi bi-question-circle-fill"></i>';
+    }
+  }
+
+  /* confirm button colour */
+  if (btn) {
+    btn.style.background = danger ? 'var(--accent)' : warn ? 'var(--gold)' : 'var(--navy)';
+    btn.style.color      = (warn && !danger) ? 'var(--ink)' : '#fff';
+    btn.textContent      = options.confirmText || 'Confirm';
+    btn.onclick = function () {
+      bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+      if (href) window.location.href = href;
+      if (options.onConfirm) options.onConfirm();
+    };
+  }
+
+  var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('confirmModal'));
+  modal.show();
+  return false;
+}
+</script>
+
+<!-- Toast Container -->
+<div class="toast-stack" id="toastStack"></div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('admin.static', filename='js/admin.js') }}"></script>
+<script src="{{ url_for('admin.static', filename='js/pagination.js') }}"></script>
+<script src="{{ url_for('admin.static', filename='js/enhancements.js') }}"></script>
+{% block extra_js %}{% endblock %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}
+<style>
+#vx-toast-wrap {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.vx-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  min-width: 280px;
+  max-width: 380px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  pointer-events: all;
+  animation: vxSlideIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;
+  color: #fff;
+  background: #1a2744;
+  border-left: 5px solid #C9A84C;
+}
+.vx-toast.vx-success { border-left-color: #C9A84C; }
+.vx-toast.vx-error   { border-left-color: #C9A84C; }
+.vx-toast.vx-warning { border-left-color: #C9A84C; }
+.vx-toast.vx-info    { border-left-color: #C9A84C; }
+.vx-toast-icon { font-size: 1rem; flex-shrink: 0; }
+.vx-toast-msg  { flex: 1; line-height: 1.4; }
+.vx-toast-close { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 1rem; cursor: pointer; padding: 0; line-height: 1; }
+.vx-toast-close:hover { color: #fff; }
+@keyframes vxSlideIn {
+  from { opacity: 0; transform: translateX(60px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes vxSlideOut {
+  from { opacity: 1; transform: translateX(0); max-height: 80px; }
+  to   { opacity: 0; transform: translateX(60px); max-height: 0; padding: 0; margin: 0; }
+}
+</style>
+<div id="vx-toast-wrap">
+{% for category, message in messages %}
+{% if category == 'success' %}{% set tc = 'vx-success' %}{% set icon = 'bi-check-circle-fill' %}
+{% elif category in ('error','danger') %}{% set tc = 'vx-error' %}{% set icon = 'bi-x-circle-fill' %}
+{% elif category == 'warning' %}{% set tc = 'vx-warning' %}{% set icon = 'bi-exclamation-triangle-fill' %}
+{% else %}{% set tc = 'vx-info' %}{% set icon = 'bi-info-circle-fill' %}{% endif %}
+<div class="vx-toast {{ tc }}" id="vxt-{{ loop.index }}">
+  <i class="bi {{ icon }} vx-toast-icon"></i>
+  <span class="vx-toast-msg">{{ message }}</span>
+  <button class="vx-toast-close" onclick="this.closest('.vx-toast').remove()">&#x2715;</button>
+</div>
+{% endfor %}
+</div>
+<script>
+  document.querySelectorAll('.vx-toast').forEach(function(t) {
+    setTimeout(function() {
+      t.style.animation = 'vxSlideOut 0.4s ease forwards';
+      setTimeout(function() { t.remove(); }, 400);
+    }, 5000);
+  });
+</script>
+{% endif %}{% endwith %}
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify OTP | Attendeez</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="auth-page">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <i class="fas fa-shield-alt" style="font-size: 3rem; color: var(--primary); margin-bottom: 1.5rem;"></i>
+                <h1>Verify OTP</h1>
+                <p>A 4-digit code and your Unique ID have been sent to your email. Please check your inbox.</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Attempt tracker -->
+            <div style="display: flex; justify-content: space-between; align-items: center;
+                        background: rgba(255,255,255,0.04); border: 1px solid var(--border-color);
+                        border-radius: 10px; padding: 0.7rem 1rem; margin-bottom: 1.2rem; font-size: 0.82rem;">
+                <span style="color: var(--text-muted);">
+                    <i class="fas fa-key" style="margin-right: 5px; color: var(--primary);"></i>
+                    Attempts left:
+                    <strong {% if (max_wrong - wrong_count) <= 2 %}style="color: #ef4444;"{% else %}style="color: var(--primary);"{% endif %}>
+                        {{ max_wrong - wrong_count }} / {{ max_wrong }}
+                    </strong>
+                </span>
+                <span style="color: var(--text-muted);">
+                    <i class="fas fa-paper-plane" style="margin-right: 5px; color: var(--primary);"></i>
+                    Resends left:
+                    <strong {% if resends_left == 0 %}style="color: #ef4444;"{% else %}style="color: var(--primary);"{% endif %}>
+                        {{ resends_left }}
+                    </strong>
+                </span>
+            </div>
+
+            <form method="POST" action="{{ url_for('auth.verify_otp') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group text-center">
+                    <label class="form-label" style="display: block; margin-bottom: 1rem;">Enter 4-Digit Code</label>
+                    
+                    <!-- Premium 4-box OTP Input -->
+                    <div class="otp-inputs-wrapper" style="display: flex; justify-content: center; gap: 1rem; margin-bottom: 1.5rem;">
+                        <input type="text" class="otp-box form-control text-center" maxlength="1" required 
+                               style="width: 60px; height: 60px; font-size: 2rem; font-weight: bold; padding: 0; border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.03);"
+                               autocomplete="off" inputmode="numeric" autofocus>
+                        <input type="text" class="otp-box form-control text-center" maxlength="1" required 
+                               style="width: 60px; height: 60px; font-size: 2rem; font-weight: bold; padding: 0; border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.03);"
+                               autocomplete="off" inputmode="numeric">
+                        <input type="text" class="otp-box form-control text-center" maxlength="1" required 
+                               style="width: 60px; height: 60px; font-size: 2rem; font-weight: bold; padding: 0; border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.03);"
+                               autocomplete="off" inputmode="numeric">
+                        <input type="text" class="otp-box form-control text-center" maxlength="1" required 
+                               style="width: 60px; height: 60px; font-size: 2rem; font-weight: bold; padding: 0; border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.03);"
+                               autocomplete="off" inputmode="numeric">
+                    </div>
+                    
+                    <!-- Hidden input to store the combined OTP value for form submission -->
+                    <input type="hidden" name="otp" id="final-otp" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-full">
+                    <i class="fas fa-check-circle" style="margin-right: 6px;"></i>
+                    Verify Code
+                </button>
+            </form>
+            
+            <div class="text-center mt-4">
+                <!-- Resend button with cooldown logic -->
+                {% if resends_left > 0 %}
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;">
+                        Didn't receive the code?
+                    </p>
+                    <div id="resend-wrapper">
+                        <!-- Countdown shown while in cooldown -->
+                        <p id="cooldown-msg" style="color: var(--text-muted); font-size: 0.85rem; display:none;">
+                            <i class="fas fa-clock" style="margin-right: 4px;"></i>
+                            Resend available in <strong id="countdown-timer">2:00</strong>
+                        </p>
+                        <!-- Active resend link shown when cooldown has passed -->
+                        <a id="resend-link" href="{{ url_for('auth.resend_otp') }}"
+                           style="color: var(--primary); text-decoration: none; font-weight: bold; font-size: 0.9rem;">
+                            <i class="fas fa-redo" style="margin-right: 4px;"></i>Resend Code
+                        </a>
+                    </div>
+                {% else %}
+                    <p style="color: #ef4444; font-size: 0.85rem;">
+                        <i class="fas fa-ban" style="margin-right: 4px;"></i>
+                        Resend limit reached. If you still need help, please contact support.
+                    </p>
+                {% endif %}
+
+                <a href="{{ url_for('auth.forgot_password') }}"
+                   style="color: var(--text-muted); text-decoration: none; font-size: 0.85rem; display: block; margin-top: 1rem;">
+                    <i class="fas fa-arrow-left" style="margin-right: 4px;"></i>
+                    Try a different email
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Cooldown countdown — cooldown_ends is a Unix epoch int passed from Flask
+        const cooldownEnds = parseInt("{{ cooldown_ends }}", 10) || 0;
+
+        function updateCountdown() {
+            const now   = Math.floor(Date.now() / 1000);
+            const diff  = cooldownEnds - now;
+
+            const resendLink   = document.getElementById('resend-link');
+            const cooldownMsg  = document.getElementById('cooldown-msg');
+            const timerEl      = document.getElementById('countdown-timer');
+
+            if (!resendLink || !cooldownMsg) return;
+
+            if (diff > 0) {
+                // Still in cooldown — show timer, hide link
+                resendLink.style.display  = 'none';
+                cooldownMsg.style.display = 'block';
+                const m = Math.floor(diff / 60).toString().padStart(1, '0');
+                const s = (diff % 60).toString().padStart(2, '0');
+                timerEl.textContent = `${m}:${s}`;
+                setTimeout(updateCountdown, 1000);
+            } else {
+                // Cooldown expired — show link, hide timer
+                resendLink.style.display  = '';
+                cooldownMsg.style.display = 'none';
+            }
+        }
+
+        updateCountdown();
+
+        // Premium OTP Input Logic (Auto-advance and Backspace handling)
+        const otpBoxes = document.querySelectorAll('.otp-box');
+        const finalOtpInput = document.getElementById('final-otp');
+
+        otpBoxes.forEach((box, index) => {
+            box.addEventListener('input', (e) => {
+                // Allow only numbers
+                e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                
+                // Auto-advance
+                if (e.target.value.length === 1 && index < otpBoxes.length - 1) {
+                    otpBoxes[index + 1].focus();
+                }
+                
+                updateFinalOtp();
+            });
+
+            box.addEventListener('keydown', (e) => {
+                // Move back on Backspace
+                if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                    otpBoxes[index - 1].focus();
+                }
+            });
+            
+            // Allow paste of 4 digits
+            box.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const pasteData = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '').slice(0, 4);
+                
+                for(let i = 0; i < pasteData.length; i++) {
+                    if (otpBoxes[i]) {
+                        otpBoxes[i].value = pasteData[i];
+                    }
+                }
+                
+                // Focus on the next empty box or the last one
+                const nextFocus = pasteData.length < 4 ? pasteData.length : 3;
+                otpBoxes[nextFocus].focus();
+                
+                updateFinalOtp();
+            });
+        });
+
+        function updateFinalOtp() {
+            let otpValue = '';
+            otpBoxes.forEach(box => {
+                otpValue += box.value;
+            });
+            finalOtpInput.value = otpValue;
+        }
+        
+        // Ensure OTP is filled before submit
+        document.querySelector('form').addEventListener('submit', (e) => {
+            if (finalOtpInput.value.length !== 4) {
+                e.preventDefault();
+                alert('Please enter the 4-digit code.');
+            }
+        });
+    </script>
+</body>
+</html>

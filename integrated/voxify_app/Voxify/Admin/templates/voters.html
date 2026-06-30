@@ -1,0 +1,441 @@
+{% extends "admin/base.html" %}
+{% block title %}Voters{% endblock %}
+{% block page_title %}Voters{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('admin.static', filename='css/voters.css') }}" rel="stylesheet"/>
+{% endblock %}
+
+{% block content %}
+<div id="votersPageData" data-create-voter-restore="{{ 'true' if create_voter_restore else 'false' }}" style="display:none;"></div>
+<div class="page-header">
+  <div>
+    <h2 class="page-heading">Voter Management</h2>
+    <p class="page-subheading">Create, edit, and archive voters in your college.</p>
+  </div>
+  <div class="page-header-actions" style="display:flex;gap:10px;align-items:center;">
+    <button class="btn-primary-custom" type="button" onclick="openModal('importVotersModal')"
+      style="background:#16a34a;border-color:#16a34a;">
+      <i class="bi bi-cloud-download-fill"></i> Import from TestPoint
+    </button>
+    <button class="btn-primary-custom" type="button" onclick="openModal('addVoterModal')">
+      <i class="bi bi-person-plus-fill"></i> Add Voter
+    </button>
+  </div>
+
+  <!-- ── Import from TestPoint Modal ── -->
+  <div class="vmodal-overlay" id="importVotersModal" style="display:none;" onclick="if(event.target===this)closeModal('importVotersModal')">
+    <div class="vmodal" style="max-width:460px;">
+      <div class="vmodal-header">
+        <h5><i class="bi bi-cloud-download-fill" style="margin-right:8px;color:#16a34a;"></i>Import Voters from TestPoint</h5>
+        <button class="vmodal-close" onclick="closeModal('importVotersModal')">&times;</button>
+      </div>
+      <div class="vmodal-body">
+        <p style="font-size:.85rem;color:#64748b;margin-bottom:16px;">
+          This will pull all active students from <strong>TestPoint</strong> and register them as voters in this college.
+          Already-existing voters will be skipped.
+        </p>
+        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:6px;">Default Password for imported voters</label>
+        <input id="import-pw" type="text" value="Voter@2026" style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;margin-bottom:14px;"/>
+        <div id="import-status" style="font-size:.82rem;min-height:24px;"></div>
+      </div>
+      <div class="vmodal-footer">
+        <button type="button" class="vbtn vbtn-secondary" onclick="closeModal('importVotersModal')">Cancel</button>
+        <button type="button" class="vbtn vbtn-primary" style="background:#16a34a;border-color:#16a34a;" onclick="triggerImport()">
+          <i class="bi bi-cloud-download-fill"></i> Import Now
+        </button>
+      </div>
+    </div>
+  </div>
+  <script>
+  async function triggerImport() {
+    const pw = document.getElementById('import-pw').value;
+    const statusEl = document.getElementById('import-status');
+    statusEl.innerHTML = '<span style="color:#64748b">⏳ Importing from TestPoint…</span>';
+    try {
+      const r = await fetch('/api/voters/import-from-testpoint', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ college_id: {{ college_id|default(1) }}, default_password: pw })
+      });
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+      statusEl.innerHTML = `<span style="color:#16a34a;font-weight:600;">✅ ${data.message}</span>`;
+      setTimeout(() => location.reload(), 1800);
+    } catch(e) {
+      statusEl.innerHTML = `<span style="color:#ef4444;">⚠ ${e.message}</span>`;
+    }
+  }
+  </script>
+</div>
+
+
+<!-- Tab Navigation -->
+{% set active_voters = voters | selectattr('is_active', 'equalto', true) | list %}
+{% set archived_voters = voters | selectattr('is_active', 'equalto', false) | list %}
+
+<div class="voter-tabs">
+  <button class="voter-tab voter-tab-active" id="tab-active" onclick="switchTab('active')">
+    <i class="bi bi-people-fill"></i>
+    Active Voters
+    <span class="vtab-count" id="count-active">{{ active_voters | length }}</span>
+  </button>
+  <button class="voter-tab" id="tab-archived" onclick="switchTab('archived')">
+    <i class="bi bi-archive-fill"></i>
+    Archives
+    <span class="vtab-count vtab-count-muted" id="count-archived">{{ archived_voters | length }}</span>
+  </button>
+</div>
+
+<!-- Active Voters Panel -->
+<div class="card-panel" id="panel-active">
+  <div class="card-panel-body p-0">
+    {% if active_voters %}
+    <div class="table-responsive">
+      <table class="table-custom" id="activeVotersTable">
+        <thead>
+          <tr>
+            <th style="width:44px;">#</th>
+            <th>Voter</th>
+            <th>Student ID</th>
+            <th>Registered</th>
+            <th style="width:110px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for voter in active_voters %}
+          <tr>
+            <td class="text-muted-sm">{{ loop.index }}</td>
+            <td class="td-wrap">
+              <div class="voter-cell">
+                <div class="voter-avatar-sm">{{ voter.firstname[0]|upper }}</div>
+                <div>
+                  <div class="fw-600">{{ voter.firstname }} {% if voter.middlename %}{{ voter.middlename }} {% endif %}{{ voter.surname }}</div>
+                  <div class="text-muted-sm">{{ voter.email or '—' }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="text-muted-sm">{{ voter.student_id or '—' }}</td>
+            <td class="text-muted-sm">{{ voter.created_at.strftime('%b %d, %Y %I:%M %p') if voter.created_at else '—' }}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn-action btn-action-edit" title="Edit"
+                  onclick="openModal('editVoterModal{{ voter.id }}')">
+                  <i class="bi bi-pencil-fill"></i>
+                </button>
+                <a href="{{ url_for('admin.archive_voter', voter_id=voter.id) }}"
+                   class="btn-action btn-action-warn"
+                   title="Archive voter"
+                   onclick="return vxConfirm(event, 'Archive Voter', 'Archive this voter? They will no longer be able to vote.')">
+                  <i class="bi bi-archive-fill"></i>
+                </a>
+                <a href="{{ url_for('admin.delete_voter', voter_id=voter.id) }}"
+                   class="btn-action btn-action-delete" title="Delete permanently"
+                   onclick="return vxConfirm(event, 'Delete Voter', 'Permanently delete this voter? This cannot be undone.')">
+                  <i class="bi bi-trash3-fill"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-people"></i>
+      <h5>No Active Voters</h5>
+      <p>Start by adding voters to your college.</p>
+      <span class="btn-primary-custom" style="cursor:default;pointer-events:none;opacity:0.85;display:inline-flex;align-items:center;gap:6px;">
+        <i class="bi bi-person-plus-fill"></i> Add First Voter
+      </span>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Active pagination -->
+  <div class="pagination-wrapper" id="activePagWrap">
+    <div class="pagination-info" id="activePagInfo"></div>
+    <ul class="pagination-custom" id="activePagList"></ul>
+  </div>
+</div>
+
+<!-- Archived Voters Panel -->
+<div class="card-panel" id="panel-archived" style="display:none;">
+  <div class="archive-panel-header">
+    <div class="archive-notice">
+      <i class="bi bi-archive-fill"></i>
+      <span>Archived voters cannot log in or cast votes. You can restore them at any time.</span>
+    </div>
+  </div>
+  <div class="card-panel-body p-0">
+    {% if archived_voters %}
+    <div class="table-responsive">
+      <table class="table-custom" id="archivedVotersTable">
+        <thead>
+          <tr>
+            <th style="width:44px;">#</th>
+            <th>Voter</th>
+            <th>Student ID</th>
+            <th>Registered</th>
+            <th style="width:110px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for voter in archived_voters %}
+          <tr class="archived-row">
+            <td class="text-muted-sm">{{ loop.index }}</td>
+            <td class="td-wrap">
+              <div class="voter-cell voter-cell-archived">
+                <div class="voter-avatar-sm voter-avatar-archived">{{ voter.firstname[0]|upper }}</div>
+                <div>
+                  <div class="fw-600" style="opacity:0.6;">{{ voter.firstname }} {% if voter.middlename %}{{ voter.middlename }} {% endif %}{{ voter.surname }}</div>
+                  <div class="text-muted-sm">{{ voter.email or '—' }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="text-muted-sm">{{ voter.student_id or '—' }}</td>
+            <td class="text-muted-sm">{{ voter.created_at.strftime('%b %d, %Y %I:%M %p') if voter.created_at else '—' }}</td>
+            <td>
+              <div class="action-buttons">
+                <a href="{{ url_for('admin.archive_voter', voter_id=voter.id) }}"
+                   class="btn-action btn-action-restore"
+                   title="Restore voter">
+                  <i class="bi bi-arrow-counterclockwise"></i>
+                </a>
+                <a href="{{ url_for('admin.delete_voter', voter_id=voter.id) }}"
+                   class="btn-action btn-action-delete" title="Delete permanently"
+                   onclick="return vxConfirm(event, 'Delete Voter', 'Permanently delete this voter? This cannot be undone.')">
+                  <i class="bi bi-trash3-fill"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-archive"></i>
+      <h5>No Archived Voters</h5>
+      <p>Voters you archive will appear here. Archived voters can be restored at any time.</p>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Archived pagination -->
+  <div class="pagination-wrapper" id="archivedPagWrap">
+    <div class="pagination-info" id="archivedPagInfo"></div>
+    <ul class="pagination-custom" id="archivedPagList"></ul>
+  </div>
+</div>
+
+<!-- ADD VOTER MODAL -->
+<div class="vmodal-overlay" id="addVoterModal" onclick="overlayClose(event, 'addVoterModal')">
+  <div class="vmodal-box">
+    <div class="vmodal-header">
+      <h5><i class="bi bi-person-plus-fill" style="margin-right:8px;"></i>Add New Voter</h5>
+      <button class="vmodal-close" onclick="closeModal('addVoterModal')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.create_voter') }}" id="addVoterForm" novalidate>
+      <div class="vmodal-body">
+
+        <!-- Flash messages inside the modal -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages and create_voter_restore %}
+            {% for category, message in messages %}
+            <div style="background:{% if category=='error' %}#fef2f2{% else %}#f0fdf4{% endif %};
+                        border:1px solid {% if category=='error' %}#fca5a5{% else %}#86efac{% endif %};
+                        color:{% if category=='error' %}#991b1b{% else %}#166534{% endif %};
+                        border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;
+                        display:flex;justify-content:space-between;align-items:center;">
+              <span><i class="bi bi-exclamation-circle me-2"></i>{{ message }}</span>
+              <button type="button" style="background:none;border:none;cursor:pointer;font-size:1rem;color:inherit;padding:0 0 0 10px;" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="vform-row">
+          <div class="vform-col">
+            <label class="vform-label required">First Name</label>
+            <input type="text" name="firstname" id="av-firstname" class="vform-input" placeholder="First name" autocomplete="off"
+                   value="{{ create_voter_restore.firstname if create_voter_restore else '' }}"/>
+            <small class="vform-error" id="av-firstname-err"></small>
+          </div>
+          <div class="vform-col">
+            <label class="vform-label">Middle Name</label>
+            <input type="text" name="middlename" id="av-middlename" class="vform-input" placeholder="Middle name" autocomplete="off"
+                   value="{{ create_voter_restore.middlename if create_voter_restore else '' }}"/>
+            <small class="vform-error" id="av-middlename-err"></small>
+          </div>
+          <div class="vform-col">
+            <label class="vform-label required">Surname</label>
+            <input type="text" name="surname" id="av-surname" class="vform-input" placeholder="Surname" autocomplete="off"
+                   value="{{ create_voter_restore.surname if create_voter_restore else '' }}"/>
+            <small class="vform-error" id="av-surname-err"></small>
+          </div>
+        </div>
+        <div class="vform-row">
+          <div class="vform-col-half">
+            <label class="vform-label required">Student ID</label>
+            <div class="vform-input-group">
+              <span class="vform-input-prefix">{{ student_id_prefix }}</span>
+              <input type="number" name="student_id_seq" id="av-studentid" class="vform-input vform-input-suffix" placeholder="1" min="1"
+                     value="{{ create_voter_restore.student_id_seq if create_voter_restore else '' }}"/>
+            </div>
+            <small class="vform-hint">Type a number, e.g. 3 → {{ student_id_prefix }}0003</small>
+            <small class="vform-error" id="av-studentid-err"></small>
+          </div>
+          <div class="vform-col-half">
+            <label class="vform-label required">Email</label>
+            <input type="text" name="email" id="av-email" class="vform-input" placeholder="student@gmail.com" autocomplete="off"
+                   value="{{ create_voter_restore.email if create_voter_restore else '' }}"/>
+            <small class="vform-error" id="av-email-err"></small>
+          </div>
+        </div>
+        <div class="vform-row">
+          <div class="vform-col-half">
+            <label class="vform-label required">Password</label>
+            <div style="position:relative;">
+              <input type="password" name="password" id="av-password" class="vform-input" placeholder="Min. 8 characters" style="padding-right:40px;" oninput="avUpdateStrength()"/>
+              <button type="button" onclick="togglePw('av-password','av-pw-icon')" tabindex="-1"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#6b7280;padding:0;">
+                <i class="bi bi-eye-fill" id="av-pw-icon"></i>
+              </button>
+            </div>
+            <!-- Strength bar -->
+            <div id="av-strength-wrapper" style="display:none;margin-top:8px;">
+              <div style="display:flex;gap:4px;margin-bottom:4px;">
+                <div id="av-seg1" style="flex:1;height:4px;border-radius:3px;background:#ddd;transition:background .3s;"></div>
+                <div id="av-seg2" style="flex:1;height:4px;border-radius:3px;background:#ddd;transition:background .3s;"></div>
+                <div id="av-seg3" style="flex:1;height:4px;border-radius:3px;background:#ddd;transition:background .3s;"></div>
+              </div>
+              <div id="av-strength-label" style="font-size:0.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;min-height:14px;"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin-top:6px;">
+                <div class="av-req" id="av-req-len"  style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>8+ characters</div>
+                <div class="av-req" id="av-req-upper" style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Uppercase letter</div>
+                <div class="av-req" id="av-req-lower" style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Lowercase letter</div>
+                <div class="av-req" id="av-req-num"   style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Number</div>
+                <div class="av-req" id="av-req-special" style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Special char</div>
+              </div>
+            </div>
+            <small class="vform-error" id="av-password-err"></small>
+          </div>
+          <div class="vform-col-half">
+            <label class="vform-label required">Confirm Password</label>
+            <div style="position:relative;">
+              <input type="password" name="confirm_password" id="av-confirm-password" class="vform-input" placeholder="Repeat password" style="padding-right:40px;" oninput="avUpdateMatch()"/>
+              <button type="button" onclick="togglePw('av-confirm-password','av-cpw-icon')" tabindex="-1"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#6b7280;padding:0;">
+                <i class="bi bi-eye-fill" id="av-cpw-icon"></i>
+              </button>
+            </div>
+            <small id="av-match-hint" style="font-size:0.76rem;margin-top:4px;display:block;min-height:16px;"></small>
+            <small class="vform-error" id="av-confirm-password-err"></small>
+          </div>
+        </div>
+      </div>
+      <div class="vmodal-footer">
+        <button type="button" class="vbtn vbtn-secondary" onclick="closeModal('addVoterModal')">Cancel</button>
+        <button type="submit" class="vbtn vbtn-primary" id="av-submit-btn"><i class="bi bi-person-plus-fill"></i> Create Voter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- EDIT VOTER MODALS -->
+{% for voter in voters %}
+<div class="vmodal-overlay" id="editVoterModal{{ voter.id }}" onclick="overlayClose(event, 'editVoterModal{{ voter.id }}')">
+  <div class="vmodal-box">
+    <div class="vmodal-header">
+      <h5><i class="bi bi-pencil-fill" style="margin-right:8px;"></i>Edit Voter</h5>
+      <button class="vmodal-close" onclick="closeModal('editVoterModal{{ voter.id }}')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.edit_voter', voter_id=voter.id) }}" id="editVoterForm{{ voter.id }}" novalidate>
+      <div class="vmodal-body">
+        <div class="vform-row">
+          <div class="vform-col">
+            <label class="vform-label required">First Name</label>
+            <input type="text" name="firstname" id="ev-{{ voter.id }}-firstname" class="vform-input" value="{{ voter.firstname }}" autocomplete="off"/>
+            <small class="vform-error" id="ev-{{ voter.id }}-firstname-err"></small>
+          </div>
+          <div class="vform-col">
+            <label class="vform-label">Middle Name</label>
+            <input type="text" name="middlename" id="ev-{{ voter.id }}-middlename" class="vform-input" value="{{ voter.middlename or '' }}" autocomplete="off"/>
+            <small class="vform-error" id="ev-{{ voter.id }}-middlename-err"></small>
+          </div>
+          <div class="vform-col">
+            <label class="vform-label required">Surname</label>
+            <input type="text" name="surname" id="ev-{{ voter.id }}-surname" class="vform-input" value="{{ voter.surname }}" autocomplete="off"/>
+            <small class="vform-error" id="ev-{{ voter.id }}-surname-err"></small>
+          </div>
+        </div>
+        <div class="vform-row">
+          <div class="vform-col-half">
+            <label class="vform-label">Student ID</label>
+            <input type="text" class="vform-input vform-input-disabled" value="{{ voter.student_id }}" disabled/>
+            <small class="vform-hint">Cannot be changed</small>
+          </div>
+          <div class="vform-col-half">
+            <label class="vform-label required">Email</label>
+            <input type="text" name="email" id="ev-{{ voter.id }}-email" class="vform-input" value="{{ voter.email or '' }}" autocomplete="off"/>
+            <small class="vform-error" id="ev-{{ voter.id }}-email-err"></small>
+          </div>
+        </div>
+        <div class="vform-row">
+          <div class="vform-col-half">
+            <label class="vform-label">New Password</label>
+            <small class="vform-hint">Leave blank to keep current</small>
+            <div style="position:relative;margin-top:4px;">
+              <input type="password" name="password" id="ev-{{ voter.id }}-password" class="vform-input" placeholder="Enter new password" style="padding-right:40px;" oninput="evUpdateStrength('{{ voter.id }}')"/>
+              <button type="button" onclick="togglePw('ev-{{ voter.id }}-password','ev-{{ voter.id }}-pw-icon')" tabindex="-1"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#6b7280;padding:0;">
+                <i class="bi bi-eye-fill" id="ev-{{ voter.id }}-pw-icon"></i>
+              </button>
+            </div>
+            <div id="ev-{{ voter.id }}-strength-wrapper" style="display:none;margin-top:8px;">
+              <div style="display:flex;gap:4px;margin-bottom:4px;">
+                <div id="ev-{{ voter.id }}-seg1" style="flex:1;height:4px;border-radius:3px;background:#ddd;transition:background .3s;"></div>
+                <div id="ev-{{ voter.id }}-seg2" style="flex:1;height:4px;border-radius:3px;background:#ddd;transition:background .3s;"></div>
+                <div id="ev-{{ voter.id }}-seg3" style="flex:1;height:4px;border-radius:3px;background:#ddd;transition:background .3s;"></div>
+              </div>
+              <div id="ev-{{ voter.id }}-strength-label" style="font-size:0.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;min-height:14px;"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin-top:6px;">
+                <div class="av-req" id="ev-{{ voter.id }}-req-len"     style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>8+ characters</div>
+                <div class="av-req" id="ev-{{ voter.id }}-req-upper"   style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Uppercase letter</div>
+                <div class="av-req" id="ev-{{ voter.id }}-req-lower"   style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Lowercase letter</div>
+                <div class="av-req" id="ev-{{ voter.id }}-req-num"     style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Number</div>
+                <div class="av-req" id="ev-{{ voter.id }}-req-special" style="display:flex;align-items:center;gap:5px;font-size:0.74rem;color:#999;"><span class="av-dot" style="width:6px;height:6px;border-radius:50%;background:#ddd;flex-shrink:0;"></span>Special char</div>
+              </div>
+            </div>
+            <small class="vform-error" id="ev-{{ voter.id }}-password-err"></small>
+          </div>
+          <div class="vform-col-half">
+            <label class="vform-label">Confirm New Password</label>
+            <small class="vform-hint" style="visibility:hidden;">placeholder</small>
+            <div style="position:relative;margin-top:4px;">
+              <input type="password" name="confirm_password" id="ev-{{ voter.id }}-confirm-password" class="vform-input" placeholder="Repeat new password" style="padding-right:40px;" oninput="evUpdateMatch('{{ voter.id }}')"/>
+              <button type="button" onclick="togglePw('ev-{{ voter.id }}-confirm-password','ev-{{ voter.id }}-cpw-icon')" tabindex="-1"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#6b7280;padding:0;">
+                <i class="bi bi-eye-fill" id="ev-{{ voter.id }}-cpw-icon"></i>
+              </button>
+            </div>
+            <small id="ev-{{ voter.id }}-match-hint" style="font-size:0.76rem;margin-top:4px;display:block;min-height:16px;"></small>
+            <small class="vform-error" id="ev-{{ voter.id }}-confirm-password-err"></small>
+          </div>
+        </div>
+      </div>
+      <div class="vmodal-footer">
+        <button type="button" class="vbtn vbtn-secondary" onclick="closeModal('editVoterModal{{ voter.id }}')">Cancel</button>
+        <button type="submit" class="vbtn vbtn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('admin.static', filename='js/voters.js') }}"></script>
+{% endblock %}

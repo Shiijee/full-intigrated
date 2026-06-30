@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ subject.subject_name }} Performance | Attendeez</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .performance-card { padding: 2rem; margin-bottom: 2rem; }
+        .stats-large { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 2rem; }
+        .stat-item { text-align: center; padding: 1.5rem; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); }
+        .scan-container { margin-top: 3rem; text-align: center; padding: 3rem; border-radius: 24px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1)); border: 1px dashed var(--primary); }
+    </style>
+</head>
+<body class="theme-student" data-mark-read-url="{{ url_for('user.mark_notifications_read') }}">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Student') }}</p>
+                            <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">Student Member</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('user.profile') }}" class="nav-item profile-nav-item"><i class="fas fa-user-circle"></i> My Profile</a>
+                <a href="{{ url_for('user.dashboard') }}" class="nav-item"><i class="fas fa-house"></i> Student Dashboard </a>
+                <div class="nav-accordion">
+                    <button class="nav-item-btn accordion-trigger" onclick="toggleAccordion(this)">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>My Classes</span>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </button>
+                    <div class="accordion-content">
+                        {% for s in subjects %}
+                        <a href="{{ url_for('user.subject_performance', subject_id=s.subject_id) }}" class="nav-item" title="{{ s.subject_name }}">
+                            <i class="fas fa-book"></i> {{ s.subject_code }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <a href="{{ url_for('user.timetable') }}" class="nav-item"><i class="fas fa-calendar-alt"></i> Class Timetable </a>
+                <a href="{{ url_for('user.notifications_page') }}" class="nav-item"><i class="fas fa-bell"></i> Notifications {% if unread_count > 0 %}<span id="notif-badge-sidebar" class="badge badge-danger" style="margin-left: auto;">{{ unread_count }}</span>{% endif %}</a>
+                <a href="{{ url_for('user.submit_excuse') }}" class="nav-item"><i class="fas fa-envelope-open-text"></i> Excuse Letters </a>
+            </nav>
+            
+            
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 style="margin: 0;">{{ subject.subject_name }}</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <p style="color: var(--text-muted); margin: 0;">Subject Code: {{ subject.subject_code }}</p>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;"><i class="fas fa-chalkboard-teacher"></i> Instructor: {{ subject.teacher_first }} {{ subject.teacher_last }}</p>
+                    </div>
+                    <div class="badge {% if attendance_pct >= 75 %}badge-success{% else %}badge-danger{% endif %}" style="font-size: 1.2rem; padding: 0.8rem 1.5rem;">
+                        Attendance: {{ attendance_pct }}%
+                    </div>
+                </div>
+
+                <!-- Schedule Info -->
+                <div class="glass-panel" style="padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
+                    <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+                        <i class="fas fa-clock" style="color: var(--primary); margin-right: 0.4rem;"></i> Class Schedule
+                    </h4>
+                    {% if schedules %}
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+                        {% for sch in schedules %}
+                        <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.88rem;">
+                            <i class="fas fa-calendar-day" style="color: var(--primary); font-size: 0.8rem;"></i>
+                            <span style="font-weight: 600;">{{ sch.day_of_week }}</span>
+                            <span style="color: var(--text-muted);">{{ sch.start_time }} – {{ sch.end_time }}</span>
+                            <span style="color: var(--text-muted);">•</span>
+                            <i class="fas fa-door-open" style="color: var(--text-muted); font-size: 0.8rem;"></i>
+                            <span style="color: var(--text-muted);">{{ sch.room }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0;">
+                        <i class="fas fa-info-circle" style="margin-right: 0.3rem;"></i> No Schedule Yet
+                    </p>
+                    {% endif %}
+                </div>
+
+
+
+            <div class="glass-panel performance-card">
+                <h3 style="margin-bottom: 1.5rem;">Attendance Breakdown</h3>
+                <div class="stats-large">
+                    <div class="stat-item">
+                        <i class="fas fa-check-circle" style="color: var(--text-muted); font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <h2 style="margin: 0; color: var(--text-muted);">{{ stats.get('Present', 0) }}</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Present</p>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-times-circle" style="color: var(--danger-color); font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <h2 style="margin: 0; color: var(--danger-color);">{{ stats.get('Absent', 0) }}</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Absent</p>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-clock" style="color: #fbbf24; font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <h2 style="margin: 0; color: #fbbf24;">{{ stats.get('Late', 0) }}</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Late</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 3rem; height: 300px;">
+                    <canvas id="subjectChart"></canvas>
+                </div>
+            </div>
+
+            <div class="scan-container">
+                <i class="fas fa-qrcode" style="font-size: 4rem; color: var(--primary); margin-bottom: 1.5rem; opacity: 0.8;"></i>
+                <h2 style="margin-bottom: 1rem;">Ready to mark attendance?</h2>
+                <p style="color: var(--text-muted); margin-bottom: 2rem; max-width: 400px; margin-left: auto; margin-right: auto;">
+                    Ensure you are in the classroom and have granted camera/location permissions.
+                </p>
+                <a href="{{ url_for('user.scan_qr', subject_id=subject.subject_id) }}" class="btn btn-primary btn-lg" style="padding: 1.2rem 3rem; font-size: 1.2rem; border-radius: 50px; box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);">
+                    <i class="fas fa-camera mr-2"></i> Open QR Scanner
+                </a>
+            </div> <!-- End main-content-inner -->
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="application/json" id="subject-stats-data">{{ stats | tojson }}</script>
+    <script>
+        const MARK_READ_URL = document.body.dataset.markReadUrl;
+
+
+        const statsData = JSON.parse(document.getElementById('subject-stats-data').textContent);
+        const ctx = document.getElementById('subjectChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Present', 'Absent', 'Late'],
+                datasets: [{
+                    label: 'Attendance Count',
+                    data: [statsData['Present'] || 0, statsData['Absent'] || 0, statsData['Late'] || 0],
+                    backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    
+    <nav class="bottom-nav">
+        <a href="{{ url_for('user.dashboard') }}" class="nav-item {% if request.endpoint == 'user.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('user.timetable') }}" class="nav-item {% if request.endpoint == 'user.timetable' %}active{% endif %}">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Schedule</span>
+        </a>
+        <a href="{{ url_for('user.submit_excuse') }}" class="nav-item {% if request.endpoint == 'user.submit_excuse' %}active{% endif %}">
+            <i class="fas fa-envelope-open-text"></i>
+            <span>Excuse</span>
+        </a>
+        <a href="{{ url_for('user.notifications_page') }}" class="nav-item {% if request.endpoint == 'user.notifications_page' %}active{% endif %}">
+            <i class="fas fa-bell"></i>
+            <span>Alerts</span>
+        </a>
+        <a href="{{ url_for('user.profile') }}" class="nav-item {% if request.endpoint == 'user.profile' %}active{% endif %}">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+    
+    
+
+</body>
+</html>

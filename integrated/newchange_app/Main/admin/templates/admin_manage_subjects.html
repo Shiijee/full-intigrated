@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Manage Subjects | Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-admin">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+                <aside class="sidebar">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="sidebar-logo">
+                <div>
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </div>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Admin') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="openChangePinModal()">
+                            <i class="fas fa-shield-alt"></i> Security PIN
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
+                <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
+                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
+                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
+                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
+                <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
+                <a href="{{ url_for('admin.attendance_analytics') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.attendance_analytics' else '' }}" data-tooltip="Attendance Analytics"><i class="fas fa-chart-pie"></i><span class="nav-item-text"> Attendance Analytics</span></a>
+                <a href="{{ url_for('admin.drop_requests') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.drop_requests' else '' }}" data-tooltip="Drop Requests"><i class="fas fa-user-minus"></i><span class="nav-item-text"> Drop Requests</span></a>
+                <a href="{{ url_for('admin.audit_logs') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.audit_logs' else '' }}" data-tooltip="Audit Logs"><i class="fas fa-clipboard-list"></i><span class="nav-item-text"> Audit Logs</span></a>
+            </nav>
+            <div class="sidebar-bottom-actions">
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Manage Subjects</h2>
+                </div>
+</header>
+
+            <div class="main-content-inner">
+                <div class="flex flex-responsive justify-between items-center mb-8">
+                    <div>
+                        <h1 class="auth-title">Subject Management</h1>
+                        <p class="text-muted">Define and manage academic subjects and curriculum.</p>
+                    </div>
+                    <div class="flex gap-4 items-center">
+                        <div class="glass-panel" style="padding: 0.5rem 1rem; font-weight: 600;">
+                            Total Subjects: <span class="text-primary">{{ total_count }}</span>
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> Add Subject</button>
+                    </div>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <form method="GET" action="{{ url_for('admin.manage_subjects') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Search Subjects</label>
+                            <input type="text" name="search" class="form-control" placeholder="Code or Name..." value="{{ search }}">
+                        </div>
+                        <div class="flex gap-2" style="margin-bottom: 0;">
+                            <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <a href="{{ url_for('admin.manage_subjects', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                                <i class="fas fa-rotate"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} mb-4">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="glass-panel p-4" style="padding: 1.5rem;">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="min-width: 120px;">Code</th>
+                                <th style="min-width: 280px;">Subject Name</th>
+                                <th style="min-width: 150px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for subject in subjects %}
+                            <tr>
+                                <td data-label="Code" style="font-weight: 600;"><span class="badge badge-primary">{{ subject.subject_code }}</span></td>
+                                <td data-label="Subject Name">{{ subject.subject_name|truncate(50, true) }}</td>
+                                <td class="action-cell" data-label="Actions" style="text-align: right;">
+                                        <button class="btn btn-sm btn-secondary" 
+                                                 style="margin-right: 0.25rem;"
+                                                 onclick="openEditModal(`{{ subject.subject_id }}`, `{{ subject.subject_code }}`, `{{ subject.subject_name }}`)">
+                                             <i class="fas fa-edit"></i>
+                                         </button>
+                                         <a href="{{ url_for('admin.archive_subject', subject_id=subject.subject_id) }}" 
+                                            class="btn btn-sm btn-warning" 
+                                            style="margin-right: 0.25rem; text-decoration: none;"
+                                            onclick="return confirm('Archive this subject?')">
+                                             <i class="fas fa-archive"></i>
+                                         </a>
+                                         <a href="#" 
+                                            class="btn btn-sm btn-danger" 
+                                            style="text-decoration: none;"
+                                            onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_subject', subject_id=subject.subject_id) }}`)">
+                                             <i class="fas fa-trash-alt"></i>
+                                         </a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center" style="padding: 2rem;" data-label="Code">No subjects defined yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Subject Modal -->
+    <div id="addSubjectModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 450px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('addSubjectModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Add New Subject</h3>
+            <form method="POST" action="{{ url_for('admin.manage_subjects') }}" onsubmit="return validateSubjectForm(this)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label class="form-label">Subject Code</label>
+                    <input type="text" name="subject_code" class="form-control" placeholder="e.g. CS101" required>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="form-label">Subject Name</label>
+                    <input type="text" name="subject_name" class="form-control" placeholder="e.g. Introduction to Programming" required>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addSubjectModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Subject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Subject Modals -->
+    <div id="editSubjectModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="glass-panel" style="width: 450px; padding: 2rem; position: relative;">
+            <button onclick="closeModal('editSubjectModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            <h3 class="mb-4">Edit Subject</h3>
+            <form id="editSubjectForm" method="POST" onsubmit="return validateSubjectForm(this)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group mb-3">
+                    <label class="form-label">Subject Code</label>
+                    <input type="text" name="subject_code" id="edit_subject_code" class="form-control" required>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="form-label">Subject Name</label>
+                    <input type="text" name="subject_name" id="edit_subject_name" class="form-control" required>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editSubjectModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Subject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openAddModal() {
+            restoreAddForm();
+            document.getElementById('addSubjectModal').classList.add('active');
+        }
+
+        function saveAddForm() {
+            const f = document.getElementById('addSubjectModal');
+            const data = {};
+            f.querySelectorAll('input').forEach(el => { if (el.name && el.name !== 'csrf_token') data[el.name] = el.value; });
+            localStorage.setItem('addSubjectForm', JSON.stringify(data));
+        }
+        function restoreAddForm() {
+            const saved = localStorage.getItem('addSubjectForm');
+            if (!saved) return;
+            const data = JSON.parse(saved);
+            const f = document.getElementById('addSubjectModal');
+            Object.keys(data).forEach(k => { const el = f.querySelector(`[name="${k}"]`); if (el) el.value = data[k]; });
+        }
+
+        function openEditModal(id, code, name) {
+            document.getElementById('editSubjectForm').action = "/admin/edit_subject/" + id;
+            document.getElementById('edit_subject_code').value = code;
+            document.getElementById('edit_subject_name').value = name;
+            document.getElementById('editSubjectModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const hasError = document.querySelector('.alert-error, .alert-danger');
+            if (hasError && localStorage.getItem('addSubjectForm')) {
+                openAddModal();
+            }
+            document.getElementById('addSubjectModal').querySelectorAll('input').forEach(el => {
+                el.addEventListener('input', saveAddForm);
+            });
+        });
+
+        document.querySelectorAll('form').forEach(f => {
+            f.addEventListener('submit', () => localStorage.removeItem('addSubjectForm'));
+        });
+
+
+        function validateSubjectForm(form) {
+            const code = form.querySelector('[name="subject_code"]').value.trim();
+            const name = form.querySelector('[name="subject_name"]').value.trim();
+
+            if (!code || !name) {
+                alert("Both subject code and name are required.");
+                return false;
+            }
+
+            // Subject Code Pattern: Alphanumeric, Hyphens, dots (e.g. CS-101)
+            const codePattern = /^[A-Za-z0-9\-\.]+$/;
+            if (!codePattern.test(code)) {
+                alert("Subject Code can only contain letters, numbers, hyphens, and dots.");
+                return false;
+            }
+
+            if (name.length < 5) {
+                alert("Subject Name is too short. Please enter a valid descriptive name.");
+                return false;
+            }
+
+            return true;
+        }
+
+    </script>
+
+
+        <nav class="bottom-nav">
+        <a href="{{ url_for('admin.dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('admin.manage_students') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_students' %}active{% endif %}">
+            <i class="fas fa-user-graduate"></i>
+            <span>Students</span>
+        </a>
+        <a href="{{ url_for('admin.manage_teachers') }}" class="bottom-nav-item {% if request.endpoint == 'admin.manage_teachers' %}active{% endif %}">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>Faculty</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Logs</span>
+        </a>
+    </nav>
+
+
+<script src="{{ url_for('static', filename='js/main.js') }}?v=1.1"></script>
+</body>
+</html>
