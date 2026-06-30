@@ -1,0 +1,10 @@
+.env
+integrated\portal\__pycache__
+integrated/portal/__pycache__/db_config.cpython-314.pyc
+integrated/testpoint_app/testpoint/__pycache__/api.cpython-314.pyc
+integrated/testpoint_app/testpoint/__pycache__/sso.cpython-314.pyc
+integrated/voxify_app/Voxify/__pycache__/__init__.cpython-314.pyc
+integrated/voxify_app/Voxify/__pycache__/api.cpython-314.pyc
+integrated/voxify_app/Voxify/Admin/__pycache__/routes.cpython-314.pyc
+integrated/voxify_app/Voxify/Authentication/__pycache__/routes.cpython-314.pyc
+.pyc

@@ -10,7 +10,7 @@ from flask_mail import Mail
 from dotenv import load_dotenv
 import os
 
-load_dotenv("testpoint/passwordDB.env")
+load_dotenv()
 passwordDB    = os.getenv("DBPASSWORD")
 emailpassword = os.getenv("GMAILPASS")
 email         = os.getenv("GMAIL")

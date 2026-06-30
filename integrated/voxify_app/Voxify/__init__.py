@@ -2,13 +2,18 @@ from flask import Flask
 import mysql.connector
 from mysql.connector import Error
 import os
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+passwordDB    = os.getenv("DBPASSWORD")
 
 def get_db_connection():
     try:
         connection = mysql.connector.connect(
             host="localhost",
             user="root",
-            password="",
+            password=passwordDB,
             database="db_voting"
         )
         return connection
@@ -48,7 +53,7 @@ def add_candidate_photo_column():
         try:
             cursor.execute("SHOW COLUMNS FROM candidates LIKE 'photo'")
             result = cursor.fetchone()
-            
+
             if not result:
                 cursor.execute("ALTER TABLE candidates ADD COLUMN photo VARCHAR(255) NULL DEFAULT NULL")
                 conn.commit()
@@ -63,20 +68,20 @@ def add_candidate_photo_column():
 
 def create_app():
     app = Flask(__name__, static_folder=None)
-    
-                                            
+
+
     app.secret_key = '04a5b29e6c18f7f5035af7fa603b3fc1'
 
-                           
+
     app.config['SESSION_PERMANENT'] = True
-    app.config['PERMANENT_SESSION_LIFETIME'] = 3600          
-    app.config['SESSION_COOKIE_SECURE'] = False                                        
+    app.config['PERMANENT_SESSION_LIFETIME'] = 3600
+    app.config['SESSION_COOKIE_SECURE'] = False
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['SESSION_REFRESH_EACH_REQUEST'] = True
-    app.config['SESSION_COOKIE_NAME'] = 'evoting_session'                       
+    app.config['SESSION_COOKIE_NAME'] = 'evoting_session'
 
-                                       
+
     app.config['SMTP_SERVER'] = 'smtp.gmail.com'
     app.config['SMTP_PORT'] = 587
     app.config['SMTP_USERNAME'] = os.getenv('SMTP_USERNAME', 'voxify.otpsender@gmail.com')
@@ -96,7 +101,7 @@ def create_app():
 
     app.config["get_db_connection"] = get_db_connection
 
-                                             
+
     with app.app_context():
         create_trusted_devices_table()
         add_candidate_photo_column()
