@@ -18,6 +18,108 @@ def ping():
     return jsonify({"system": "TestPoint", "status": "ok"})
 
 
+@api.route('/provision-user', methods=['POST'])
+def provision_user():
+    """
+    Called by another module (Voxify, Attendance) right after IT creates
+    a user, so that same person gets a matching local profile row here
+    too — letting them use TestPoint with the same Portal identity.
+
+    Unlike add_user() in Admin/admin.py, this does NOT generate a new
+    custom_user_id (A26-/T26-/S26- prefix+seq) — it uses the Portal's
+    username directly as TestPoint's user_id/teacher_id/student_id/
+    admin_id, so the identity stays consistent across all three modules.
+
+    Request body (JSON):
+        {
+            "username":  "<string>",   required — used as TestPoint's user_id
+            "password":  "<string>",   required, PLAINTEXT
+            "full_name": "<string>",   required — split into first/middle/last
+            "role":      "<string>",   required — superadmin|admin|teacher|student
+            "email":     "<string>",   optional
+        }
+
+    Success response (201):
+        { "success": true }
+
+    Failure response (400/409/500):
+        { "success": false, "reason": "<string>" }
+    """
+    from werkzeug.security import generate_password_hash
+
+    body = request.get_json(silent=True) or {}
+
+    username  = (body.get("username") or "").strip()
+    password  = body.get("password") or ""
+    full_name = (body.get("full_name") or "").strip()
+    role      = (body.get("role") or "").strip()
+    email     = body.get("email") or f"{username}@placeholder.local"
+
+    if not username or not password or not full_name:
+        return jsonify({"success": False, "reason": "username, password, and full_name are required"}), 400
+
+    # TestPoint's db_exam.users.role enum is 'super_admin' (underscore).
+    role_map = {"superadmin": "super_admin", "admin": "admin",
+                "teacher": "teacher", "student": "student"}
+    tp_role = role_map.get(role)
+    if not tp_role:
+        return jsonify({"success": False, "reason": "role must be superadmin, admin, teacher, or student"}), 400
+
+    name_parts = full_name.split()
+    if len(name_parts) >= 3:
+        first_name, middle_name, last_name = name_parts[0], " ".join(name_parts[1:-1]), name_parts[-1]
+    elif len(name_parts) == 2:
+        first_name, middle_name, last_name = name_parts[0], "", name_parts[1]
+    else:
+        first_name, middle_name, last_name = full_name, "", ""
+
+    hashed_password = generate_password_hash(password)
+
+    conn = get_conn()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT user_id FROM users WHERE user_id = %s", (username,))
+        if cursor.fetchone():
+            return jsonify({"success": False, "reason": f"'{username}' already exists in users"}), 409
+
+        cursor.execute(
+            "INSERT INTO users (user_id, email, password, role, is_verified, is_active) "
+            "VALUES (%s, %s, %s, %s, 1, 1)",
+            (username, email, hashed_password, tp_role),
+        )
+
+        if tp_role == "teacher":
+            cursor.execute(
+                "INSERT INTO teachers (teacher_id, email, firstname, middlename, lastname) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (username, email, first_name, middle_name, last_name),
+            )
+        elif tp_role == "student":
+            cursor.execute(
+                "INSERT INTO students (student_id, email, firstname, middlename, lastname) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (username, email, first_name, middle_name, last_name),
+            )
+        elif tp_role in ("admin", "super_admin"):
+            cursor.execute(
+                "INSERT INTO admins (admin_id, email, firstname, middlename, lastname) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (username, email, first_name, middle_name, last_name),
+            )
+
+        conn.commit()
+        return jsonify({"success": True}), 201
+
+    except mysql.connector.Error as err:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(err)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # ── Endpoint 1: All active students ─────────────────────────────────────────
 @api.route('/students')
 def get_students():

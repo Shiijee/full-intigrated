@@ -1226,18 +1226,36 @@ def create_voter():
         new_voter_id = cursor.lastrowid
 
         # ── Sync to Portal so this voter can log in via SSO ─────────────────
-        from Voxify.portal_sync import sync_user_to_portal, portal_role
+        from Voxify.portal_sync import (
+            sync_user_to_portal, sync_user_to_testpoint,
+            sync_user_to_attendance, portal_role,
+        )
         fullname_for_portal = ' '.join([firstname, middlename, surname] if middlename else [firstname, surname])
+        mirrored_role = portal_role('voter')   # maps to 'student'
         sync_result = sync_user_to_portal(
             username=student_id,
             password=password,           # plaintext, before hashing
             full_name=fullname_for_portal,
-            role=portal_role('voter'),   # maps to 'student' on the Portal
+            role=mirrored_role,
             email=email,
             external_id=student_id,
         )
         if not sync_result["success"]:
             print(f"[Portal sync] Failed to sync voter '{student_id}': {sync_result['reason']}")
+
+        tp_result = sync_user_to_testpoint(
+            username=student_id, password=password,
+            full_name=fullname_for_portal, role=mirrored_role, email=email,
+        )
+        if not tp_result["success"]:
+            print(f"[TestPoint sync] Failed to sync voter '{student_id}': {tp_result['reason']}")
+
+        att_result = sync_user_to_attendance(
+            username=student_id, password=password,
+            full_name=fullname_for_portal, role=mirrored_role, email=email,
+        )
+        if not att_result["success"]:
+            print(f"[Attendance sync] Failed to sync voter '{student_id}': {att_result['reason']}")
         # ─────────────────────────────────────────────────────────────────────
 
         cursor.execute(

@@ -65,4 +65,8 @@ def reg_app():
     app.register_blueprint(nc_api)              # Integration API
     app.register_blueprint(sso_bp)              # SSO helpers
 
+    # nc_api is a server-to-server JSON API (called by Voxify/TestPoint),
+    # not a browser form — it has no CSRF token to send, so exempt it.
+    csrf.exempt(nc_api)
+
     return app

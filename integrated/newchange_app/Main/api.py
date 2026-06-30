@@ -6,7 +6,7 @@ Also consumes APIs from TestPoint and Voxify.
 from flask import Blueprint, jsonify, request
 import requests
 from Main.db import get_db_connection
-from psycopg2.extras import RealDictCursor
+from werkzeug.security import generate_password_hash
 
 nc_api = Blueprint('nc_api', __name__, url_prefix='/api')
 
@@ -20,6 +20,101 @@ def ping():
     return jsonify({"system": "NewChange", "status": "ok"})
 
 
+@nc_api.route('/provision-user', methods=['POST'])
+def provision_user():
+    """
+    Called by another module (Voxify, TestPoint) right after IT creates
+    a user, so that same person gets a matching local profile row here
+    too — letting them use Attendance with the same Portal identity.
+
+    Request body (JSON):
+        {
+            "username":  "<string>",   required — used as uSID/uTID,
+                                        or stored in admins.username
+            "password":  "<string>",   required, PLAINTEXT
+            "full_name": "<string>",   required — split on whitespace into
+                                        first/middle/last as best-effort
+            "role":      "<string>",   required — superadmin|admin|teacher|student
+            "email":     "<string>",   optional
+        }
+
+    Success response (201):
+        { "success": true }
+
+    Failure response (400/409/500):
+        { "success": false, "reason": "<string>" }
+    """
+    body = request.get_json(silent=True) or {}
+
+    username  = (body.get("username") or "").strip()
+    password  = body.get("password") or ""
+    full_name = (body.get("full_name") or "").strip()
+    role      = (body.get("role") or "").strip()
+    email     = body.get("email") or f"{username}@placeholder.local"
+
+    if not username or not password or not full_name:
+        return jsonify({"success": False, "reason": "username, password, and full_name are required"}), 400
+
+    if role not in ("superadmin", "admin", "teacher", "student"):
+        return jsonify({"success": False, "reason": "role must be superadmin, admin, teacher, or student"}), 400
+
+    # Best-effort name split: "First Middle Last" -> first/middle/last.
+    # Two-word names get an empty middle name (most tables allow NULL/'').
+    name_parts = full_name.split()
+    if len(name_parts) >= 3:
+        first_name, middle_name, last_name = name_parts[0], " ".join(name_parts[1:-1]), name_parts[-1]
+    elif len(name_parts) == 2:
+        first_name, middle_name, last_name = name_parts[0], "", name_parts[1]
+    else:
+        first_name, middle_name, last_name = full_name, "", ""
+
+    password_hash = generate_password_hash(password)
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        if role in ("superadmin", "admin"):
+            cursor.execute("SELECT admin_id FROM admins WHERE username = %s", (username,))
+            if cursor.fetchone():
+                return jsonify({"success": False, "reason": f"'{username}' already exists in admins"}), 409
+            cursor.execute(
+                "INSERT INTO admins (username, password_hash, email) VALUES (%s, %s, %s)",
+                (username, password_hash, email),
+            )
+
+        elif role == "teacher":
+            cursor.execute("SELECT uTID FROM teachers WHERE uTID = %s", (username,))
+            if cursor.fetchone():
+                return jsonify({"success": False, "reason": f"'{username}' already exists in teachers"}), 409
+            cursor.execute(
+                "INSERT INTO teachers (uTID, first_name, middle_name, last_name, email, password_hash) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (username, first_name, middle_name, last_name, email, password_hash),
+            )
+
+        elif role == "student":
+            cursor.execute("SELECT uSID FROM students WHERE uSID = %s", (username,))
+            if cursor.fetchone():
+                return jsonify({"success": False, "reason": f"'{username}' already exists in students"}), 409
+            cursor.execute(
+                "INSERT INTO students (uSID, first_name, middle_name, last_name, email, password_hash) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (username, first_name, middle_name, last_name, email, password_hash),
+            )
+
+        conn.commit()
+        return jsonify({"success": True}), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # ── Endpoint 1: All active enrolled students ──────────────────────────────────
 @nc_api.route('/students/active')
 def get_active_students():
@@ -29,7 +124,7 @@ def get_active_students():
     """
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
         cursor.execute("""
             SELECT
                 usid        AS student_id,
@@ -61,7 +156,7 @@ def get_enrollment(student_id):
     """
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
 
         # Check student exists
         cursor.execute("SELECT * FROM Students WHERE usid = %s", (student_id,))
@@ -109,7 +204,7 @@ def get_attendance(student_id):
     """
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT usid FROM Students WHERE usid = %s", (student_id,))
         if not cursor.fetchone():
             cursor.close(); conn.close()
@@ -143,7 +238,7 @@ def get_attendance(student_id):
 def get_stats():
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT COUNT(*) AS c FROM Students WHERE status='Active'")
         students = cursor.fetchone()['c']
         cursor.execute("SELECT COUNT(*) AS c FROM Teachers WHERE status='Active'")
@@ -192,7 +287,7 @@ def enroll_verified():
     # 2. Enroll in NewChange
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
 
         # Check subject exists
         cursor.execute("SELECT subject_id FROM Subjects WHERE subject_id = %s", (subject_id,))
