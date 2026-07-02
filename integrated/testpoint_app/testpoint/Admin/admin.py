@@ -17,16 +17,18 @@ ALLOWED_EXTENSIONS = {'pdf'}
 
 @admin.route('/admin_dashboard')
 def admin_dashboard():
-    print(f"DEBUG: Current User Role is {session.get('role')}")
     if admin_logged_in():
         firstname = session.get('firstname')
         connection = mysql.connector.connect(**db_config)
         cursor = connection.cursor(dictionary=True)
 
         try:
-            # 1. Main Summary Stats
+            # 1. Summary Stats
             cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_active = 1")
             total_users = cursor.fetchone()['count']
+
+            cursor.execute("SELECT COUNT(*) as count FROM colleges WHERE is_active = 1")
+            total_colleges = cursor.fetchone()['count']
 
             cursor.execute("SELECT COUNT(*) as count FROM programs WHERE is_active = 1")
             total_programs = cursor.fetchone()['count']
@@ -37,20 +39,19 @@ def admin_dashboard():
             cursor.execute("SELECT COUNT(*) as count FROM classes WHERE is_active = 1")
             total_classes = cursor.fetchone()['count']
 
-            # 2. Live Data
             cursor.execute("SELECT COUNT(*) as count FROM exam_attempts WHERE status = 'in-progress'")
             live_sessions = cursor.fetchone()['count']
 
             cursor.execute("SELECT SUM(tab_switches) as total FROM exam_attempts")
             global_violations = cursor.fetchone()['total'] or 0
 
-            # 3. Pie Chart: User Distribution
+            # 2. Pie Chart: User Distribution
             cursor.execute("SELECT role, COUNT(*) as count FROM users WHERE is_active = 1 GROUP BY role")
             role_data = cursor.fetchall()
-            pie_labels = [r['role'].capitalize() for r in role_data]
+            pie_labels = [r['role'].replace('_', ' ').capitalize() for r in role_data]
             pie_values = [r['count'] for r in role_data]
 
-            # 4. Bar Chart: Year Level Distribution (Derived from block names like '1A', '2B')
+            # 3. Bar Chart: Year Level Distribution (Missing in previous update)
             cursor.execute("""
                 SELECT LEFT(block_name, 1) as year, COUNT(s.student_id) as count
                 FROM blocks b
@@ -62,19 +63,15 @@ def admin_dashboard():
             year_labels = [f"Year {y['year']}" for y in year_data]
             year_values = [y['count'] for y in year_data]
 
+            # 4. Capacity Watchlist
             cursor.execute("""
-                SELECT
-                    b.block_id,      -- ADD THIS LINE
-                    b.block_name,
-                    p.program_name,
-                    b.capacity,
-                    (SELECT COUNT(*) FROM students WHERE block_id = b.block_id) as current_count
+                SELECT b.block_id, b.block_name, p.program_name, b.capacity,
+                (SELECT COUNT(*) FROM students WHERE block_id = b.block_id) as current_count
                 FROM blocks b
                 JOIN programs p ON b.program_id = p.program_id
                 WHERE b.is_active = 1
                 HAVING (current_count / b.capacity) >= 0.8
-                ORDER BY (current_count / b.capacity) DESC
-                LIMIT 5
+                ORDER BY (current_count / b.capacity) DESC LIMIT 5
             """)
             watchlist = cursor.fetchall()
 
@@ -84,6 +81,7 @@ def admin_dashboard():
         return render_template('admin_dashboard.html',
                                firstname=firstname,
                                total_users=total_users,
+                               total_colleges=total_colleges,
                                total_programs=total_programs,
                                total_blocks=total_blocks,
                                total_classes=total_classes,
@@ -95,7 +93,6 @@ def admin_dashboard():
                                year_values=year_values,
                                watchlist=watchlist)
     return redirect(url_for('auth.login'))
-
 
 #! 1. MANAGE ACCOUNTS (Modified to handle Blocks)
 @admin.route('/manage_accounts')
@@ -404,20 +401,75 @@ def empty_trash():
         return redirect(url_for('admin.trashed_accounts'))
     return redirect(url_for('auth.login'))
 
-#! 2. MANAGE PROGRAMS (NEW)
+#! 1. MANAGE COLLEGES (NEW CRUD)
+@admin.route('/manage_colleges', methods=['GET', 'POST'])
+def manage_colleges():
+    if not admin_logged_in(): return redirect(url_for('auth.login'))
+    connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
+
+    if request.method == 'POST':
+        name = request.form.get('college_name')
+        desc = request.form.get('description')
+        cursor.execute("INSERT INTO colleges (college_name, description) VALUES (%s, %s)", (name, desc))
+        connection.commit()
+        flash(f"College '{name}' added successfully.", "success")
+        return redirect(url_for('admin.manage_colleges'))
+
+    cursor.execute("SELECT * FROM colleges WHERE is_active = 1 ORDER BY college_name")
+    colleges = cursor.fetchall()
+    cursor.close(); connection.close()
+    return render_template('admin_colleges.html', colleges=colleges, firstname=session.get('firstname'))
+
+@admin.route('/edit_college/<int:college_id>', methods=['POST'])
+def edit_college(college_id):
+    if admin_logged_in():
+        name = request.form.get('college_name')
+        desc = request.form.get('description')
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
+        cursor.execute("UPDATE colleges SET college_name = %s, description = %s WHERE college_id = %s", (name, desc, college_id))
+        connection.commit(); cursor.close(); connection.close()
+        flash(f"College updated.", "success")
+        return redirect(url_for('admin.manage_colleges'))
+    return redirect(url_for('auth.login'))
+
+@admin.route('/archive_college/<int:college_id>', methods=['POST'])
+def archive_college(college_id):
+    if admin_logged_in():
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
+        cursor.execute("UPDATE colleges SET is_active = 0 WHERE college_id = %s", (college_id,))
+        connection.commit(); cursor.close(); connection.close()
+        flash('College moved to trash.', 'warning')
+        return redirect(url_for('admin.manage_colleges'))
+    return redirect(url_for('auth.login'))
+
+#! 2. MANAGE PROGRAMS (Updated for Colleges)
 @admin.route('/manage_programs', methods=['GET', 'POST'])
 def manage_programs():
     if not admin_logged_in(): return redirect(url_for('auth.login'))
     connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
-    if request.method == 'POST':
-        name = request.form.get('program_name'); desc = request.form.get('description')
-        cursor.execute("INSERT INTO programs (program_name, description) VALUES (%s, %s)", (name, desc))
-        connection.commit(); flash("Program added.", "success"); return redirect(url_for('admin.manage_programs'))
 
-    cursor.execute("SELECT * FROM programs WHERE is_active = 1 ORDER BY program_name")
+    if request.method == 'POST':
+        name = request.form.get('program_name')
+        desc = request.form.get('description')
+        c_id = request.form.get('college_id')
+        cursor.execute("INSERT INTO programs (program_name, description, college_id) VALUES (%s, %s, %s)", (name, desc, c_id))
+        connection.commit()
+        flash("Program added and assigned to college.", "success")
+        return redirect(url_for('admin.manage_programs'))
+
+    cursor.execute("""
+        SELECT p.*, c.college_name
+        FROM programs p
+        LEFT JOIN colleges c ON p.college_id = c.college_id
+        WHERE p.is_active = 1 ORDER BY c.college_name
+    """)
     progs = cursor.fetchall()
+
+    cursor.execute("SELECT * FROM colleges WHERE is_active = 1")
+    colleges = cursor.fetchall()
+
     cursor.close(); connection.close()
-    return render_template('admin_programs.html', programs=progs, firstname=session.get('firstname'))
+    return render_template('admin_programs.html', programs=progs, colleges=colleges, firstname=session.get('firstname'))
 
 @admin.route('/view_program_blocks/<int:program_id>')
 def view_program_blocks(program_id):
@@ -445,20 +497,25 @@ def view_program_blocks(program_id):
                            blocks=blocks,
                            firstname=session.get('firstname'))
 
-@admin.route('/edit_program/<int:program_id>', methods=['POST'])
+
+@admin.route("/edit_program/<int:program_id>", methods=["POST"])
 def edit_program(program_id):
     if admin_logged_in():
-        name = request.form.get('program_name')
-        desc = request.form.get('description')
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
-        try:
-            cursor.execute("UPDATE programs SET program_name = %s, description = %s WHERE program_id = %s", (name, desc, program_id))
-            connection.commit()
-            flash(f'Program "{name}" updated.', 'success')
-        finally:
-            cursor.close(); connection.close()
-        return redirect(url_for('admin.manage_programs'))
-    return redirect(url_for('auth.login'))
+        name = request.form.get("program_name")
+        desc = request.form.get("description")
+        c_id = request.form.get("college_id")
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE programs SET program_name = %s, description = %s, college_id = %s WHERE program_id = %s",
+            (name, desc, c_id, program_id),
+        )
+        connection.commit()
+        cursor.close()
+        connection.close()
+        flash(f"Program updated.", "success")
+        return redirect(url_for("admin.manage_programs"))
+    return redirect(url_for("auth.login"))
 
 @admin.route('/archive_program/<int:program_id>', methods=['POST'])
 def archive_program(program_id):
@@ -741,14 +798,34 @@ def bulk_remove_from_block():
     return redirect(url_for('admin.manage_block_students', block_id=block_id))
 
 #! 4. MANAGE COURSES (Master Subject Catalog - course_code is PK)
-@admin.route('/manage_courses')
+@admin.route('/manage_courses', methods=['GET', 'POST'])
 def manage_courses():
     if admin_logged_in():
         connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM courses WHERE is_active = 1 ORDER BY course_code ASC")
+
+        if request.method == 'POST':
+            code = request.form.get('course_code')
+            name = request.form.get('course_name')
+            desc = request.form.get('description')
+            c_id = request.form.get('college_id')
+            cursor.execute("INSERT INTO courses (course_code, course_name, description, college_id) VALUES (%s, %s, %s, %s)", (code, name, desc, c_id))
+            connection.commit()
+            flash(f"Course {code} added.", "success")
+            return redirect(url_for('admin.manage_courses'))
+
+        cursor.execute("""
+            SELECT co.*, c.college_name
+            FROM courses co
+            LEFT JOIN colleges c ON co.college_id = c.college_id
+            WHERE co.is_active = 1 ORDER BY co.course_code ASC
+        """)
         courses = cursor.fetchall()
+
+        cursor.execute("SELECT * FROM colleges WHERE is_active = 1")
+        colleges = cursor.fetchall()
+
         cursor.close(); connection.close()
-        return render_template('admin_courses.html', courses=courses, firstname=session.get('firstname'))
+        return render_template('admin_courses.html', courses=courses, colleges=colleges, firstname=session.get('firstname'))
     return redirect(url_for('auth.login'))
 
 @admin.route('/add_course', methods=['POST'])
@@ -767,27 +844,13 @@ def add_course():
 @admin.route('/update_course/<string:old_code>', methods=['POST'])
 def update_course(old_code):
     if admin_logged_in():
-        # We no longer request 'course_code' from the form
         name = request.form.get('course_name')
         desc = request.form.get('description')
-
-        connection = mysql.connector.connect(**db_config)
-        cursor = connection.cursor()
-        try:
-            # We ONLY update name and description. The code stays the same.
-            cursor.execute("""
-                UPDATE courses
-                SET course_name = %s, description = %s
-                WHERE course_code = %s
-            """, (name, desc, old_code))
-
-            connection.commit()
-            flash(f'Subject {old_code} updated successfully.', 'success')
-        except mysql.connector.Error as err:
-            flash(f'Error: {err}', 'danger')
-        finally:
-            cursor.close()
-            connection.close()
+        c_id = request.form.get('college_id')
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
+        cursor.execute("UPDATE courses SET course_name = %s, description = %s, college_id = %s WHERE course_code = %s", (name, desc, c_id, old_code))
+        connection.commit(); cursor.close(); connection.close()
+        flash(f'Course {old_code} updated.', 'success')
         return redirect(url_for('admin.manage_courses'))
     return redirect(url_for('auth.login'))
 
@@ -833,6 +896,35 @@ def empty_course_trash():
         cursor.execute("DELETE FROM courses WHERE is_active = 0")
         connection.commit(); cursor.close(); connection.close()
         flash('Subject trash emptied.', 'success'); return redirect(url_for('admin.trashed_courses'))
+    return redirect(url_for('auth.login'))
+
+@admin.route('/trashed_colleges')
+def trashed_colleges():
+    if admin_logged_in():
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM colleges WHERE is_active = 0")
+        trashed = cursor.fetchall(); cursor.close(); connection.close()
+        return render_template('admin_trashed_colleges.html', trashed_colleges=trashed, firstname=session.get('firstname'))
+    return redirect(url_for('auth.login'))
+
+@admin.route('/restore_college/<int:college_id>', methods=['POST'])
+def restore_college(college_id):
+    if admin_logged_in():
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
+        cursor.execute("UPDATE colleges SET is_active = 1 WHERE college_id = %s", (college_id,))
+        connection.commit(); cursor.close(); connection.close()
+        flash('College restored.', 'success')
+        return redirect(url_for('admin.trashed_colleges'))
+    return redirect(url_for('auth.login'))
+
+@admin.route('/delete_college_permanently/<int:college_id>', methods=['POST'])
+def delete_college_permanently(college_id):
+    if admin_logged_in():
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
+        cursor.execute("DELETE FROM colleges WHERE college_id = %s", (college_id,))
+        connection.commit(); cursor.close(); connection.close()
+        flash('College deleted permanently.', 'danger')
+        return redirect(url_for('admin.trashed_colleges'))
     return redirect(url_for('auth.login'))
 
 #! 5. MANAGE CLASSES (The Link: Subject + Block + Teacher)

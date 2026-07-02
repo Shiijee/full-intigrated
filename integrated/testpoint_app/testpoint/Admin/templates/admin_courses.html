@@ -7,11 +7,11 @@
     .card { border: none; border-radius: var(--tp-admin-radius) !important; }
     .btn-circle-sm { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; transition: all 0.2s; border: 1.5px solid var(--tp-admin-border); background: #fff; }
     .btn-circle-sm:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-    
+
     .tp-pill { border-radius: 50px !important; font-weight: 600; font-size: 12px; padding: 8px 24px; }
     .form-control { height: 42px !important; border-radius: 8px !important; border: 1.5px solid var(--tp-admin-border) !important; font-size: 14px !important; }
     .form-control:focus { border-color: var(--tp-admin-ink) !important; box-shadow: 0 0 0 4px rgba(15,14,17,0.05) !important; }
-    
+
     .field-feedback { font-size: 11px; margin-top: 4px; display: block; min-height: 1rem; }
     .valid-msg { color: #1a7a5e; }
     .invalid-msg { color: #c0392b; }
@@ -19,6 +19,8 @@
     /* Description link styling */
     .btn-view-desc { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--tp-accent); text-decoration: none !important; padding: 2px 8px; border-radius: 4px; background: var(--tp-accent-lt); transition: all 0.2s; }
     .btn-view-desc:hover { background: var(--tp-accent); color: #fff; }
+
+    .college-tag { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #4e73df; background: #eaecf4; padding: 3px 10px; border-radius: 50px; }
 </style>
 {% endblock %}
 
@@ -27,7 +29,7 @@
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <div>
         <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);">Course Catalog</h1>
-        <p class="text-muted small mb-0">Manage and organize institutional subjects and descriptions.</p>
+        <p class="text-muted small mb-0">Manage and organize institutional subjects and descriptions by college.</p>
     </div>
     <div class="d-flex" style="gap: 12px;">
         <button class="btn btn-dark shadow-sm tp-pill" data-toggle="modal" data-target="#addCourseModal">
@@ -35,7 +37,7 @@
         </button>
         <a href="{{ url_for('admin.trashed_courses') }}" class="btn btn-white border shadow-sm tp-pill text-danger">
             <i class="fas fa-trash-alt mr-2"></i> View Trash
-        </a>        
+        </a>
     </div>
 </div>
 
@@ -52,10 +54,7 @@
 <div class="card shadow-sm mb-4">
     <div class="card-body py-3">
         <div class="input-group">
-            <div class="input-group-prepend">
-                <span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-gray-400 small"></i></span>
-            </div>
-            <input type="text" id="searchInput" class="form-control border-left-0" placeholder="Search by subject code, title, or keywords...">
+            <input type="text" id="searchInput" class="form-control border-left-0" placeholder="Search by subject code, title, college, or keywords...">
         </div>
     </div>
 </div>
@@ -67,9 +66,10 @@
             <table class="table table-hover align-middle mb-0" id="courseTable">
                 <thead class="bg-light">
                     <tr style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                        <th class="border-0 px-4" width="15%">Subject Code</th>
+                        <th class="border-0 px-4" width="15%">Code</th>
+                        <th class="border-0" width="20%">College</th>
                         <th class="border-0" width="25%">Title</th>
-                        <th class="border-0" width="45%">Description</th>
+                        <th class="border-0" width="25%">Description</th>
                         <th class="border-0 text-center px-4" width="15%">Actions</th>
                     </tr>
                 </thead>
@@ -77,15 +77,22 @@
                     {% for course in courses %}
                     <tr class="course-row">
                         <td class="px-4 font-weight-bold text-gray-800 search-data">{{ course.course_code }}</td>
+                        <td>
+                            {% if course.college_name %}
+                                <span class="college-tag">{{ course.college_name }}</span>
+                            {% else %}
+                                <span class="text-muted small font-italic">Unassigned</span>
+                            {% endif %}
+                        </td>
                         <td class="search-data font-weight-bold text-gray-700">{{ course.course_name }}</td>
                         <td>
                             <div class="d-flex align-items-center justify-content-between">
-                                <span class="small text-muted text-truncate mr-2" style="max-width: 300px;">
-                                    {{ course.description[:80] }}{% if course.description|length > 80 %}...{% endif %}
+                                <span class="small text-muted text-truncate mr-2" style="max-width: 200px;">
+                                    {{ course.description[:60] }}{% if course.description|length > 60 %}...{% endif %}
                                 </span>
-                                <button type="button" class="btn btn-view-desc ml-auto flex-shrink-0" 
-                                        data-code="{{ course.course_code }}" 
-                                        data-name="{{ course.course_name }}" 
+                                <button type="button" class="btn btn-view-desc ml-auto flex-shrink-0"
+                                        data-code="{{ course.course_code }}"
+                                        data-name="{{ course.course_name }}"
                                         data-desc="{{ course.description }}">
                                     View
                                 </button>
@@ -102,7 +109,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="text-center py-5">
+                        <td colspan="5" class="text-center py-5">
                             <i class="fas fa-book fa-3x text-gray-200 mb-3"></i>
                             <p class="text-muted font-italic small">No subjects found in the catalog.</p>
                         </td>
@@ -140,15 +147,24 @@
 </div>
 
 <!-- 1. Add Subject Modal -->
-<div class="modal fade validate-modal" id="addCourseModal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade" id="addCourseModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
             <div class="modal-header border-0 pb-0 pt-4 px-4">
                 <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-plus-circle mr-2 text-primary"></i>New Subject Entry</h5>
                 <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
             </div>
-            <form action="{{ url_for('admin.add_course') }}" method="POST" novalidate>
+            <form action="{{ url_for('admin.manage_courses') }}" method="POST">
                 <div class="modal-body p-4">
+                    <div class="form-group mb-3">
+                        <label class="small font-weight-bold">Department / College</label>
+                        <select name="college_id" class="form-control" required>
+                            <option value="" disabled selected>-- Select Affiliated College --</option>
+                            {% for college in colleges %}
+                                <option value="{{ college.college_id }}">{{ college.college_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <div class="form-group mb-3">
                         <label class="small font-weight-bold">Subject Code</label>
                         <input type="text" class="form-control" name="course_code" placeholder="e.g. COMP101" required>
@@ -161,7 +177,7 @@
                     </div>
                     <div class="form-group mb-0">
                         <label class="small font-weight-bold">Subject Description</label>
-                        <textarea class="form-control" name="description" rows="4" placeholder="Briefly describe the course objectives..."></textarea>
+                        <textarea class="form-control" name="description" rows="3" placeholder="Briefly describe the course objectives..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0">
@@ -182,8 +198,19 @@
                 <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-edit mr-2 text-info"></i>Update: {{ course.course_code }}</h5>
                 <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
             </div>
-            <form action="{{ url_for('admin.update_course', old_code=course.course_code) }}" method="POST" novalidate>
+            <form action="{{ url_for('admin.update_course', old_code=course.course_code) }}" method="POST">
                 <div class="modal-body p-4">
+                    <div class="form-group mb-3">
+                        <label class="small font-weight-bold">Department / College</label>
+                        <select name="college_id" class="form-control" required>
+                            <option value="" disabled>-- Select Affiliated College --</option>
+                            {% for college in colleges %}
+                                <option value="{{ college.college_id }}" {% if college.college_id == course.college_id %}selected{% endif %}>
+                                    {{ college.college_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <div class="form-group mb-3">
                         <label class="small font-weight-bold">Subject Title</label>
                         <input type="text" class="form-control" name="course_name" value="{{ course.course_name }}" required>
@@ -230,6 +257,9 @@
     $(document).ready(function () {
         "use strict";
 
+        // Move modals to body root to avoid stacking context issues
+        $('.modal').appendTo('body');
+
         // 1. Search Logic
         $('#searchInput').on('keyup', function () {
             var value = $(this).val().toLowerCase();
@@ -261,15 +291,16 @@
             $('#deleteCourseForm').attr('action', actionUrl);
         });
 
-        // 4. Inline Validation
-        $(document).on('input blur', '.validate-modal input[required]', function () {
+        // 4. Inline Validation for Add/Edit
+        $('form').on('input blur', 'input[required], select[required]', function () {
             const input = $(this);
-            if (input.val().trim().length < 2) {
+            const feedback = input.next('.field-feedback');
+            if (input.val() === null || input.val().trim().length < 1) {
                 input.removeClass('is-valid').addClass('is-invalid');
-                input.siblings('.field-feedback').text('Required (min 2 chars)').addClass('invalid-msg').removeClass('valid-msg');
+                if(feedback.length) feedback.text('Field required').addClass('invalid-msg').removeClass('valid-msg');
             } else {
                 input.removeClass('is-invalid').addClass('is-valid');
-                input.siblings('.field-feedback').text('✓ OK').addClass('valid-msg').removeClass('invalid-msg');
+                if(feedback.length) feedback.text('✓ OK').addClass('valid-msg').removeClass('invalid-msg');
             }
         });
     });

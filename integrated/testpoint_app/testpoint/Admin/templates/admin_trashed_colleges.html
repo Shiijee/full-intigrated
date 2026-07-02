@@ -1,0 +1,124 @@
+{% extends "admin_base.html" %}
+{% block title %}Trashed Colleges - TestPoint Admin{% endblock %}
+
+{% block head %}
+<style>
+    .card { border: none; border-radius: var(--tp-admin-radius) !important; }
+    .btn-circle-sm { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; transition: all 0.2s; border: 1.5px solid var(--tp-admin-border); background: #fff; }
+    .btn-circle-sm:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .tp-pill { border-radius: 50px !important; font-weight: 600; font-size: 12px; padding: 8px 24px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-trash-alt mr-2 text-danger"></i>Trashed Colleges</h1>
+        <p class="text-muted small mb-0">Manage archived colleges flagged for permanent deletion.</p>
+    </div>
+</div>
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb bg-white shadow-sm small" style="border-radius: 12px;">
+        <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_dashboard') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('admin.manage_colleges') }}">Colleges</a></li>
+        <li class="breadcrumb-item active">Trash Bin</li>
+    </ol>
+</nav>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body py-3">
+        <div class="input-group">
+            <div class="input-group-prepend"><span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-gray-400 small"></i></span></div>
+            <input type="text" id="trashSearch" class="form-control border-left-0" placeholder="Search trashed colleges...">
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="trashTable">
+                <thead class="bg-light">
+                    <tr style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <th class="border-0 px-4" width="30%">Abbreviation</th>
+                        <th class="border-0" width="45%">Full College Name</th>
+                        <th class="border-0 text-center px-4" width="25%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in trashed_colleges %}
+                    <tr class="trash-row">
+                        <td class="px-4 font-weight-bold text-gray-800">{{ c.college_name }}</td>
+                        <td class="small text-muted">{{ c.description }}</td>
+                        <td class="text-center px-4">
+                            <form action="{{ url_for('admin.restore_college', college_id=c.college_id) }}" method="POST" class="d-inline">
+                                <button class="btn btn-circle-sm mr-1 shadow-sm" type="submit" title="Restore">
+                                    <i class="fas fa-undo text-success"></i>
+                                </button>
+                            </form>
+                            <button class="btn btn-circle-sm shadow-sm" data-toggle="modal" data-target="#permDeleteModal{{ c.college_id }}" title="Destroy Permanently">
+                                <i class="fas fa-times-circle text-danger"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="text-center py-5 text-muted font-italic small">Trash bin is empty.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer bg-white border-0 py-3">
+            <nav><ul class="pagination pagination-sm justify-content-center mb-0" id="trash-pagination"></ul></nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+{% for c in trashed_colleges %}
+<div class="modal fade" id="permDeleteModal{{ c.college_id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-body text-center p-5">
+                <i class="fas fa-exclamation-triangle fa-4x text-danger mb-4"></i>
+                <h4 class="font-weight-bold" style="font-family: var(--tp-serif);">Irreversible Action</h4>
+                <p class="text-gray-600">Permanently destroy <strong>{{ c.college_name }}</strong>? This will detach all associated programs and courses.</p>
+                <div class="mt-4 justify-content-center d-flex" style="gap: 12px;">
+                    <button class="btn btn-light px-4 rounded-pill" data-dismiss="modal">Cancel</button>
+                    <form action="{{ url_for('admin.delete_college_permanently', college_id=c.college_id) }}" method="POST">
+                        <button type="submit" class="btn btn-danger px-4 rounded-pill font-weight-bold">Confirm Destruction</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('admin.static', filename='js/paginator.js') }}"></script>
+<script>
+    $(document).ready(function() {
+        "use strict";
+        $('.modal').appendTo('body');
+
+        const rows = Array.from(document.querySelectorAll('#trashTable tbody tr.trash-row'));
+        let filtered = [...rows];
+        const paginator = createPaginator({
+            tableBodySelector: '#trashTable tbody',
+            paginationSelector: '#trash-pagination',
+            rowsPerPage: 10,
+            getVisibleRows: () => filtered
+        });
+        paginator.render();
+
+        $('#trashSearch').on('keyup', function() {
+            const val = $(this).val().toLowerCase();
+            filtered = rows.filter(r => r.textContent.toLowerCase().includes(val));
+            paginator.reset();
+        });
+    });
+</script>
+{% endblock %}

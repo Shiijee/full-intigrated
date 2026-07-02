@@ -9,6 +9,18 @@
     .btn-circle-sm:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
     .tp-pill { border-radius: 50px !important; font-weight: 600; font-size: 12px; padding: 8px 24px; }
     .form-control { height: 42px !important; border-radius: 8px !important; border: 1.5px solid var(--tp-admin-border) !important; font-size: 14px !important; }
+
+    .college-tag {
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 2px 8px;
+        border-radius: 50px;
+    }
 </style>
 {% endblock %}
 
@@ -16,7 +28,7 @@
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <div>
         <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-trash-alt mr-2 text-danger"></i>Trashed Courses</h1>
-        <p class="text-muted small mb-0">Manage subjects flagged for permanent deletion.</p>
+        <p class="text-muted small mb-0">Manage subjects flagged for permanent deletion or restoration.</p>
     </div>
     <button class="btn btn-danger shadow-sm tp-pill font-weight-bold" data-toggle="modal" data-target="#emptyTrashModal">
         <i class="fas fa-eraser mr-2"></i> Purge All Trash
@@ -40,7 +52,7 @@
             <div class="col-md-9 mb-2 mb-md-0">
                 <div class="input-group">
                     <div class="input-group-prepend"><span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-gray-400 small"></i></span></div>
-                    <input type="text" class="form-control border-left-0" id="searchInput" placeholder="Search by subject code or title...">
+                    <input type="text" id="searchInput" class="form-control border-left-0" placeholder="Search by subject code, title, or college...">
                 </div>
             </div>
             <div class="col-md-3">
@@ -60,27 +72,35 @@
             <table class="table table-hover align-middle mb-0" id="courseTable">
                 <thead class="bg-light">
                     <tr style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                        <th class="border-0 px-4" width="20%">Subject Code</th>
-                        <th class="border-0" width="50%">Subject Title</th>
-                        <th class="border-0 text-center px-4" width="30%">Restore / Destroy</th>
+                        <th class="border-0 px-4" width="15%">Code</th>
+                        <th class="border-0" width="25%">College</th>
+                        <th class="border-0" width="40%">Subject Title</th>
+                        <th class="border-0 text-center px-4" width="20%">Restore / Destroy</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for course in trashed_courses %}
                     <tr class="course-row">
                         <td class="px-4 font-weight-bold text-gray-800">{{ course.course_code }}</td>
+                        <td>
+                            {% if course.college_name %}
+                                <span class="college-tag">{{ course.college_name }}</span>
+                            {% else %}
+                                <span class="text-muted small font-italic">N/A</span>
+                            {% endif %}
+                        </td>
                         <td class="font-weight-bold text-gray-700">{{ course.course_name }}</td>
                         <td class="text-center px-4">
-                            <button type="button" class="btn btn-circle-sm mr-2" data-toggle="modal" data-target="#restoreCourseModal" data-id="{{ course.course_code }}" data-name="{{ course.course_name }}" title="Restore Subject">
+                            <button type="button" class="btn btn-circle-sm mr-2 shadow-sm" data-toggle="modal" data-target="#restoreCourseModal" data-id="{{ course.course_code }}" data-name="{{ course.course_name }}" title="Restore Subject">
                                 <i class="fas fa-undo text-success"></i>
                             </button>
-                            <button type="button" class="btn btn-circle-sm" data-toggle="modal" data-target="#permDeleteCourseModal" data-id="{{ course.course_code }}" data-name="{{ course.course_name }}" title="Destroy Permanently">
-                                <i class="fas fa-exclamation-triangle text-danger"></i>
+                            <button type="button" class="btn btn-circle-sm shadow-sm" data-toggle="modal" data-target="#permDeleteCourseModal" data-id="{{ course.course_code }}" data-name="{{ course.course_name }}" title="Destroy Permanently">
+                                <i class="fas fa-bomb text-danger"></i>
                             </button>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="3" class="text-center py-5 text-muted font-italic small">Course trash bin is empty.</td></tr>
+                    <tr><td colspan="4" class="text-center py-5 text-muted font-italic small">Course trash bin is empty.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -107,8 +127,8 @@
                     <p class="text-gray-600 mb-0">Restore <strong id="restoreCourseName" class="text-dark"></strong> to the active Subject Catalog?</p>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0 justify-content-center">
-                    <button class="btn btn-light px-4" type="button" data-dismiss="modal">Cancel</button>
-                    <button class="btn btn-success px-4 font-weight-bold" type="submit">Yes, Restore</button>
+                    <button class="btn btn-light px-4 rounded-pill" type="button" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-success px-4 font-weight-bold rounded-pill" type="submit">Confirm Restore</button>
                 </div>
             </form>
         </div>
@@ -126,12 +146,12 @@
                 <div class="modal-body text-center p-4">
                     <p class="text-dark font-weight-bold mb-2">Destroy <span id="deleteCourseName" class="text-danger"></span> permanently?</p>
                     <div class="p-3 bg-light rounded text-muted small" style="border: 1px solid #fee2e2;">
-                        <i class="fas fa-exclamation-triangle text-danger mr-1"></i> <strong>Warning:</strong> Every single question and linked curriculum record will be lost forever.
+                        <i class="fas fa-exclamation-triangle text-danger mr-1"></i> <strong>Warning:</strong> Every single question bank entry and linked class record associated with this course will be purged. This action is final.
                     </div>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0 justify-content-center">
-                    <button class="btn btn-light px-4" type="button" data-dismiss="modal">Cancel</button>
-                    <button class="btn btn-danger px-4 font-weight-bold" type="submit">Destroy Forever</button>
+                    <button class="btn btn-light px-4 rounded-pill" type="button" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger px-4 font-weight-bold rounded-pill" type="submit">Destroy Forever</button>
                 </div>
             </form>
         </div>
@@ -150,8 +170,8 @@
                     <p class="text-gray-600 mb-0">Permanently delete every subject currently in the trash? This operation is irreversible.</p>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0 justify-content-center">
-                    <button class="btn btn-light px-4" type="button" data-dismiss="modal">Cancel</button>
-                    <button class="btn btn-danger px-4 font-weight-bold" type="submit">Confirm Purge</button>
+                    <button class="btn btn-light px-4 rounded-pill" type="button" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger px-4 font-weight-bold rounded-pill" type="submit">Confirm Purge</button>
                 </div>
             </form>
         </div>
@@ -164,6 +184,11 @@
 <script>
     (function ($) {
         "use strict";
+
+        $(document).ready(function() {
+            // Move modals to body root to avoid stacking context issues
+            $('.modal').appendTo('body');
+        });
 
         const courseTableBody = document.querySelector('#courseTable tbody');
         const allRows = Array.from(courseTableBody.querySelectorAll('tr.course-row'));
@@ -182,14 +207,14 @@
             var btn = $(event.relatedTarget);
             var code = btn.data('id');
             $('#restoreCourseName').text(code + " (" + btn.data('name') + ")");
-            $('#restoreForm').attr('action', "{{ url_for('admin.restore_course', course_code='_code_') }}".replace('_code_', code));
+            $('#restoreForm').attr('action', "{{ url_for('admin.restore_course', course_code='_code_') }}".replace('_code_', encodeURIComponent(code)));
         });
 
         $('#permDeleteCourseModal').on('show.bs.modal', function (event) {
             var btn = $(event.relatedTarget);
             var code = btn.data('id');
             $('#deleteCourseName').text(code);
-            $('#permDeleteForm').attr('action', "{{ url_for('admin.delete_course_permanently', course_code='_code_') }}".replace('_code_', code));
+            $('#permDeleteForm').attr('action', "{{ url_for('admin.delete_course_permanently', course_code='_code_') }}".replace('_code_', encodeURIComponent(code)));
         });
 
         const paginator = createPaginator({

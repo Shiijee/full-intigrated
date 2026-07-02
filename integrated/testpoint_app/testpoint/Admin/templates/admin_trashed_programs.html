@@ -6,6 +6,18 @@
     .card { border: none; border-radius: var(--tp-admin-radius) !important; }
     .btn-circle-sm { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; transition: all 0.2s; border: 1.5px solid var(--tp-admin-border); background: #fff; }
     .btn-circle-sm:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+    .college-tag {
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 2px 8px;
+        border-radius: 50px;
+    }
 </style>
 {% endblock %}
 
@@ -13,10 +25,11 @@
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <div>
         <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-trash-alt mr-2 text-danger"></i>Trashed Programs</h1>
-        <p class="text-muted small mb-0">Review programs marked for deletion.</p>
+        <p class="text-muted small mb-0">Review and manage institutional degree programs marked for deletion.</p>
     </div>
 </div>
 
+<!-- Breadcrumb -->
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb bg-white shadow-sm small" style="border-radius: 12px;">
         <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_dashboard') }}">Dashboard</a></li>
@@ -25,50 +38,65 @@
     </ol>
 </nav>
 
+<!-- Filter Card -->
 <div class="card shadow-sm mb-4">
     <div class="card-body py-3">
         <div class="input-group">
             <div class="input-group-prepend"><span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-gray-400 small"></i></span></div>
-            <input type="text" id="progTrashSearch" class="form-control border-left-0" placeholder="Search trashed programs...">
+            <input type="text" id="progTrashSearch" class="form-control border-left-0" placeholder="Search by abbreviation, name, or college...">
         </div>
     </div>
 </div>
 
+<!-- Trashed Table -->
 <div class="card shadow-sm mb-4">
+    <div class="card-header py-3 bg-white border-0">
+        <h6 class="m-0 font-weight-bold text-gray-800 text-uppercase small" style="letter-spacing: 0.5px;">Deleted Programs Registry</h6>
+    </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0" id="progTrashTable">
                 <thead class="bg-light">
                     <tr style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                        <th class="border-0 px-4" width="30%">Abbreviation</th>
+                        <th class="border-0 px-4" width="15%">Abbreviation</th>
+                        <th class="border-0" width="25%">College</th>
                         <th class="border-0" width="40%">Program Name</th>
-                        <th class="border-0 text-center px-4" width="30%">Actions</th>
+                        <th class="border-0 text-center px-4" width="20%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for p in trashed_programs %}
                     <tr class="trash-row">
                         <td class="px-4 font-weight-bold text-gray-800">{{ p.program_name }}</td>
+                        <td>
+                            {% if p.college_name %}
+                                <span class="college-tag">{{ p.college_name }}</span>
+                            {% else %}
+                                <span class="text-muted small font-italic">N/A</span>
+                            {% endif %}
+                        </td>
                         <td class="small text-muted">{{ p.description }}</td>
                         <td class="text-center px-4">
                             <form action="{{ url_for('admin.restore_program', program_id=p.program_id) }}" method="POST" class="d-inline">
-                                <button class="btn btn-circle-sm mr-1" type="submit" title="Restore">
+                                <button class="btn btn-circle-sm mr-1 shadow-sm" type="submit" title="Restore Program">
                                     <i class="fas fa-undo text-success"></i>
                                 </button>
                             </form>
-                            <button class="btn btn-circle-sm" data-toggle="modal" data-target="#permDeleteProgModal{{ p.program_id }}" title="Destroy Permanently">
-                                <i class="fas fa-times-circle text-danger"></i>
+                            <button class="btn btn-circle-sm shadow-sm" data-toggle="modal" data-target="#permDeleteProgModal{{ p.program_id }}" title="Destroy Permanently">
+                                <i class="fas fa-bomb text-danger"></i>
                             </button>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="3" class="text-center py-5 text-muted font-italic small">Trash bin is empty.</td></tr>
+                    <tr><td colspan="4" class="text-center py-5 text-muted font-italic small">Program trash bin is empty.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         <div class="card-footer bg-white border-0 py-3">
-            <nav><ul class="pagination pagination-sm justify-content-center mb-0" id="prog-trash-pagination"></ul></nav>
+            <nav aria-label="Trashed programs pagination">
+                <ul class="pagination pagination-sm justify-content-center mb-0" id="prog-trash-pagination"></ul>
+            </nav>
         </div>
     </div>
 </div>
@@ -76,17 +104,20 @@
 
 {% block modals %}
 {% for p in trashed_programs %}
-<div class="modal fade" id="permDeleteProgModal{{ p.program_id }}" tabindex="-1" role="dialog">
+<div class="modal fade" id="permDeleteProgModal{{ p.program_id }}" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
             <div class="modal-body text-center p-5">
-                <i class="fas fa-bomb fa-4x text-danger mb-4"></i>
+                <i class="fas fa-exclamation-triangle fa-4x text-danger mb-4"></i>
                 <h4 class="font-weight-bold" style="font-family: var(--tp-serif);">Permanent Destruction</h4>
-                <p class="text-gray-600">You are about to permanently delete <strong>{{ p.program_name }}</strong>. All linked blocks will be lost forever.</p>
+                <p class="text-gray-600">You are about to permanently delete <strong>{{ p.program_name }}</strong>.</p>
+                <div class="p-3 bg-light rounded text-muted small mb-4 text-left" style="border: 1px solid #fee2e2;">
+                    <i class="fas fa-info-circle text-danger mr-1"></i> <strong>Warning:</strong> All academic blocks and student assignments associated with this program will be lost forever.
+                </div>
                 <div class="mt-4 justify-content-center d-flex" style="gap: 12px;">
-                    <button class="btn btn-light px-4" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-light px-4 rounded-pill" data-dismiss="modal">Cancel</button>
                     <form action="{{ url_for('admin.delete_program_permanently', program_id=p.program_id) }}" method="POST">
-                        <button type="submit" class="btn btn-danger px-4 font-weight-bold">Confirm Delete</button>
+                        <button type="submit" class="btn btn-danger px-4 rounded-pill font-weight-bold">Destroy Forever</button>
                     </form>
                 </div>
             </div>
@@ -100,10 +131,22 @@
 <script src="{{ url_for('admin.static', filename='js/paginator.js') }}"></script>
 <script>
     $(document).ready(function() {
+        "use strict";
+
+        // Move modals to body root to avoid stacking context issues
+        $('.modal').appendTo('body');
+
         const rows = Array.from(document.querySelectorAll('#progTrashTable tbody tr.trash-row'));
         let filtered = [...rows];
-        const paginator = createPaginator({ tableBodySelector: '#progTrashTable tbody', paginationSelector: '#prog-trash-pagination', rowsPerPage: 10, getVisibleRows: () => filtered });
+
+        const paginator = createPaginator({
+            tableBodySelector: '#progTrashTable tbody',
+            paginationSelector: '#prog-trash-pagination',
+            rowsPerPage: 10,
+            getVisibleRows: () => filtered
+        });
         paginator.render();
+
         $('#progTrashSearch').on('keyup', function() {
             const val = $(this).val().toLowerCase();
             filtered = rows.filter(r => r.textContent.toLowerCase().includes(val));

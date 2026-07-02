@@ -21,7 +21,7 @@
         </button>
         <a href="{{ url_for('admin.trashed_programs') }}" class="btn btn-white border shadow-sm px-4 rounded-pill font-weight-bold small text-danger">
             <i class="fas fa-trash-alt mr-2"></i> View Trash
-        </a>        
+        </a>
     </div>
 </div>
 
@@ -36,7 +36,7 @@
     <div class="card-body py-3">
         <div class="input-group">
             <div class="input-group-prepend"><span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-gray-400 small"></i></span></div>
-            <input type="text" id="progSearch" class="form-control border-left-0" placeholder="Search programs by name or abbreviation...">
+            <input type="text" id="progSearch" class="form-control border-left-0" placeholder="Search programs by name, college, or abbreviation...">
         </div>
     </div>
 </div>
@@ -47,15 +47,23 @@
             <table class="table table-hover align-middle mb-0" id="progTable">
                 <thead class="bg-light">
                     <tr style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                        <th class="border-0 px-4" width="20%">Abbreviation</th>
-                        <th class="border-0" width="50%">Program Name</th>
-                        <th class="border-0 text-center px-4" width="30%">Actions</th>
+                        <th class="border-0 px-4" width="15%">Abbreviation</th>
+                        <th class="border-0" width="20%">College</th>
+                        <th class="border-0" width="40%">Program Name</th>
+                        <th class="border-0 text-center px-4" width="25%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for p in programs %}
                     <tr class="prog-row">
                         <td class="px-4 font-weight-bold text-gray-800">{{ p.program_name }}</td>
+                        <td>
+                            {% if p.college_name %}
+                                <span class="badge badge-light border text-primary small font-weight-bold">{{ p.college_name }}</span>
+                            {% else %}
+                                <span class="text-muted small font-italic">Unassigned</span>
+                            {% endif %}
+                        </td>
                         <td class="small text-muted">{{ p.description }}</td>
                         <td class="text-center px-4">
                             <a href="{{ url_for('admin.view_program_blocks', program_id=p.program_id) }}" class="btn btn-circle-sm mr-1" title="View Blocks">
@@ -95,9 +103,18 @@
                         <label class="small font-weight-bold">Program Abbreviation</label>
                         <input type="text" name="program_name" class="form-control" placeholder="e.g. BSIT" required>
                     </div>
+                    <div class="form-group mb-4">
+                        <label class="small font-weight-bold">Assigned College</label>
+                        <select name="college_id" class="form-control" required>
+                            <option value="" disabled selected>-- Select College --</option>
+                            {% for college in colleges %}
+                                <option value="{{ college.college_id }}">{{ college.college_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <div class="form-group mb-0">
                         <label class="small font-weight-bold">Full Program Name</label>
-                        <textarea name="description" class="form-control" rows="4" placeholder="Enter formal description..."></textarea>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Enter formal description..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0">
@@ -124,9 +141,20 @@
                             <label class="small font-weight-bold">Program Abbreviation</label>
                             <input type="text" name="program_name" class="form-control" value="{{ p.program_name }}" required>
                         </div>
+                        <div class="form-group mb-4">
+                            <label class="small font-weight-bold">Assigned College</label>
+                            <select name="college_id" class="form-control" required>
+                                <option value="" disabled>-- Select College --</option>
+                                {% for college in colleges %}
+                                    <option value="{{ college.college_id }}" {% if college.college_id == p.college_id %}selected{% endif %}>
+                                        {{ college.college_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <div class="form-group mb-0">
                             <label class="small font-weight-bold">Full Program Name</label>
-                            <textarea name="description" class="form-control" rows="4">{{ p.description }}</textarea>
+                            <textarea name="description" class="form-control" rows="3">{{ p.description }}</textarea>
                         </div>
                     </div>
                     <div class="modal-footer border-0 px-4 pb-4 pt-0">
@@ -162,10 +190,15 @@
 
 {% block scripts %}
 <script>
-    $('#progSearch').on('keyup', function () {
-        var val = $(this).val().toLowerCase();
-        $('.prog-row').each(function () {
-            $(this).toggle($(this).text().toLowerCase().indexOf(val) > -1);
+    $(document).ready(function() {
+        // Move modals to body root to avoid stacking context issues
+        $('.modal').appendTo('body');
+
+        $('#progSearch').on('keyup', function () {
+            var val = $(this).val().toLowerCase();
+            $('.prog-row').each(function () {
+                $(this).toggle($(this).text().toLowerCase().indexOf(val) > -1);
+            });
         });
     });
 </script>

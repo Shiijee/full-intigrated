@@ -21,12 +21,15 @@
         <div class="card shadow-sm border-0" style="background: linear-gradient(to right, #ffffff, #fcfcfc);">
             <div class="card-body py-3 d-flex align-items-center overflow-auto">
                 <span class="small font-weight-bold text-muted text-uppercase mr-4" style="letter-spacing: 1px;">Quick Actions:</span>
+                <a href="{{ url_for('admin.manage_colleges') }}" class="btn btn-white shadow-sm border rounded-pill mr-2 text-nowrap px-3 py-1 small font-weight-bold">
+                    <i class="fas fa-university mr-1 text-danger"></i> Colleges
+                </a>
                 <a href="{{ url_for('admin.manage_programs') }}" class="btn btn-white shadow-sm border rounded-pill mr-2 text-nowrap px-3 py-1 small font-weight-bold">
                     <i class="fas fa-graduation-cap mr-1 text-primary"></i> Programs
                 </a>
                 <a href="{{ url_for('admin.manage_blocks') }}" class="btn btn-white shadow-sm border rounded-pill mr-2 text-nowrap px-3 py-1 small font-weight-bold">
                     <i class="fas fa-layer-group mr-1 text-success"></i> Blocks
-                </a>                
+                </a>
                 <a href="{{ url_for('admin.manage_courses') }}" class="btn btn-white shadow-sm border rounded-pill mr-2 text-nowrap px-3 py-1 small font-weight-bold">
                     <i class="fas fa-book mr-1 text-secondary"></i> Catalog
                 </a>
@@ -43,8 +46,25 @@
 
 <!-- 2. SUMMARY CARDS -->
 <div class="row">
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card h-100 py-2 border-left-primary">
+    <!-- Colleges Card -->
+    <div class="col-xl col-md-6 mb-4">
+        <div class="card h-100 py-2 border-left-danger shadow-sm">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Colleges</div>
+                        <div class="h4 mb-0 font-weight-bold text-gray-800">{{ total_colleges }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="p-3 bg-light rounded-circle"><i class="fas fa-university fa-lg text-danger"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Programs Card -->
+    <div class="col-xl col-md-6 mb-4">
+        <div class="card h-100 py-2 border-left-primary shadow-sm">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
@@ -58,8 +78,9 @@
             </div>
         </div>
     </div>
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card h-100 py-2 border-left-success">
+    <!-- Blocks Card -->
+    <div class="col-xl col-md-6 mb-4">
+        <div class="card h-100 py-2 border-left-success shadow-sm">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
@@ -73,8 +94,9 @@
             </div>
         </div>
     </div>
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card h-100 py-2 border-left-info">
+    <!-- Classes Card -->
+    <div class="col-xl col-md-6 mb-4">
+        <div class="card h-100 py-2 border-left-info shadow-sm">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
@@ -88,16 +110,17 @@
             </div>
         </div>
     </div>
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card h-100 py-2 border-left-danger">
+    <!-- Live Exams Card -->
+    <div class="col-xl col-md-6 mb-4">
+        <div class="card h-100 py-2 border-left-warning shadow-sm">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Live Exams</div>
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Live Exams</div>
                         <div class="h4 mb-0 font-weight-bold text-gray-800">{{ live_sessions }}</div>
                     </div>
                     <div class="col-auto">
-                        <div class="spinner-grow spinner-grow-sm text-danger" role="status"></div>
+                        <div class="spinner-grow spinner-grow-sm text-warning" role="status"></div>
                     </div>
                 </div>
             </div>
@@ -108,7 +131,7 @@
 <!-- 3. CHARTS ROW -->
 <div class="row">
     <div class="col-xl-8 col-lg-7">
-        <div class="card mb-4 border-0">
+        <div class="card mb-4 border-0 shadow-sm">
             <div class="card-header py-3 bg-white d-flex justify-content-between align-items-center border-0">
                 <h6 class="m-0 font-weight-bold text-gray-800">Student Year-Level Distribution</h6>
                 <i class="fas fa-chart-bar text-gray-300"></i>
@@ -122,7 +145,7 @@
     </div>
 
     <div class="col-xl-4 col-lg-5">
-        <div class="card mb-4 border-0">
+        <div class="card mb-4 border-0 shadow-sm">
             <div class="card-header py-3 bg-white border-0">
                 <h6 class="m-0 font-weight-bold text-gray-800">Account Roles</h6>
             </div>
@@ -144,7 +167,7 @@
 <div class="row">
     <!-- Capacity Watchlist -->
     <div class="col-lg-7 mb-4">
-        <div class="card border-0">
+        <div class="card border-0 shadow-sm">
             <div class="card-header py-3 bg-white border-0 d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-gray-800">Capacity Watchlist</h6>
                 <span class="badge badge-soft-warning px-3 py-2 rounded-pill font-weight-bold" style="background: #fff8e1; color: #f57c00; font-size: 10px;">NEAR FULL CAPACITY</span>
@@ -189,7 +212,7 @@
 
     <!-- Security Feed -->
     <div class="col-lg-5 mb-4">
-        <div class="card border-0 h-100" style="background: #1a1a1a;">
+        <div class="card border-0 h-100 shadow-sm" style="background: #1a1a1a;">
             <div class="card-body p-4 d-flex flex-column">
                 <div class="d-flex align-items-center mb-4">
                     <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
@@ -200,7 +223,7 @@
                         <h4 class="font-weight-bold text-white mb-0">{{ global_violations }} <span class="small font-weight-normal" style="opacity: 0.5;">Violations</span></h4>
                     </div>
                 </div>
-                
+
                 <div class="mt-auto">
                     <div class="p-3 rounded mb-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);">
                         <p class="small mb-0" style="color: rgba(255,255,255,0.5); line-height: 1.6;">
@@ -255,9 +278,9 @@
     var backgroundColors = labels.map(function(label) {
         var l = label.toLowerCase();
         if (l === 'admin') return '#1a1a1a';
-        if (l === 'super_admin') return '#FFFF00';
-        if (l === 'teacher') return '#e74a3b'; 
-        return '#4e73df';                     
+        if (l === 'super_admin') return '#4e73df'; // Reverted from previous yellow test to match theme
+        if (l === 'teacher') return '#e74a3b';
+        return '#4e73df';
     });
 
     var myPieChart = new Chart(ctxPie, {
