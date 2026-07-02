@@ -8,3 +8,12 @@ integrated/voxify_app/Voxify/__pycache__/api.cpython-314.pyc
 integrated/voxify_app/Voxify/Admin/__pycache__/routes.cpython-314.pyc
 integrated/voxify_app/Voxify/Authentication/__pycache__/routes.cpython-314.pyc
 .pyc
+integrated/testpoint_app/testpoint/__pycache__/portal_sync.cpython-314.pyc
+integrated/voxify_app/Voxify/SuperAdmin/__pycache__/routes.cpython-314.pyc
+integrated/voxify_app/Voxify/utils/__pycache__/__init__.cpython-314.pyc
+integrated/voxify_app/Voxify/utils/__pycache__/election_status.cpython-314.pyc
+integrated/voxify_app/Voxify/utils/__pycache__/otp.cpython-314.pyc
+integrated/voxify_app/Voxify/Voter/__pycache__/routes.cpython-314.pyc
+integrated/voxify_app/Voxify/utils/__pycache__/__init__.cpython-314.pyc
+integrated/voxify_app/Voxify/utils/__pycache__/election_status.cpython-314.pyc
+integrated/voxify_app/Voxify/utils/__pycache__/otp.cpython-314.pyc

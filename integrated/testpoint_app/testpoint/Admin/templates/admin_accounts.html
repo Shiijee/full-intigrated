@@ -1,6 +1,6 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Account Manager - TestPoint Admin{% endblock %}
+{% block title %}Account Manager — TestPoint Admin{% endblock %}
 
 {% block head %}
 <style>
@@ -19,25 +19,10 @@
         border-radius: 6px;
     }
 
-    .badge-student {
-        background: #e8edfb;
-        color: #2d5be3;
-    }
-
-    .badge-teacher {
-        background: #fdecea;
-        color: #d93025;
-    }
-
-    .badge-admin {
-        background: #f1f1f1;
-        color: #1a1a1a;
-    }
-
-    .badge-super {
-        background: #1a1a1a;
-        color: #fff;
-    }
+    .badge-student { background: #e8edfb; color: #2d5be3; }
+    .badge-teacher { background: #fdecea; color: #d93025; }
+    .badge-admin { background: #f1f1f1; color: #1a1a1a; }
+    .badge-super { background: #1a1a1a; color: #fff; }
 
     /* ── STATUS BADGES ── */
     .badge-status {
@@ -47,15 +32,8 @@
         padding: 4px 8px;
     }
 
-    .badge-active-soft {
-        background: #e6f4ea;
-        color: #1e7e34;
-    }
-
-    .badge-disabled-soft {
-        background: #feeceb;
-        color: #d93025;
-    }
+    .badge-active-soft { background: #e6f4ea; color: #1e7e34; }
+    .badge-disabled-soft { background: #feeceb; color: #d93025; }
 
     /* ── ACTION BUTTONS ── */
     .btn-circle-sm {
@@ -105,6 +83,20 @@
         border-color: var(--tp-admin-ink) !important;
         box-shadow: 0 0 0 4px rgba(15, 14, 17, 0.05) !important;
     }
+
+    /* ── VALIDATION STYLING ── */
+    .field-feedback {
+        font-size: 11px;
+        margin-top: 4px;
+        min-height: 16px;
+        display: block;
+        font-weight: 600;
+    }
+    .valid-msg { color: #1a7a5e; }
+    .invalid-msg { color: #c0392b; }
+
+    .form-control.is-valid { border-color: #1a7a5e !important; background-image: none !important; }
+    .form-control.is-invalid { border-color: #c0392b !important; background-image: none !important; }
 </style>
 {% endblock %}
 
@@ -273,7 +265,7 @@
 
 {% for user in users %}
 <!-- EDIT USER MODAL -->
-<div class="modal fade validate-modal" id="editUserModal{{ user.user_id }}" tabindex="-1" role="dialog"
+<div class="modal fade" id="editUserModal{{ user.user_id }}" tabindex="-1" role="dialog"
     aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
@@ -282,29 +274,30 @@
                         class="fas fa-user-edit mr-2 text-info"></i>Modify Account</h5>
                 <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
             </div>
-            <form action="{{ url_for('admin.update_account', user_id=user.user_id) }}" method="POST" novalidate>
+            <form action="{{ url_for('admin.update_account', user_id=user.user_id) }}" method="POST" novalidate class="validated-form">
                 <div class="modal-body p-4">
                     <div class="tp-section-label">Identity</div>
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="small font-weight-bold">First Name</label>
-                            <input type="text" class="form-control" name="firstname" value="{{ user.firstname }}"
-                                required>
+                            <input type="text" class="form-control validate-me" data-type="name" name="firstname" value="{{ user.firstname }}" required>
+                            <span class="field-feedback"></span>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="small font-weight-bold">Middle Name</label>
-                            <input type="text" class="form-control" name="middlename" value="{{ user.middlename }}"
-                                required>
+                        <div class="col-md-4 mb-3">
+                            <label class="small font-weight-bold">Middle Name </label>
+                            <input type="text" class="form-control validate-me" data-type="name-optional" name="middlename" value="{{ user.middlename if user.middlename else '' }}">
+                            <span class="field-feedback"></span>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="small font-weight-bold">Last Name</label>
-                            <input type="text" class="form-control" name="lastname" value="{{ user.lastname }}"
-                                required>
+                            <input type="text" class="form-control validate-me" data-type="name" name="lastname" value="{{ user.lastname }}" required>
+                            <span class="field-feedback"></span>
                         </div>
                     </div>
                     <div class="form-group mb-4">
                         <label class="small font-weight-bold">Email Address</label>
-                        <input type="email" class="form-control" name="email" value="{{ user.email }}" required>
+                        <input type="email" class="form-control validate-me" data-type="email" name="email" value="{{ user.email }}" required>
+                        <span class="field-feedback"></span>
                     </div>
 
                     {% if user.role == 'student' %}
@@ -325,7 +318,8 @@
                     <div class="row">
                         <div class="col-md-6">
                             <label class="small font-weight-bold">New Password</label>
-                            <input type="password" class="form-control" name="password" placeholder="Keep current">
+                            <input type="password" class="form-control validate-me" data-type="password-optional" name="password" placeholder="Keep current">
+                            <span class="field-feedback"></span>
                         </div>
                         <div class="col-md-6">
                             <label class="small font-weight-bold">Account Status</label>
@@ -348,7 +342,7 @@
 {% endfor %}
 
 <!-- ADD NEW USER MODAL -->
-<div class="modal fade validate-modal" id="addUserModal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade" id="addUserModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
             <div class="modal-header border-0 pb-0 pt-4 px-4 text-center">
@@ -356,21 +350,34 @@
                     <i class="fas fa-user-plus mr-2 text-primary"></i>Create New Account</h5>
                 <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
             </div>
-            <form action="{{ url_for('admin.add_user') }}" method="POST" novalidate id="addUserForm">
+            <form action="{{ url_for('admin.add_user') }}" method="POST" novalidate id="addUserForm" class="validated-form">
                 <div class="modal-body p-4">
                     <div class="tp-section-label">Personal Information</div>
                     <div class="row mb-3">
-                        <div class="col-md-4"><label class="small font-weight-bold">First Name</label><input type="text"
-                                class="form-control" name="firstname" required></div>
-                        <div class="col-md-4"><label class="small font-weight-bold">Middle Name</label><input
-                                type="text" class="form-control" name="middlename"></div>
-                        <div class="col-md-4"><label class="small font-weight-bold">Last Name</label><input type="text"
-                                class="form-control" name="lastname" required></div>
+                        <div class="col-md-4">
+                            <label class="small font-weight-bold">First Name</label>
+                            <input type="text" class="form-control validate-me" data-type="name" name="firstname" required>
+                            <span class="field-feedback"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="small font-weight-bold">Middle Name (Optional)</label>
+                            <input type="text" class="form-control validate-me" data-type="name-optional" name="middlename">
+                            <span class="field-feedback"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="small font-weight-bold">Last Name</label>
+                            <input type="text" class="form-control validate-me" data-type="name" name="lastname" required>
+                            <span class="field-feedback"></span>
+                        </div>
                     </div>
                     <div class="row mb-4">
-                        <div class="col-md-8"><label class="small font-weight-bold">Email Address</label><input
-                                type="email" class="form-control" name="email" required></div>
-                        <div class="col-md-4"><label class="small font-weight-bold">User Role</label>
+                        <div class="col-md-8">
+                            <label class="small font-weight-bold">Email Address</label>
+                            <input type="email" class="form-control validate-me" data-type="email" name="email" required>
+                            <span class="field-feedback"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="small font-weight-bold">User Role</label>
                             <select class="form-control" name="role" id="addUserRole">
                                 <option value="student">Student</option>
                                 <option value="teacher">Teacher</option>
@@ -378,9 +385,37 @@
                             </select>
                         </div>
                     </div>
+
+                    <div class="tp-section-label">Address Information</div>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <label class="small font-weight-bold">Region</label>
+                            <select name="region" class="form-control validate-me" data-type="select" id="region" required></select>
+                            <input type="hidden" name="region_text" id="region-text">
+                            <span class="field-feedback"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="small font-weight-bold">Province</label>
+                            <select name="province" class="form-control validate-me" data-type="select" id="province" required></select>
+                            <input type="hidden" name="province_text" id="province-text">
+                            <span class="field-feedback"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="small font-weight-bold">City</label>
+                            <select name="city" class="form-control validate-me" data-type="select" id="city" required></select>
+                            <input type="hidden" name="city_text" id="city-text">
+                            <span class="field-feedback"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="small font-weight-bold">Barangay</label>
+                            <select name="barangay" class="form-control validate-me" data-type="select" id="barangay" required></select>
+                            <input type="hidden" name="barangay_text" id="barangay-text">
+                            <span class="field-feedback"></span>
+                        </div>
+                    </div>
+
                     <div class="form-group mb-4" id="blockSelectionArea">
-                        <label class="small font-weight-bold text-primary"><i class="fas fa-link mr-1"></i> Block
-                            Assignment</label>
+                        <label class="small font-weight-bold text-primary"><i class="fas fa-link mr-1"></i> Block Assignment</label>
                         <select class="form-control" name="block_id">
                             <option value="">-- Select Block --</option>
                             {% for b in blocks %}
@@ -388,12 +423,19 @@
                             {% endfor %}
                         </select>
                     </div>
+
                     <div class="tp-section-label">Security Settings</div>
                     <div class="row mb-4">
-                        <div class="col-md-6"><label class="small font-weight-bold">Initial Password</label><input
-                                type="password" class="form-control" name="password" required></div>
-                        <div class="col-md-6"><label class="small font-weight-bold">Confirm Password</label><input
-                                type="password" class="form-control" name="confirm_password" required></div>
+                        <div class="col-md-6">
+                            <label class="small font-weight-bold">Initial Password</label>
+                            <input type="password" class="form-control validate-me" data-type="password" name="password" id="add_pw" required>
+                            <span class="field-feedback"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small font-weight-bold">Confirm Password</label>
+                            <input type="password" class="form-control validate-me" data-type="confirm" data-match="add_pw" name="confirm_password" required>
+                            <span class="field-feedback"></span>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0">
@@ -430,13 +472,150 @@
 
 {% block scripts %}
 <script src="{{ url_for('admin.static', filename='js/paginator.js') }}"></script>
+<script src="{{ url_for('auth.static', filename='js/ph-address-selector.js') }}"></script>
 <script>
     (function ($) {
         "use strict";
 
-        // 1. FILTERING
-        const userTableBody = document.querySelector('#userTable tbody');
-        const allRows = Array.from(userTableBody.querySelectorAll('tr.user-row'));
+        /* ══════════════════════════════════════════
+           1. CORE VALIDATION UTILITIES
+           ══════════════════════════════════════════ */
+        function setValid($el, msg) {
+            $el.removeClass('is-invalid').addClass('is-valid');
+            $el.nextAll('.field-feedback').first().text(msg || '✓ Looks good!').removeClass('invalid-msg').addClass('valid-msg');
+        }
+
+        function setInvalid($el, msg) {
+            $el.removeClass('is-valid').addClass('is-invalid');
+            $el.nextAll('.field-feedback').first().text(msg).removeClass('valid-msg').addClass('invalid-msg');
+        }
+
+        function clearValidation($el) {
+            $el.removeClass('is-valid is-invalid');
+            $el.nextAll('.field-feedback').first().text('');
+        }
+
+        /* ── Gibberish & Pattern Logic ── */
+        function checkGibberish(str, label) {
+            var pure = str.replace(/[^a-z]/ig, '').toLowerCase();
+            if (pure.length < 5) return null;
+            if (/^[asdfghjkl]+$/.test(pure) || /^[qwertyuiop]+$/.test(pure) || /^[zxcvbnm]+$/.test(pure))
+                return { ok: false, msg: label + ' resembles a keyboard pattern.' };
+            if (/[bcdfghjklmnpqrstvwxyz]{6,}/.test(pure))
+                return { ok: false, msg: label + ' has unnatural consonant runs.' };
+            if (pure.length >= 7 && (pure.match(/[aeiouy]/g) || []).length === 0)
+                return { ok: false, msg: label + ' appears abnormal.' };
+            return null;
+        }
+
+        function checkNameField(v, label, required) {
+            if (!v) return required ? { ok: false, msg: label + ' is required.' } : { ok: true, msg: '' };
+            if (v.length < 2) return { ok: false, msg: label + ' is too short.' };
+            if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-\.]+$/.test(v)) return { ok: false, msg: 'Invalid characters in name.' };
+            if (/^(.)\1+$/.test(v.replace(/\s/g, ''))) return { ok: false, msg: 'Name cannot be repeating letters.' };
+
+            var lower = v.toLowerCase().replace(/[^a-z]/g, '');
+            if (lower.length >= 4) {
+                var seq = 1, max = 1;
+                for (var i = 1; i < lower.length; i++) {
+                    seq = (lower.charCodeAt(i) === lower.charCodeAt(i - 1) + 1) ? seq + 1 : 1;
+                    if (seq > max) max = seq;
+                }
+                if (max >= 4) return { ok: false, msg: 'Sequential letters (abcd) are not allowed.' };
+            }
+            var gib = checkGibberish(v, label);
+            if (gib) return gib;
+            return { ok: true, msg: '✓ Verified' };
+        }
+
+        async function checkEmailField(v) {
+            if (!v) return { ok: false, msg: 'Email is required.' };
+            var parts = v.split('@');
+            if (parts.length !== 2) return { ok: false, msg: 'Invalid email format.' };
+            var local = parts[0].toLowerCase(), domain = parts[1].toLowerCase();
+
+            var authorizedExplicit = [
+                "gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com",
+                "live.com", "msn.com", "icloud.com", "proton.me", "zoho.com"
+            ];
+            var isExplicit = authorizedExplicit.indexOf(domain) !== -1;
+            var isEduOrPh = domain.endsWith('.edu') || domain.endsWith('.ph') || domain.endsWith('.edu.ph');
+
+            if (!isExplicit && !isEduOrPh) return { ok: false, msg: 'Use a major provider, .edu, or .ph email.' };
+            if (local.length < 3) return { ok: false, msg: 'Username too short.' };
+            var gib = checkGibberish(local, 'Email prefix');
+            if (gib) return gib;
+            return { ok: true, msg: '✓ Institutional Domain Verified' };
+        }
+
+        function checkPasswordField(v, isOptional = false) {
+            if (!v && isOptional) return { ok: true, msg: '' };
+            if (!v) return { ok: false, msg: 'Password is required.' };
+            if (v.length < 8) return { ok: false, msg: 'Minimum 8 characters required.' };
+            if (!/[A-Z]/.test(v) || !/[0-9]/.test(v) || !/[!@#$%^&*]/.test(v))
+                return { ok: false, msg: 'Complexity: Needs Uppercase, Number, and Symbol.' };
+
+            var common = ['password', 'password123', 'admin123', 'qwerty12345'];
+            if (common.indexOf(v.toLowerCase()) !== -1) return { ok: false, msg: 'This password is too common.' };
+            return { ok: true, msg: '✓ Secure' };
+        }
+
+        /* ══════════════════════════════════════════
+           2. FORM LOGIC (ADD & EDIT)
+           ══════════════════════════════════════════ */
+        async function validateField(input) {
+            const $input = $(input);
+            const type = $input.data('type');
+            const val = $input.val().trim();
+            const label = $input.prev('label').text();
+
+            let res = { ok: true, msg: '' };
+
+            if (type === 'name') res = checkNameField(val, label, true);
+            else if (type === 'name-optional') res = checkNameField(val, label, false);
+            else if (type === 'email') res = await checkEmailField(val);
+            else if (type === 'password') res = checkPasswordField(val, false);
+            else if (type === 'password-optional') res = checkPasswordField(val, true);
+            else if (type === 'confirm') {
+                const matchVal = $('#' + $input.data('match')).val();
+                res = (val === matchVal && val !== "") ? { ok: true, msg: '✓ Match' } : { ok: false, msg: 'Passwords do not match.' };
+            }
+
+            if (val === "" && type.includes('optional')) { clearValidation($input); return true; }
+            res.ok ? setValid($input, res.msg) : setInvalid($input, res.msg);
+            return res.ok;
+        }
+
+        // Attach listeners to all validated forms
+        $(document).on('input blur', '.validate-me', function() { validateField(this); });
+
+        $('.validated-form').on('submit', async function(e) {
+            e.preventDefault();
+            const $form = $(this);
+            let allOk = true;
+
+            // Check all visible fields
+            const fields = $form.find('.validate-me:visible').get();
+            for (const field of fields) {
+                const ok = await validateField(field);
+                if (!ok) allOk = false;
+            }
+
+            // Check address selects in Add form
+            if ($form.attr('id') === 'addUserForm') {
+                ['region', 'province', 'city', 'barangay'].forEach(id => {
+                    const $sel = $('#' + id);
+                    if (!$sel.val()) { setInvalid($sel, 'Required'); allOk = false; }
+                });
+            }
+
+            if (allOk) $form[0].submit();
+        });
+
+        /* ══════════════════════════════════════════
+           3. FILTERING, PAGINATION & UI
+           ══════════════════════════════════════════ */
+        const allRows = Array.from(document.querySelectorAll('tr.user-row'));
         let filteredRows = [...allRows];
 
         function performFilter() {
@@ -445,8 +624,8 @@
             var statusVal = $('#statusFilter').val().toLowerCase();
 
             filteredRows = allRows.filter(row => {
-                var rowText = $(row).find('.search-data').text().toLowerCase();
-                var matchesSearch = rowText.indexOf(searchVal) > -1;
+                var text = $(row).find('.search-data').text().toLowerCase();
+                var matchesSearch = text.indexOf(searchVal) > -1;
                 var matchesRole = roleVal === "" || $(row).attr('data-role').toLowerCase() === roleVal;
                 var matchesStatus = statusVal === "" || $(row).attr('data-status') === statusVal;
                 return matchesSearch && matchesRole && matchesStatus;
@@ -458,7 +637,6 @@
         $('#roleFilter, #statusFilter').on('change', performFilter);
         $('#resetFilters').on('click', () => { $('#searchInput, #roleFilter, #statusFilter').val(''); performFilter(); });
 
-        // 2. PAGINATOR
         const paginator = createPaginator({
             tableBodySelector: 'tbody',
             paginationSelector: '#accounts-pagination',
@@ -467,39 +645,37 @@
         });
         paginator.render();
 
-        // 3. DELETE MODAL
-        $('#deleteUserModal').on('show.bs.modal', function (event) {
-            var btn = $(event.relatedTarget);
-            $('#deleteUserName').text(btn.data('name'));
-            $('#deleteUserForm').attr('action', "{{ url_for('admin.delete_account', user_id='0') }}".replace('0', btn.data('id')));
-        });
-
-        // 4. ROLE DROPDOWN
-        $('#addUserRole').on('change', function () {
-            if ($(this).val() === 'student') { $('#blockSelectionArea').slideDown(); }
-            else { $('#blockSelectionArea').slideUp(); }
-        });
-
-        // 5. DETAILS LOADER
+        // Details Loader
         $('.view-details-btn').on('click', function () {
-            var userId = $(this).data('id');
-            $('#detailUserName').text($(this).data('name'));
+            var userId = $(this).data('id'), name = $(this).data('name');
+            $('#detailUserName').text(name);
             $('#detailList').html('<li class="list-group-item text-center small text-muted py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</li>');
             $('#userDetailsModal').modal('show');
             $.getJSON('/admin/get_user_courses/' + userId, function (data) {
                 $('#modalLabel').text(data.label);
                 $('#detailList').empty();
-                if (data.items.length === 0) {
-                    $('#detailList').append('<li class="list-group-item small text-muted text-center py-4">No assignments found.</li>');
-                } else {
-                    data.items.forEach(item => {
-                        $('#detailList').append('<li class="list-group-item d-flex justify-content-between align-items-center small font-weight-bold">' +
-                            '<span><i class="fas fa-book-open mr-2 text-gray-400"></i>' + (item.class_code || item.course_code) + '</span>' +
-                            '<span class="text-primary">' + item.course_name + '</span></li>');
-                    });
-                }
+                if (!data.items.length) $('#detailList').append('<li class="list-group-item small text-muted text-center py-4">No assignments.</li>');
+                else data.items.forEach(i => {
+                    $('#detailList').append(`<li class="list-group-item d-flex justify-content-between align-items-center small font-weight-bold">
+                        <span><i class="fas fa-book-open mr-2 text-gray-400"></i>${i.class_code || i.course_code}</span>
+                        <span class="text-primary">${i.course_name}</span></li>`);
+                });
             });
         });
+
+        // Delete Modal
+        $('#deleteUserModal').on('show.bs.modal', function (e) {
+            var btn = $(e.relatedTarget);
+            $('#deleteUserName').text(btn.data('name'));
+            $('#deleteUserForm').attr('action', "{{ url_for('admin.delete_account', user_id='0') }}".replace('0', btn.data('id')));
+        });
+
+        $('#addUserRole').on('change', function () {
+            $(this).val() === 'student' ? $('#blockSelectionArea').slideDown() : $('#blockSelectionArea').slideUp();
+        });
+
+        // Hierarchy Fix
+        $('#addUserModal, #deleteUserModal, #userDetailsModal').appendTo('body');
     })(jQuery);
 </script>
 {% endblock %}
