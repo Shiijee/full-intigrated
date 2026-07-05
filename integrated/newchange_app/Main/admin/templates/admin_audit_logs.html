@@ -13,13 +13,13 @@
         <aside class="sidebar">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('admin.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
                 <div class="user-menu-container">
-                    <button class="burger-btn" onclick="toggleUserMenu()">
-                        <i class="fas fa-ellipsis-v"></i>
+                    <button class="burger-btn" onclick="toggleUserMenu()" aria-label="Open account options">
+                        <i class="fas fa-ellipsis-h"></i>
                     </button>
                     <div id="user-dropdown" class="user-dropdown">
                         <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
@@ -27,19 +27,20 @@
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
                         </div>
                         <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
-                            <i class="fas fa-key"></i> Change Password
+                            <i class="fas fa-lock"></i> Change Password
                         </a>
                         <a href="#" class="dropdown-item" onclick="openChangePinModal()">
-                            <i class="fas fa-shield-alt"></i> Security PIN
+                            <i class="fas fa-shield-halved"></i> Security PIN
                         </a>
                         <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                            <i class="fas fa-right-from-bracket"></i> Logout
                         </a>
                     </div>
                 </div>
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
                 <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
                 <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
                 <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
@@ -58,8 +59,8 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <button class="sidebar-toggle" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open navigation menu">
+                    <i class="fas fa-grip-lines"></i>
                 </button>
                 <div class="header-left">
                     <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Audit Logs</h2>
@@ -230,6 +231,6 @@
     </nav>
 
 
-<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
 </body>
 </html>

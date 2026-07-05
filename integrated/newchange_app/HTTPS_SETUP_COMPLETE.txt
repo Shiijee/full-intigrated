@@ -1,0 +1,50 @@
+HTTPS SETUP COMPLETE - Testing Instructions
+============================================
+
+✅ SSL Certificates Generated:
+   - cert.pem (valid for 365 days)
+   - key.pem (private key)
+
+✅ app.py Modified:
+   - SSL enabled with ssl_context=('cert.pem', 'key.pem')
+   - Server runs on https://0.0.0.0:5000
+
+✅ Mobile Scrolling Fixed:
+   - CSS updated with proper overflow properties
+   - Touch scrolling enabled
+
+HOW TO TEST:
+------------
+
+1. Start the Flask app:
+   python app.py
+
+2. Find your laptop's IP address:
+   ipconfig
+   (Look for "IPv4 Address" under your WiFi adapter)
+
+3. On your phone (connected to SAME WiFi):
+   Open browser and go to: https://192.168.1.5:5000
+   (Replace 192.168.1.5 with your actual IP)
+
+4. Accept Browser Warning:
+   - Chrome/Android: Click "Advanced" → "Proceed to 192.168.1.5 (unsafe)"
+   - Safari/iOS: Click "Show Details" → "visit this website"
+   - This warning is expected for self-signed certificates
+
+5. Test Camera & Location:
+   - Navigate to QR scan page (camera access)
+   - Check location permission prompts
+   - Both should now work with HTTPS!
+
+TROUBLESHOOTING:
+----------------
+- If certificate error persists, clear browser cache on phone
+- Make sure both devices are on the same WiFi network
+- Verify firewall allows port 5000
+- Check laptop IP hasn't changed (run ipconfig again)
+
+SECURITY NOTE:
+--------------
+Self-signed certificate shows warning but is SAFE for local testing.
+For production, use a certificate from a trusted authority (Let's Encrypt).

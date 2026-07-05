@@ -55,10 +55,10 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('teacher.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
                 <div class="user-menu-container">
                     <button class="burger-btn" onclick="toggleUserMenu()">
                         <i class="fas fa-ellipsis-v"></i>
@@ -79,6 +79,7 @@
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
                 <a href="{{ url_for('teacher.profile') }}" class="nav-item profile-nav-item" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
                 <a href="{{ url_for('teacher.dashboard') }}" class="nav-item" data-tooltip="Teacher Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Teacher Dashboard</span></a>
                 <a href="{{ url_for('teacher.manage_students') }}" class="nav-item" data-tooltip="Manage Students"><i class="fas fa-users"></i><span class="nav-item-text"> Manage Students</span></a>
@@ -135,6 +136,11 @@
                     <div>
                         <h3 style="margin: 0; font-size: 1.1rem; color: #f59e0b;">Unsaved Attendance</h3>
                         <p style="margin: 0; color: var(--text-muted); font-size: 0.9rem;">This attendance is temporary. You can still edit marks below. Click "Save Attendance" to finalize.</p>
+                        {% if pending_flagged_count > 0 %}
+                        <p style="margin: 0.5rem 0 0 0; color: #ef4444; font-size: 0.9rem; font-weight: 600;">
+                            ⚠️ {{ pending_flagged_count }} flagged student(s) must be accepted or declined before saving!
+                        </p>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -142,11 +148,21 @@
                 <div class="glass-panel" style="padding: 1.5rem;">
                     <div class="flex justify-between items-center mb-4">
                         <h3>Attendance Records ({{ records|length }} students)</h3>
-                        {% if not is_finalized %}
-                        <button class="btn btn-primary" onclick="saveAttendance()">
-                            <i class="fas fa-save"></i> Save Attendance
-                        </button>
-                        {% endif %}
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            {% if not is_finalized and pending_flagged_count > 0 %}
+                            <button class="btn" style="background: #10b981; border: none; color: white; padding: 0.5rem 1rem;" onclick="bulkAcceptFlagged()">
+                                <i class="fas fa-check-double"></i> Accept All Flagged
+                            </button>
+                            <button class="btn" style="background: #ef4444; border: none; color: white; padding: 0.5rem 1rem;" onclick="bulkDeclineFlagged()">
+                                <i class="fas fa-times-circle"></i> Decline All Flagged
+                            </button>
+                            {% endif %}
+                            {% if not is_finalized %}
+                            <button class="btn btn-primary" onclick="saveAttendance()">
+                                <i class="fas fa-save"></i> Save Attendance
+                            </button>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <div class="table-container">
@@ -156,6 +172,7 @@
                                     <th>Student ID</th>
                                     <th>Name</th>
                                     <th>Status</th>
+                                    <th>Flag Reason</th>
                                     {% if not is_finalized %}
                                     <th>Actions</th>
                                     {% endif %}
@@ -163,21 +180,77 @@
                             </thead>
                             <tbody>
                                 {% for r in records %}
-                                <tr id="row-{{ r.attendance_id }}">
-                                    <td><span class="badge badge-primary">{{ r.usid }}</span></td>
+                                <tr id="row-{{ r.attendance_id }}" {% if r.status == 'Flagged' and (not r.flag_resolution or r.flag_resolution == 'pending') %}style="background: rgba(245,158,11,0.1); border-left: 3px solid #f59e0b;"{% endif %}>
+                                    <td><span class="badge badge-primary">{{ r.user_id }}</span></td>
                                     <td><strong>{{ r.last_name }}</strong>, {{ r.first_name }} {{ r.middle_name }}</td>
                                     <td>
                                         <span class="status-badge status-{{ r.status|lower }}" id="status-{{ r.attendance_id }}">
-                                            {{ r.status }}
+                                            {% if r.status == 'Flagged' %}
+                                                <i class="fas fa-flag"></i> {{ r.status }}
+                                            {% else %}
+                                                {{ r.status }}
+                                            {% endif %}
                                         </span>
+                                        {% if r.flag_resolution == 'accepted' %}
+                                        <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; font-size: 0.7rem; margin-left: 0.25rem;">Accepted</span>
+                                        {% elif r.flag_resolution == 'declined' %}
+                                        <span class="badge" style="background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.7rem; margin-left: 0.25rem;">Declined</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if r.behavior_flags and r.behavior_flags|length > 0 %}
+                                        <div style="font-size: 0.8rem;">
+                                            {% if r.distance_meters %}
+                                            <div style="color: var(--text-muted); margin-bottom: 0.25rem;">
+                                                <i class="fas fa-map-marker-alt"></i> Distance: {{ r.distance_meters|round(1) }}m
+                                            </div>
+                                            {% endif %}
+                                            <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                                                {% for flag in r.behavior_flags %}
+                                                <span class="badge" style="background: rgba(245,158,11,0.15); color: #f59e0b; font-size: 0.7rem;">
+                                                    {% if flag == 'RAPID_SCANS' %}
+                                                        Rapid Scanning
+                                                    {% elif flag == 'LOCATION_MISMATCH' %}
+                                                        Location Mismatch
+                                                    {% elif flag == 'SUSPICIOUS_TIMING' %}
+                                                        Suspicious Timing
+                                                    {% elif flag == 'OUT_OF_RANGE' %}
+                                                        Out of Range
+                                                    {% elif flag == 'DUPLICATE_SCAN' %}
+                                                        Duplicate Scan
+                                                    {% else %}
+                                                        {{ flag }}
+                                                    {% endif %}
+                                                </span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% else %}
+                                        <span style="color: var(--text-muted); font-size: 0.8rem;">—</span>
+                                        {% endif %}
                                     </td>
                                     {% if not is_finalized %}
                                     <td>
+                                        {% if r.status == 'Flagged' and (not r.flag_resolution or r.flag_resolution == 'pending') %}
+                                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                            <button class="btn" style="background: #10b981; border: none; color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem;" 
+                                                onclick="acceptFlagged({{ r.attendance_id }})">
+                                                <i class="fas fa-check"></i> Accept
+                                            </button>
+                                            <button class="btn" style="background: #ef4444; border: none; color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem;" 
+                                                onclick="declineFlagged({{ r.attendance_id }})">
+                                                <i class="fas fa-times"></i> Decline
+                                            </button>
+                                        </div>
+                                        {% elif r.status != 'Flagged' %}
                                         <select class="form-control" style="width: auto; display: inline-block; font-size: 0.85rem;" onchange="updateStatus({{ r.attendance_id }}, this.value)">
                                             <option value="Present" {% if r.status == 'Present' %}selected{% endif %}>Present</option>
                                             <option value="Absent" {% if r.status == 'Absent' %}selected{% endif %}>Absent</option>
                                             <option value="Late" {% if r.status == 'Late' %}selected{% endif %}>Late</option>
                                         </select>
+                                        {% else %}
+                                        <span style="color: var(--text-muted); font-size: 0.8rem;">Resolved</span>
+                                        {% endif %}
                                     </td>
                                     {% endif %}
                                 </tr>
@@ -211,6 +284,170 @@
     <script>
         const sessionId = '{{ ses.session_id }}';
         const CSRF = () => document.querySelector('meta[name="csrf-token"]').content;
+
+        function acceptFlagged(attendanceId) {
+            Swal.fire({
+                title: 'Accept Flagged Attendance?',
+                text: 'This will mark the student as Present.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-check"></i> Yes, Accept',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#10b981',
+            }).then(result => {
+                if (!result.isConfirmed) return;
+
+                fetch('{{ url_for("teacher.accept_flagged_student") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': CSRF()
+                    },
+                    body: JSON.stringify({ attendance_id: attendanceId })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Accepted!',
+                            text: data.message,
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire('Error', data.message || 'Could not accept', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    Swal.fire('Error', 'Network error', 'error');
+                });
+            });
+        }
+
+        function declineFlagged(attendanceId) {
+            Swal.fire({
+                title: 'Decline Flagged Attendance?',
+                text: 'This will mark the student as Absent.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-times"></i> Yes, Decline',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#ef4444',
+            }).then(result => {
+                if (!result.isConfirmed) return;
+
+                fetch('{{ url_for("teacher.decline_flagged_student") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': CSRF()
+                    },
+                    body: JSON.stringify({ attendance_id: attendanceId })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Declined!',
+                            text: data.message,
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire('Error', data.message || 'Could not decline', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    Swal.fire('Error', 'Network error', 'error');
+                });
+            });
+        }
+
+        function bulkAcceptFlagged() {
+            Swal.fire({
+                title: 'Accept All Flagged Students?',
+                text: 'This will mark all flagged students as Present.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-check-double"></i> Accept All',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#10b981',
+            }).then(result => {
+                if (!result.isConfirmed) return;
+
+                fetch('{{ url_for("teacher.bulk_accept_flagged") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': CSRF()
+                    },
+                    body: JSON.stringify({ session_id: sessionId })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Accepted!',
+                            text: data.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire('Error', data.message || 'Could not accept all', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    Swal.fire('Error', 'Network error', 'error');
+                });
+            });
+        }
+
+        function bulkDeclineFlagged() {
+            Swal.fire({
+                title: 'Decline All Flagged Students?',
+                text: 'This will mark all flagged students as Absent.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-times-circle"></i> Decline All',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#ef4444',
+            }).then(result => {
+                if (!result.isConfirmed) return;
+
+                fetch('{{ url_for("teacher.bulk_decline_flagged") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': CSRF()
+                    },
+                    body: JSON.stringify({ session_id: sessionId })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Declined!',
+                            text: data.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire('Error', data.message || 'Could not decline all', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    Swal.fire('Error', 'Network error', 'error');
+                });
+            });
+        }
 
         function updateStatus(attendanceId, newStatus) {
             fetch('{{ url_for("teacher.update_temp_status") }}', {

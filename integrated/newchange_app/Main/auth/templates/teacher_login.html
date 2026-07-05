@@ -659,11 +659,11 @@
                 <span id="js-alert-msg">Error message</span>
             </div>
 
-            <form id="loginForm" method="POST" action="{{ url_for('auth.teacher_login') }}" novalidate>
+            <form id="loginForm" method="POST" action="{{ url_for('teacher.login') }}" novalidate>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
                 <div class="input-group">
-                    <input type="text" id="email" name="email" class="login-input"
+                    <input type="text" id="email" name="user_id" class="login-input"
                         placeholder="Teacher ID (e.g. T-2024-001)" required autocomplete="off"
                         value="{{ prefill_id or '' }}">
                     <i class="fas fa-id-badge input-icon"></i>

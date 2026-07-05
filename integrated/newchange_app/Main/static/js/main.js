@@ -2,8 +2,52 @@ function toggleUserMenu() {
     const dropdown = document.getElementById('user-dropdown');
     if (dropdown) {
         dropdown.classList.toggle('active');
+        
+        // On mobile, prevent body scroll when dropdown is open
+        if (window.innerWidth <= 768) {
+            if (dropdown.classList.contains('active')) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = '';
+            }
+        }
     }
 }
+
+// Close dropdown when clicking outside on mobile
+document.addEventListener('click', function(event) {
+    const dropdown = document.getElementById('user-dropdown');
+    const burgerBtn = document.querySelector('.burger-btn');
+    
+    if (dropdown && dropdown.classList.contains('active')) {
+        if (!dropdown.contains(event.target) && !burgerBtn.contains(event.target)) {
+            dropdown.classList.remove('active');
+            if (window.innerWidth <= 768) {
+                document.body.style.overflow = '';
+            }
+        }
+    }
+});
+
+// Handle escape key to close dropdown on mobile
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const dropdown = document.getElementById('user-dropdown');
+        if (dropdown && dropdown.classList.contains('active')) {
+            dropdown.classList.remove('active');
+            if (window.innerWidth <= 768) {
+                document.body.style.overflow = '';
+            }
+        }
+    }
+});
+
+// Reset body overflow on window resize
+window.addEventListener('resize', function() {
+    if (window.innerWidth > 768) {
+        document.body.style.overflow = '';
+    }
+});
 
 function toggleAccordion(button) {
     const accordion = button.closest('.nav-accordion');
@@ -12,15 +56,112 @@ function toggleAccordion(button) {
     }
 }
 
-function toggleSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.querySelector('.sidebar-overlay');
-    if (sidebar) {
-        sidebar.classList.toggle('open');
-        if (overlay) {
-            overlay.classList.toggle('active');
-        }
+function ensureMobileSidebar() {
+    if (document.querySelector('.mobile-sidebar-drawer')) {
+        return;
     }
+
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) {
+        return;
+    }
+
+    const nav = sidebar.querySelector('.sidebar-nav');
+    const logoLink = sidebar.querySelector('.sidebar-logo .logo-link');
+    const drawer = document.createElement('div');
+    drawer.className = 'mobile-sidebar-drawer';
+
+    const brandMarkup = logoLink ? logoLink.outerHTML : '<span>Menu</span>';
+    drawer.innerHTML = `
+        <div class="mobile-sidebar-header">
+            <div class="mobile-sidebar-brand">${brandMarkup}</div>
+            <button type="button" class="mobile-sidebar-close" aria-label="Close menu">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        ${nav ? nav.outerHTML : ''}
+    `;
+
+    document.body.appendChild(drawer);
+
+    const closeButton = drawer.querySelector('.mobile-sidebar-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', closeSidebar);
+    }
+
+    // Ensure there is a logout button at the bottom of the drawer's navigation
+    const drawerNav = drawer.querySelector('.sidebar-nav');
+    if (drawerNav) {
+        // Remove any existing duplicate mobile logout links first to prevent duplication
+        const existingLogouts = drawerNav.querySelectorAll('.sidebar-mobile-logout');
+        existingLogouts.forEach(el => el.remove());
+
+        // Create a new logout link at the bottom of the mobile sidebar navigation
+        const logoutLink = document.createElement('a');
+        logoutLink.href = '/logout';
+        logoutLink.className = 'nav-item sidebar-mobile-logout';
+        logoutLink.innerHTML = '<i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span>';
+        
+        // Add click listener to trigger the logout modal
+        logoutLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (typeof window.showLogoutModal === 'function') {
+                window.showLogoutModal(e);
+            } else {
+                window.location.href = '/logout';
+            }
+        });
+
+        drawerNav.appendChild(logoutLink);
+    }
+
+    drawer.querySelectorAll('.nav-item:not(.sidebar-mobile-logout)').forEach(function (link) {
+        link.addEventListener('click', function () {
+            if (window.innerWidth <= 1024) {
+                closeSidebar();
+            }
+        });
+    });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'mobile-sidebar-overlay';
+    overlay.addEventListener('click', closeSidebar);
+    document.body.appendChild(overlay);
+}
+
+function closeSidebar() {
+    const drawer = document.querySelector('.mobile-sidebar-drawer');
+    const overlay = document.querySelector('.mobile-sidebar-overlay');
+
+    if (drawer) {
+        drawer.classList.remove('open');
+    }
+
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
+
+    document.body.classList.remove('sidebar-open');
+    document.body.style.overflow = '';
+}
+
+function toggleSidebar() {
+    ensureMobileSidebar();
+
+    const drawer = document.querySelector('.mobile-sidebar-drawer');
+    const overlay = document.querySelector('.mobile-sidebar-overlay');
+
+    if (!drawer) {
+        return;
+    }
+
+    const isOpen = drawer.classList.toggle('open');
+    if (overlay) {
+        overlay.classList.toggle('active', isOpen);
+    }
+
+    document.body.classList.toggle('sidebar-open', isOpen && window.innerWidth <= 1024);
+    document.body.style.overflow = isOpen && window.innerWidth <= 1024 ? 'hidden' : '';
 }
 
 function toggleSidebarMinimize() {
@@ -32,13 +173,36 @@ function toggleSidebarMinimize() {
     }
 }
 
+function bindSidebarControls() {
+    ensureMobileSidebar();
+
+    document.querySelectorAll('.sidebar-toggle').forEach(button => {
+        if (button.dataset.sidebarBound === 'true') return;
+
+        button.dataset.sidebarBound = 'true';
+        button.onclick = null;
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSidebar();
+        });
+    });
+
+    const overlay = document.querySelector('.mobile-sidebar-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', function() {
+            closeSidebar();
+        });
+    }
+}
+
 // Close dropdown or sidebar when clicking outside
 window.addEventListener('click', function(e) {
     const dropdown = document.getElementById('user-dropdown');
     const burger = document.querySelector('.burger-btn');
     const sidebar = document.querySelector('.sidebar');
-    const sidebarToggle = document.querySelector('.sidebar-toggle');
     const overlay = document.querySelector('.sidebar-overlay');
+    const toggleButton = document.querySelector('.sidebar-toggle');
 
     // Handle User Dropdown
     if (dropdown && dropdown.classList.contains('active')) {
@@ -49,13 +213,25 @@ window.addEventListener('click', function(e) {
 
     // Handle Sidebar Overlay click
     if (overlay && overlay.contains(e.target)) {
-        if (sidebar) sidebar.classList.remove('open');
-        overlay.classList.remove('active');
+        closeSidebar();
+    }
+
+    if (toggleButton && toggleButton.contains(e.target)) {
+        e.stopPropagation();
+    }
+});
+
+window.addEventListener('resize', function() {
+    if (window.innerWidth > 1024) {
+        closeSidebar();
+    } else if (!document.querySelector('.mobile-sidebar-drawer')?.classList.contains('open')) {
+        document.body.classList.remove('sidebar-open');
+        document.body.style.overflow = '';
     }
 });
 
 // Global Loading & Transition Logic
-document.addEventListener('DOMContentLoaded', function() {
+function initializeGlobalUi() {
     // Inject UI elements (Guard against multiple injections if script is loaded twice)
     if (!document.getElementById('loading-overlay')) {
         const extraUI = `
@@ -71,21 +247,24 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.insertAdjacentHTML('beforeend', extraUI);
     }
 
+    bindSidebarControls();
+
     const loader = document.getElementById('loading-overlay');
     let loaderTimeout = null;
 
     function showLoader() {
-        loader.style.display = 'flex';
-        // Safety fallback: auto-hide after 8 seconds in case navigation stalls
+        if (loader) {
+            loader.style.display = 'flex';
+        }
         if (loaderTimeout) clearTimeout(loaderTimeout);
         loaderTimeout = setTimeout(() => {
-            loader.style.display = 'none';
+            if (loader) loader.style.display = 'none';
             loaderTimeout = null;
         }, 8000);
     }
 
     function hideLoader() {
-        loader.style.display = 'none';
+        if (loader) loader.style.display = 'none';
         if (loaderTimeout) { clearTimeout(loaderTimeout); loaderTimeout = null; }
     }
 
@@ -93,9 +272,6 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('beforeunload', () => {
         showLoader();
     });
-
-    // Do NOT attach loader to form submits here — individual pages handle their own forms.
-    // This prevents the overlay from blocking buttons on multi-form pages.
 
     // Add click feedback to all buttons and nav items (subtle scale only)
     const interactiveElements = document.querySelectorAll('.btn, .nav-item, .class-card, .subject-card');
@@ -119,7 +295,17 @@ document.addEventListener('DOMContentLoaded', function() {
             sidebar.classList.add('minimized');
         }
     }
+}
 
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeGlobalUi);
+} else {
+    initializeGlobalUi();
+}
+
+window.addEventListener('DOMContentLoaded', bindSidebarControls);
+
+document.addEventListener('DOMContentLoaded', function() {
     // --- DELETION PIN SECURITY UI ---
     const pinModalsHTML = `
         <div id="pinVerifyModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(4px);">

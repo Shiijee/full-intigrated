@@ -16,10 +16,10 @@
     <!-- ===================== SIDEBAR ===================== -->
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('teacher.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
                 <div class="user-menu-container">
                 <button class="burger-btn" onclick="toggleUserMenu()">
                     <i class="fas fa-ellipsis-v"></i>
@@ -40,6 +40,7 @@
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
                 <a href="{{ url_for('teacher.profile') }}" class="nav-item profile-nav-item" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
                 <a href="{{ url_for('teacher.dashboard') }}" class="nav-item" data-tooltip="Teacher Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Teacher Dashboard</span></a>
                 <a href="{{ url_for('teacher.manage_students') }}" class="nav-item active" data-tooltip="Manage Students"><i class="fas fa-users"></i><span class="nav-item-text"> Manage Students</span></a>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Manage Subjects | Admin</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin.static', filename='Astyle.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="theme-admin">
@@ -13,13 +14,13 @@
                 <aside class="sidebar">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('admin.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
                 <div class="user-menu-container">
-                    <button class="burger-btn" onclick="toggleUserMenu()">
-                        <i class="fas fa-ellipsis-v"></i>
+                    <button class="burger-btn" onclick="toggleUserMenu()" aria-label="Open account options">
+                        <i class="fas fa-ellipsis-h"></i>
                     </button>
                     <div id="user-dropdown" class="user-dropdown">
                         <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
@@ -27,19 +28,20 @@
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
                         </div>
                         <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
-                            <i class="fas fa-key"></i> Change Password
+                            <i class="fas fa-lock"></i> Change Password
                         </a>
                         <a href="#" class="dropdown-item" onclick="openChangePinModal()">
-                            <i class="fas fa-shield-alt"></i> Security PIN
+                            <i class="fas fa-shield-halved"></i> Security PIN
                         </a>
                         <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                            <i class="fas fa-right-from-bracket"></i> Logout
                         </a>
                     </div>
                 </div>
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
                 <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
                 <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
                 <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
@@ -58,8 +60,8 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <button class="sidebar-toggle" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open navigation menu">
+                    <i class="fas fa-grip-lines"></i>
                 </button>
                 <div class="header-left">
                     <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Manage Subjects</h2>
@@ -82,16 +84,32 @@
 
                 <!-- Search Bar -->
                 <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        {% if view == 'archived' %}
+                            <h3 style="font-size: 1rem; margin: 0;">Archived Subjects</h3>
+                            <a href="{{ url_for('admin.manage_subjects') }}" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                                <i class="fas fa-arrow-left"></i> Back to Active
+                            </a>
+                        {% else %}
+                            <h3 style="font-size: 1rem; margin: 0;">Active Subjects</h3>
+                            <a href="{{ url_for('admin.manage_subjects', view='archived') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                                <i class="fas fa-archive"></i> View Archived
+                            </a>
+                        {% endif %}
+                    </div>
                     <form method="GET" action="{{ url_for('admin.manage_subjects') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                        {% if view == 'archived' %}
+                            <input type="hidden" name="view" value="archived">
+                        {% endif %}
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Search Subjects</label>
+                            <label class="form-label">Search {{ 'Archived' if view == 'archived' else 'Active' }} Subjects</label>
                             <input type="text" name="search" class="form-control" placeholder="Code or Name..." value="{{ search }}">
                         </div>
                         <div class="flex gap-2" style="margin-bottom: 0;">
                             <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <a href="{{ url_for('admin.manage_subjects', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                            <a href="{{ url_for('admin.manage_subjects', clear=1, view=view if view == 'archived' else '') }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
                                 <i class="fas fa-rotate"></i>
                             </a>
                         </div>
@@ -125,23 +143,28 @@
                                 <td data-label="Code" style="font-weight: 600;"><span class="badge badge-primary">{{ subject.subject_code }}</span></td>
                                 <td data-label="Subject Name">{{ subject.subject_name|truncate(50, true) }}</td>
                                 <td class="action-cell" data-label="Actions" style="text-align: right;">
+                                    {% if view == 'archived' %}
+                                        <button class="btn btn-sm btn-success" onclick="unarchiveSubject('{{ subject.subject_id }}', '{{ subject.subject_code }}')">
+                                            <i class="fas fa-undo"></i> Restore
+                                        </button>
+                                    {% else %}
                                         <button class="btn btn-sm btn-secondary" 
                                                  style="margin-right: 0.25rem;"
                                                  onclick="openEditModal(`{{ subject.subject_id }}`, `{{ subject.subject_code }}`, `{{ subject.subject_name }}`)">
                                              <i class="fas fa-edit"></i>
                                          </button>
-                                         <a href="{{ url_for('admin.archive_subject', subject_id=subject.subject_id) }}" 
-                                            class="btn btn-sm btn-warning" 
-                                            style="margin-right: 0.25rem; text-decoration: none;"
-                                            onclick="return confirm('Archive this subject?')">
+                                         <button class="btn btn-sm btn-warning" 
+                                                style="margin-right: 0.25rem;"
+                                                onclick="archiveSubject('{{ subject.subject_id }}', '{{ subject.subject_code }}')">
                                              <i class="fas fa-archive"></i>
-                                         </a>
+                                         </button>
                                          <a href="#" 
                                             class="btn btn-sm btn-danger" 
                                             style="text-decoration: none;"
                                             onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_subject', subject_id=subject.subject_id) }}`)">
                                              <i class="fas fa-trash-alt"></i>
                                          </a>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% else %}
@@ -273,6 +296,54 @@
             return true;
         }
 
+        function archiveSubject(subjectId, subjectCode) {
+            if (confirm(`Archive subject ${subjectCode}?`)) {
+                fetch(`/admin/archive_subject/${subjectId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error archiving subject: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error archiving subject');
+                });
+            }
+        }
+
+        function unarchiveSubject(subjectId, subjectCode) {
+            if (confirm(`Restore subject ${subjectCode}?`)) {
+                fetch(`/admin/unarchive_subject/${subjectId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error restoring subject: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error restoring subject');
+                });
+            }
+        }
+
     </script>
 
 
@@ -296,6 +367,7 @@
     </nav>
 
 
-<script src="{{ url_for('static', filename='js/main.js') }}?v=1.1"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
+<script src="{{ url_for('admin.static', filename='Astyle.js') }}"></script>
 </body>
 </html>

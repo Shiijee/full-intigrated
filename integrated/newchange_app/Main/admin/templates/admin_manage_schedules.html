@@ -13,13 +13,13 @@
         <aside class="sidebar">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('admin.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
                 <div class="user-menu-container">
-                    <button class="burger-btn" onclick="toggleUserMenu()">
-                        <i class="fas fa-ellipsis-v"></i>
+                    <button class="burger-btn" onclick="toggleUserMenu()" aria-label="Open account options">
+                        <i class="fas fa-ellipsis-h"></i>
                     </button>
                     <div id="user-dropdown" class="user-dropdown">
                         <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
@@ -27,19 +27,20 @@
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
                         </div>
                         <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
-                            <i class="fas fa-key"></i> Change Password
+                            <i class="fas fa-lock"></i> Change Password
                         </a>
                         <a href="#" class="dropdown-item" onclick="openChangePinModal()">
-                            <i class="fas fa-shield-alt"></i> Security PIN
+                            <i class="fas fa-shield-halved"></i> Security PIN
                         </a>
                         <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                            <i class="fas fa-right-from-bracket"></i> Logout
                         </a>
                     </div>
                 </div>
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
                 <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
                 <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
                 <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
@@ -58,8 +59,8 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <button class="sidebar-toggle" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open navigation menu">
+                    <i class="fas fa-grip-lines"></i>
                 </button>
                 <div class="header-left">
                     <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Manage Schedules</h2>
@@ -82,6 +83,7 @@
                 {% endif %}
             {% endwith %}
 
+            {% if view != 'archived' %}
             <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
                 <h3 class="mb-4" style="font-size: 1rem;">Add Schedule</h3>
                 <form method="POST" action="{{ url_for('admin.manage_schedules') }}">
@@ -127,27 +129,45 @@
                     </div>
                 </form>
             </div>
+            {% endif %}
 
             <!-- Search Bar -->
             <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    {% if view == 'archived' %}
+                        <h3 style="font-size: 1rem; margin: 0;">Archived Schedules</h3>
+                        <a href="{{ url_for('admin.manage_schedules') }}" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                            <i class="fas fa-arrow-left"></i> Back to Active
+                        </a>
+                    {% else %}
+                        <h3 style="font-size: 1rem; margin: 0;">Schedule Search</h3>
+                        <a href="{{ url_for('admin.manage_schedules', view='archived') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                            <i class="fas fa-archive"></i> View Archived
+                        </a>
+                    {% endif %}
+                </div>
                 <form method="GET" action="{{ url_for('admin.manage_schedules') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                    {% if view == 'archived' %}
+                        <input type="hidden" name="view" value="archived">
+                    {% endif %}
                     <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label">Search Schedules</label>
+                        <label class="form-label">Search {{ 'Archived' if view == 'archived' else 'Active' }} Schedules</label>
                         <input type="text" name="search" class="form-control" placeholder="Subject, Teacher, Room or Section..." value="{{ search }}">
                     </div>
                     <div class="flex gap-2" style="margin-bottom: 0;">
                         <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;"><i class="fas fa-search"></i></button>
-                        <a href="{{ url_for('admin.manage_schedules', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"><i class="fas fa-rotate"></i></a>
+                        <a href="{{ url_for('admin.manage_schedules', clear=1, view=view if view == 'archived' else '') }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"><i class="fas fa-rotate"></i></a>
                     </div>
                 </form>
             </div>
 
             <div class="glass-panel" style="padding: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1rem; margin: 0;">Active Schedules</h3>
-                    <a href="{{ url_for('admin.manage_schedules', view='archived') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-                        <i class="fas fa-archive"></i> Archived Schedules
-                    </a>
+                    {% if view == 'archived' %}
+                        <h3 style="font-size: 1rem; margin: 0;">Archived Schedules</h3>
+                    {% else %}
+                        <h3 style="font-size: 1rem; margin: 0;">Active Schedules</h3>
+                    {% endif %}
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -178,14 +198,26 @@
                                     <div style="font-size: 0.8rem; color: var(--primary);">👨‍🏫 {{ s.first_name }} {{ s.last_name }}</div>
                                 </td>
                                 <td class="action-cell" data-label="Actions">
-                                    <button type="button" class="btn btn-warning btn-sm" style="margin-right: 0.5rem;" onclick="archiveSchedule('{{ s.schedule_id }}', '{{ s.subject_code }}')">
-                                        <i class="fas fa-archive"></i> <span class="btn-text">Archive</span>
-                                    </button>
+                                    {% if view == 'archived' %}
+                                        <button type="button" class="btn btn-success btn-sm" onclick="unarchiveSchedule('{{ s.schedule_id }}', '{{ s.subject_code }}')">
+                                            <i class="fas fa-undo"></i> <span class="btn-text">Restore</span>
+                                        </button>
+                                    {% else %}
+                                        <button type="button" class="btn btn-warning btn-sm" style="margin-right: 0.5rem;" onclick="archiveSchedule('{{ s.schedule_id }}', '{{ s.subject_code }}')">
+                                            <i class="fas fa-archive"></i> <span class="btn-text">Archive</span>
+                                        </button>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">No active schedules defined yet.</td>
+                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                    {% if view == 'archived' %}
+                                        No archived schedules found.
+                                    {% else %}
+                                        No active schedules defined yet.
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -217,11 +249,10 @@
     </nav>
 
 
-<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
 <script>
     function archiveSchedule(scheduleId, subjectCode) {
         if (confirm(`Archive this schedule for ${subjectCode}?`)) {
-            // Send archive request to backend
             fetch(`/admin/archive_schedule/${scheduleId}`, {
                 method: 'POST',
                 headers: {
@@ -232,7 +263,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Reload or update the table
                     location.reload();
                 } else {
                     alert('Error archiving schedule: ' + data.message);
@@ -244,6 +274,79 @@
             });
         }
     }
+
+    function unarchiveSchedule(scheduleId, subjectCode) {
+        if (confirm(`Restore this schedule for ${subjectCode}?`)) {
+            fetch(`/admin/unarchive_schedule/${scheduleId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error restoring schedule: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error restoring schedule');
+            });
+        }
+    }
+
+    function archiveAssignment(assignmentId, subjectCode) {
+        if (confirm(`Archive this assignment for ${subjectCode}?`)) {
+            fetch(`/admin/archive_assignment/${assignmentId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error archiving assignment: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error archiving assignment');
+            });
+        }
+    }
+
+    function unarchiveAssignment(assignmentId, subjectCode) {
+        if (confirm(`Restore this assignment for ${subjectCode}?`)) {
+            fetch(`/admin/unarchive_assignment/${assignmentId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error restoring assignment: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error restoring assignment');
+            });
+        }
+    }
+</script>
 </script>
 </body>
 </html>

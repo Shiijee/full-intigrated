@@ -650,7 +650,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
                 <div class="input-group">
-                    <input type="text" id="email" name="email" class="login-input"
+                    <input type="text" id="email" name="user_id" class="login-input"
                         placeholder="Student ID (e.g. S-2024-001)" required autocomplete="username"
                         value="{{ prefill_id or '' }}">
                     <i class="fas fa-id-card input-icon"></i>
@@ -677,7 +677,7 @@
                     <span class="btn-text">Login</span>
                 </button>
 
-                <a href="{{ url_for('auth.teacher_login') }}" class="btn-secondary-link">
+                <a href="{{ url_for('teacher.login') }}" class="btn-secondary-link">
                     <i class="fas fa-chalkboard-teacher"></i> Teacher Login
                 </a>
             </form>

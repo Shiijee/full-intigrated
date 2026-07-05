@@ -1,8 +1,7 @@
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 import json
-from Main.db import get_db_connection, log_system_action
-from psycopg2.extras import RealDictCursor
+from Main.db import get_db_connection, get_cursor, log_system_action
 import re
 from datetime import datetime, timedelta
 
@@ -66,22 +65,18 @@ def validate_user_data(first_name, middle_name, last_name, email):
     return True, "", (first_name, middle_name, last_name, email)
 
 
-admin = Blueprint('admin', __name__, template_folder='templates')
+admin = Blueprint('admin', __name__, template_folder='templates', static_folder='static', static_url_path='/admin/static')
 
 @admin.before_request
 def require_login():
-    from Main.sso import require_sso
-    result = require_sso()
-    if hasattr(result, 'status_code'):
-        return result
-    if result.get('role') != 'admin':
-        from flask import abort
-        abort(403)
+    if 'user_id' not in session or session.get('role') != 'admin':
+        flash('Please login as admin first.', 'error')
+        return redirect(url_for('auth.admin_login'))
 
 @admin.route('/dashboard')
 def dashboard():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     cursor.execute("SELECT COUNT(*) as count FROM Students")
     student_count = cursor.fetchone()['count']
@@ -92,17 +87,26 @@ def dashboard():
     cursor.execute("SELECT COUNT(*) as count FROM Subjects")
     subject_count = cursor.fetchone()['count']
     
-    # Fetch submitted reports from teachers (exclude archived)
+    # Pagination for submitted reports
+    report_page = request.args.get('report_page', 1, type=int)
+    if report_page < 1: report_page = 1
+    reports_per_page = 5
+    reports_offset = (report_page - 1) * reports_per_page
+
+    cursor.execute("SELECT COUNT(*) as total FROM Submitted_Reports WHERE is_archived != 1")
+    total_reports = cursor.fetchone()['total']
+    total_report_pages = (total_reports + reports_per_page - 1) // reports_per_page
+
     cursor.execute("""
         SELECT sr.report_id, sr.submission_date, sr.section, t.first_name, t.middle_name as teacher_middle, t.last_name as teacher_last, 
                sub.subject_code, sub.subject_name
         FROM Submitted_Reports sr
-        JOIN Teachers t ON sr.utid = t.utid
+        JOIN Teachers t ON sr.teacher_id = t.user_id
         JOIN Subjects sub ON sr.subject_id = sub.subject_id
-        WHERE sr.is_archived IS NOT TRUE
+        WHERE sr.is_archived != 1
         ORDER BY sr.submission_date DESC
-        LIMIT 10
-    """)
+        LIMIT %s OFFSET %s
+    """, (reports_per_page, reports_offset))
     submitted_reports = cursor.fetchall()
     
     # New metrics for a better dashboard
@@ -127,6 +131,9 @@ def dashboard():
                            teacher_count=teacher_count, 
                            subject_count=subject_count,
                            submitted_reports=submitted_reports,
+                           total_reports=total_reports,
+                           total_report_pages=total_report_pages,
+                           report_page=report_page,
                            pending_drops=pending_drops,
                            total_classes=total_classes,
                            recent_logs=recent_logs)
@@ -135,18 +142,16 @@ def dashboard():
 @admin.route('/view_report/<int:report_id>')
 def view_report(report_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Ensure is_archived column exists
-    cursor.execute("""
-        ALTER TABLE Submitted_Reports ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE
-    """)
+    # MySQL: is_archived column already defined in schema
     conn.commit()
     
     cursor.execute("""
         SELECT sr.*, t.first_name, t.middle_name, t.last_name, s.subject_code, s.subject_name
         FROM Submitted_Reports sr
-        JOIN Teachers t ON sr.utid = t.utid
+        JOIN Teachers t ON sr.teacher_id = t.user_id
         JOIN Subjects s ON sr.subject_id = s.subject_id
         WHERE sr.report_id = %s
     """, (report_id,))
@@ -181,8 +186,8 @@ def view_report(report_id):
 @admin.route('/archive_report/<int:report_id>')
 def archive_report(report_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("ALTER TABLE Submitted_Reports ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE")
+    cursor = get_cursor(conn)
+    # MySQL: is_archived column already defined in schema
     cursor.execute("UPDATE Submitted_Reports SET is_archived = TRUE WHERE report_id = %s", (report_id,))
     log_system_action(cursor, 'Submitted_Reports', report_id, 'Update', session['user_id'], session['role'], f"Report archived (ID: {report_id})")
     conn.commit()
@@ -194,7 +199,7 @@ def archive_report(report_id):
 @admin.route('/unarchive_report/<int:report_id>')
 def unarchive_report(report_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     cursor.execute("UPDATE Submitted_Reports SET is_archived = FALSE WHERE report_id = %s", (report_id,))
     log_system_action(cursor, 'Submitted_Reports', report_id, 'Update', session['user_id'], session['role'], f"Report unarchived (ID: {report_id})")
     conn.commit()
@@ -206,14 +211,14 @@ def unarchive_report(report_id):
 @admin.route('/archived_reports')
 def archived_reports():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("ALTER TABLE Submitted_Reports ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE")
+    cursor = get_cursor(conn)
+    # MySQL: is_archived column already defined in schema
     cursor.execute("""
         SELECT sr.report_id, sr.submission_date, sr.section,
                t.first_name, t.last_name,
                s.subject_code, s.subject_name
         FROM Submitted_Reports sr
-        JOIN Teachers t ON sr.utid = t.utid
+        JOIN Teachers t ON sr.teacher_id = t.user_id
         JOIN Subjects s ON sr.subject_id = s.subject_id
         WHERE sr.is_archived = TRUE
         ORDER BY sr.submission_date DESC
@@ -229,10 +234,10 @@ def unlock_user(user_type, user_id):
     Unlocks a student or teacher account by resetting failed attempts and clearing lockout time.
     """
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     table = 'Students' if user_type == 'student' else 'Teachers' if user_type == 'teacher' else 'Admins'
-    id_col = 'usid' if user_type == 'student' else 'utid' if user_type == 'teacher' else 'admin_id'
+    id_col = 'user_id' if user_type == 'student' else 'user_id' if user_type == 'teacher' else 'admin_id'
     
     cursor.execute(f"UPDATE {table} SET failed_attempts = 0, lockout_time = NULL WHERE {id_col} = %s", (user_id,))
     
@@ -253,26 +258,27 @@ def manage_students():
     from datetime import datetime
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     if request.method == 'POST':
-        # Auto-generation logic for Student ID (S-YYYY-XXX)
+        # Auto-generation logic for Student ID (S26-XXXX)
         current_year = datetime.now().year
-        prefix = f"S-{current_year}-"
+        short_year = str(current_year)[2:]
+        prefix = f"S{short_year}-"
         
-        cursor.execute("SELECT usid FROM Students WHERE usid LIKE %s ORDER BY usid DESC LIMIT 1", (prefix + '%',))
+        cursor.execute("SELECT user_id FROM Students WHERE user_id LIKE %s ORDER BY user_id DESC LIMIT 1", (prefix + '%',))
         last_student = cursor.fetchone()
         
         if last_student:
-            last_id_num = int(last_student['usid'].split('-')[2])
+            last_id_num = int(last_student['user_id'].split('-')[1])
             new_id_num = last_id_num + 1
         else:
             new_id_num = 1
             
-        new_usid = f"{prefix}{new_id_num:03d}"
+        new_user_id = f"{prefix}{new_id_num:04d}"
         
         # Check if Student ID already exists
-        cursor.execute("SELECT usid FROM Students WHERE usid = %s", (new_usid,))
+        cursor.execute("SELECT user_id FROM Students WHERE user_id = %s", (new_user_id,))
         if cursor.fetchone():
             flash('Student ID already exists', 'error')
             return redirect(url_for('admin.manage_students'))
@@ -298,34 +304,20 @@ def manage_students():
             flash('Email already exists. Please use a different email.', 'error')
             return redirect(url_for('admin.manage_students'))
         
-        # Default password is the ID without the 'S-' prefix (e.g. 2026-001)
-        default_password = f"{current_year}-{new_id_num:03d}"
+        # Default password matches the user_id (e.g. S26-0001)
+        default_password = new_user_id
         password_hash = generate_password_hash(default_password)
-
-        # ── Integration: notify TestPoint about new student (optional cross-check) ──
-        import requests as _req, os as _os
-        TESTPOINT_URL = _os.getenv('TESTPOINT_URL', 'http://127.0.0.1:5000')
-        testpoint_linked = False
-        try:
-            tp_resp = _req.get(f"{TESTPOINT_URL}/api/students/{new_usid}", timeout=3)
-            if tp_resp.status_code == 200:
-                testpoint_linked = True  # Student already in TestPoint — linked!
-        except Exception:
-            pass  # TestPoint offline — continue normally
-
+        
         cursor.execute("""
-            INSERT INTO Students (usid, first_name, middle_name, last_name, email, course, level, section, password_hash) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (new_usid, first_name, middle_name, last_name, email, course, level, section, password_hash))
+            INSERT INTO Students (user_id, user_role, first_name, middle_name, last_name, email, course, level, section, password_hash) 
+            VALUES (%s, 'student', %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (new_user_id, first_name, middle_name, last_name, email, course, level, section, password_hash))
         
         # Audit Logging
-        log_system_action(cursor, 'Students', new_usid, 'Create', session['user_id'], session['role'], f"Student created: {first_name} {last_name}")
+        log_system_action(cursor, 'Students', new_user_id, 'Create', session['user_id'], session['role'], f"Student created: {first_name} {last_name}")
         
         conn.commit()
-        if testpoint_linked:
-            flash(f'Student added with ID: {new_usid} ✅ Also found in TestPoint (linked across systems).', 'success')
-        else:
-            flash(f'Student added successfully with ID: {new_usid}', 'success')
+        flash(f'Student added successfully with ID: {new_user_id}', 'success')
         return redirect(url_for('admin.manage_students'))
 
     # Pagination, Search and Filter parameters
@@ -363,7 +355,7 @@ def manage_students():
     params = []
     
     if search:
-        search_clause = " AND (usid LIKE %s OR first_name LIKE %s OR middle_name LIKE %s OR last_name LIKE %s OR email LIKE %s)"
+        search_clause = " AND (user_id LIKE %s OR first_name LIKE %s OR middle_name LIKE %s OR last_name LIKE %s OR email LIKE %s)"
         query += search_clause
         count_query += search_clause
         search_val = f"%{search}%"
@@ -385,7 +377,7 @@ def manage_students():
     total_pages = (total_count + per_page - 1) // per_page
     
     # Final paginated query
-    query += " ORDER BY usid DESC LIMIT %s OFFSET %s"
+    query += " ORDER BY user_id DESC LIMIT %s OFFSET %s"
     query_params = params + [per_page, offset]
     
     cursor.execute(query, query_params)
@@ -397,13 +389,13 @@ def manage_students():
                CONCAT(t.first_name, ' ', t.middle_name, ' ', t.last_name) as teacher_name,
                (
                    SELECT COUNT(*) FROM Enrollments e 
-                   JOIN Students st ON e.usid = st.usid 
+                   JOIN Students st ON e.user_id = st.user_id 
                    WHERE e.assignment_id = ta.assignment_id
     """
     assignment_params = []
     if search:
         search_val = f"%{search}%"
-        assignment_query += " AND (st.usid LIKE %s OR st.first_name LIKE %s OR st.middle_name LIKE %s OR st.last_name LIKE %s OR st.email LIKE %s)"
+        assignment_query += " AND (st.user_id LIKE %s OR st.first_name LIKE %s OR st.middle_name LIKE %s OR st.last_name LIKE %s OR st.email LIKE %s)"
         assignment_params.extend([search_val, search_val, search_val, search_val, search_val])
     if course_filter:
         assignment_query += " AND st.course = %s"
@@ -416,7 +408,7 @@ def manage_students():
                ) as student_count
         FROM Teacher_Assignments ta
         JOIN Subjects s ON ta.subject_id = s.subject_id
-        JOIN Teachers t ON ta.utid = t.utid
+        JOIN Teachers t ON ta.teacher_id = t.user_id
     """
     
     # Apply subject search to the outer query as well
@@ -432,14 +424,14 @@ def manage_students():
     enrolled_query = """
         SELECT s.*, sub.subject_name, sub.subject_code, ta.assignment_id, e.enrollment_id, ta.section
         FROM Students s
-        JOIN Enrollments e ON s.usid = e.usid
+        JOIN Enrollments e ON s.user_id = e.user_id
         JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
         JOIN Subjects sub ON ta.subject_id = sub.subject_id
         WHERE 1=1
     """
     enrolled_params = []
     if search:
-        enrolled_query += " AND (s.usid LIKE %s OR s.first_name LIKE %s OR s.middle_name LIKE %s OR s.last_name LIKE %s OR s.email LIKE %s)"
+        enrolled_query += " AND (s.user_id LIKE %s OR s.first_name LIKE %s OR s.middle_name LIKE %s OR s.last_name LIKE %s OR s.email LIKE %s)"
         enrolled_params.extend([search_val, search_val, search_val, search_val, search_val])
     if course_filter:
         enrolled_query += " AND s.course = %s"
@@ -454,7 +446,7 @@ def manage_students():
     # Fetch students with NO enrollments for the "Manual Enroll" feature
     cursor.execute("""
         SELECT * FROM Students 
-        WHERE usid NOT IN (SELECT DISTINCT usid FROM Enrollments)
+        WHERE user_id NOT IN (SELECT DISTINCT user_id FROM Enrollments)
         AND status = 'Active'
         ORDER BY last_name ASC
     """)
@@ -465,7 +457,7 @@ def manage_students():
         SELECT ta.assignment_id, s.subject_code, s.subject_name, ta.section, t.first_name, t.middle_name, t.last_name
         FROM Teacher_Assignments ta
         JOIN Subjects s ON ta.subject_id = s.subject_id
-        JOIN Teachers t ON ta.utid = t.utid
+        JOIN Teachers t ON ta.teacher_id = t.user_id
     """)
     all_assignments = cursor.fetchall()
 
@@ -535,13 +527,14 @@ def upload_students_excel():
                     return redirect(url_for('admin.manage_students'))
             
             conn = get_db_connection()
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor = get_cursor(conn)
             
             success_count = 0
             error_count = 0
             
             current_year = datetime.now().year
-            prefix = f"S-{current_year}-"
+            short_year = str(current_year)[2:]
+            prefix = f"S{short_year}-"
             
             for index, row in df.iterrows():
                 try:
@@ -566,26 +559,26 @@ def upload_students_excel():
                         error_count += 1
                         continue
                         
-                    cursor.execute("SELECT usid FROM Students WHERE usid LIKE %s ORDER BY usid DESC LIMIT 1", (prefix + '%',))
+                    cursor.execute("SELECT user_id FROM Students WHERE user_id LIKE %s ORDER BY user_id DESC LIMIT 1", (prefix + '%',))
                     last_student = cursor.fetchone()
                     
                     if last_student:
-                        last_id_num = int(last_student['usid'].split('-')[2])
+                        last_id_num = int(last_student['user_id'].split('-')[1])
                         new_id_num = last_id_num + 1
                     else:
                         new_id_num = 1
                         
-                    new_usid = f"{prefix}{new_id_num:03d}"
+                    new_user_id = f"{prefix}{new_id_num:04d}"
                     
-                    default_password = f"{current_year}-{new_id_num:03d}"
+                    default_password = new_user_id
                     password_hash = generate_password_hash(default_password)
                     
                     cursor.execute("""
-                        INSERT INTO Students (usid, first_name, middle_name, last_name, email, course, level, section, password_hash) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (new_usid, first_name, middle_name, last_name, email, course, level, section, password_hash))
+                        INSERT INTO Students (user_id, user_role, first_name, middle_name, last_name, email, course, level, section, password_hash) 
+                        VALUES (%s, 'student', %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (new_user_id, first_name, middle_name, last_name, email, course, level, section, password_hash))
                     
-                    log_system_action(cursor, 'Students', new_usid, 'Create', session['user_id'], session['role'], f"Student bulk uploaded: {first_name} {last_name}")
+                    log_system_action(cursor, 'Students', new_user_id, 'Create', session['user_id'], session['role'], f"Student bulk uploaded: {first_name} {last_name}")
                     
                     success_count += 1
                 except Exception as e:
@@ -608,8 +601,8 @@ def upload_students_excel():
         
     return redirect(url_for('admin.manage_students'))
 
-@admin.route('/edit_student/<usid>', methods=['POST'])
-def edit_student(usid):
+@admin.route('/edit_student/<user_id>', methods=['POST'])
+def edit_student(user_id):
     """
     Handles updating an existing student's details.
     Validates required fields, name format, and prevents email duplication.
@@ -631,10 +624,10 @@ def edit_student(usid):
     first_name, middle_name, last_name, email = validated_data
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Check duplicate email in Students and Teachers
-    cursor.execute("SELECT email FROM Students WHERE email = %s AND usid != %s UNION SELECT email FROM Teachers WHERE email = %s", (email, usid, email))
+    cursor.execute("SELECT email FROM Students WHERE email = %s AND user_id != %s UNION SELECT email FROM Teachers WHERE email = %s", (email, user_id, email))
     if cursor.fetchone():
         flash('Email already exists. Please use a different email.', 'error')
         cursor.close()
@@ -645,11 +638,11 @@ def edit_student(usid):
         cursor.execute("""
             UPDATE Students 
             SET first_name = %s, middle_name = %s, last_name = %s, email = %s, course = %s, level = %s, section = %s, status = %s
-            WHERE usid = %s
-        """, (first_name, middle_name, last_name, email, course, level, section, status, usid))
+            WHERE user_id = %s
+        """, (first_name, middle_name, last_name, email, course, level, section, status, user_id))
         
         # Audit Logging
-        log_system_action(cursor, 'Students', usid, 'Update', session['user_id'], session['role'], f"Student updated: {first_name} {last_name}, Status: {status}")
+        log_system_action(cursor, 'Students', user_id, 'Update', session['user_id'], session['role'], f"Student updated: {first_name} {last_name}, Status: {status}")
         
         conn.commit()
         flash('Student updated successfully.', 'success')
@@ -661,26 +654,26 @@ def edit_student(usid):
         
     return redirect(url_for('admin.manage_students'))
     
-@admin.route('/delete_student/<usid>')
-def delete_student(usid):
+@admin.route('/delete_student/<user_id>')
+def delete_student(user_id):
     """
     Deletes a student record only if they have no attendance history.
     """
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     try:
         # Manually cascade deletes to prevent foreign key constraint errors
-        cursor.execute("DELETE FROM Attendance WHERE usid = %s", (usid,))
-        cursor.execute("DELETE FROM Excuse_Letters WHERE usid = %s", (usid,))
-        cursor.execute("DELETE FROM Drop_Requests WHERE usid = %s", (usid,))
-        cursor.execute("DELETE FROM Notifications WHERE usid = %s", (usid,))
-        cursor.execute("DELETE FROM Enrollments WHERE usid = %s", (usid,))
+        cursor.execute("DELETE FROM Attendance WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM Excuse_Letters WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM Drop_Requests WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM Notifications WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM Enrollments WHERE user_id = %s", (user_id,))
         
         # Finally delete the student
-        cursor.execute("DELETE FROM Students WHERE usid = %s", (usid,))
+        cursor.execute("DELETE FROM Students WHERE user_id = %s", (user_id,))
         
         # Audit Logging
-        log_system_action(cursor, 'Students', usid, 'Delete', session['user_id'], session['role'], f"Student deleted (ID: {usid})")
+        log_system_action(cursor, 'Students', user_id, 'Delete', session['user_id'], session['role'], f"Student deleted (ID: {user_id})")
         
         conn.commit()
         flash('Student deleted successfully.', 'success')
@@ -698,7 +691,7 @@ def verify_pin():
     admin_id = session.get('user_id')
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     cursor.execute("SELECT deletion_pin_hash FROM Admins WHERE admin_id = %s", (admin_id,))
     admin = cursor.fetchone()
     
@@ -718,7 +711,7 @@ def request_pin_otp():
     
     admin_id = session.get('user_id')
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     cursor.execute("SELECT email, username FROM Admins WHERE admin_id = %s", (admin_id,))
     admin = cursor.fetchone()
     
@@ -759,7 +752,7 @@ def change_deletion_pin():
         return jsonify({'success': False, 'message': 'Invalid verification code.'})
         
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     pin_hash = generate_password_hash(new_pin)
     cursor.execute("UPDATE Admins SET deletion_pin_hash = %s WHERE admin_id = %s", (pin_hash, admin_id))
@@ -785,23 +778,24 @@ def manage_teachers():
     from datetime import datetime
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     if request.method == 'POST':
-        # Auto-generation logic for Teacher ID (T-YYYY-XXX)
+        # Auto-generation logic for Teacher ID (T26-XXXX)
         current_year = datetime.now().year
-        prefix = f"T-{current_year}-"
+        short_year_t = str(current_year)[2:]
+        prefix = f"T{short_year_t}-"
         
-        cursor.execute("SELECT utid FROM Teachers WHERE utid LIKE %s ORDER BY utid DESC LIMIT 1", (prefix + '%',))
+        cursor.execute("SELECT user_id FROM Teachers WHERE user_id LIKE %s ORDER BY user_id DESC LIMIT 1", (prefix + '%',))
         last_teacher = cursor.fetchone()
         
         if last_teacher:
-            last_id_num = int(last_teacher['utid'].split('-')[2])
+            last_id_num = int(last_teacher['user_id'].split('-')[1])
             new_id_num = last_id_num + 1
         else:
             new_id_num = 1
             
-        new_utid = f"{prefix}{new_id_num:03d}"
+        new_teacher_id = f"{prefix}{new_id_num:04d}"
         
         first_name = request.form.get('first_name')
         middle_name = request.form.get('middle_name')
@@ -822,20 +816,20 @@ def manage_teachers():
             flash('Email already exists. Please use a different email.', 'error')
             return redirect(url_for('admin.manage_teachers'))
         
-        # Default password is the ID without the 'T-' prefix (e.g. 2026-001)
-        default_password = f"{current_year}-{new_id_num:03d}"
+        # Default password matches the user_id (e.g. T26-0001)
+        default_password = new_teacher_id
         password_hash = generate_password_hash(default_password)
         
         cursor.execute("""
-            INSERT INTO Teachers (utid, first_name, middle_name, last_name, department, email, password_hash) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (new_utid, first_name, middle_name, last_name, department, email, password_hash))
+            INSERT INTO Teachers (user_id, user_role, first_name, middle_name, last_name, department, email, password_hash) 
+            VALUES (%s, 'teacher', %s, %s, %s, %s, %s, %s)
+        """, (new_teacher_id, first_name, middle_name, last_name, department, email, password_hash))
         
         # Audit Logging
-        log_system_action(cursor, 'Teachers', new_utid, 'Create', session['user_id'], session['role'], f"Teacher created: {first_name} {last_name}")
+        log_system_action(cursor, 'Teachers', new_teacher_id, 'Create', session['user_id'], session['role'], f"Teacher created: {first_name} {last_name}")
         
         conn.commit()
-        flash(f'Teacher added successfully with ID: {new_utid}', 'success')
+        flash(f'Teacher added successfully with ID: {new_teacher_id}', 'success')
         return redirect(url_for('admin.manage_teachers'))
 
     # Pagination, Search and Filter parameters
@@ -868,12 +862,12 @@ def manage_teachers():
     
     # Base query for teachers
     
-    query = "SELECT * FROM Teachers WHERE 1=1"
+    query = "SELECT *, user_id AS utid FROM Teachers WHERE 1=1"
     count_query = "SELECT COUNT(*) as total FROM Teachers WHERE 1=1"
     params = []
     
     if search:
-        search_clause = " AND (utid LIKE %s OR first_name LIKE %s OR middle_name LIKE %s OR last_name LIKE %s OR email LIKE %s)"
+        search_clause = " AND (user_id LIKE %s OR first_name LIKE %s OR middle_name LIKE %s OR last_name LIKE %s OR email LIKE %s)"
         query += search_clause
         count_query += search_clause
         search_val = f"%{search}%"
@@ -895,7 +889,7 @@ def manage_teachers():
     total_pages = (total_count + per_page - 1) // per_page
     
     # Final paginated query
-    query += " ORDER BY utid DESC LIMIT %s OFFSET %s"
+    query += " ORDER BY user_id DESC LIMIT %s OFFSET %s"
     query_params = params + [per_page, offset]
     
     cursor.execute(query, query_params)
@@ -904,12 +898,21 @@ def manage_teachers():
     # Fetch unique departments for filter
     cursor.execute("SELECT DISTINCT department FROM Teachers WHERE department IS NOT NULL AND department != ''")
     departments = [row['department'] for row in cursor.fetchall()]
+    
+    # Accurate counts for tab badges (not affected by pagination)
+    cursor.execute("SELECT COUNT(*) as cnt FROM Teachers WHERE status = 'Active'")
+    active_count = cursor.fetchone()['cnt']
+    cursor.execute("SELECT COUNT(*) as cnt FROM Teachers WHERE status = 'Archived'")
+    archived_count = cursor.fetchone()['cnt']
+    
     cursor.close()
     conn.close()
     return render_template('admin_manage_teachers.html', 
                            teachers=teachers,
                            total_pages=total_pages,
-                           total_count=total_count, # Pass total count for badge
+                           total_count=total_count,
+                           active_count=active_count,
+                           archived_count=archived_count,
                            current_page=page,
                            search=search,
                            dept_filter=dept_filter,
@@ -938,10 +941,10 @@ def edit_teacher(utid):
     first_name, middle_name, last_name, email = validated_data
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Check duplicate email
-    cursor.execute("SELECT email FROM Teachers WHERE email = %s AND utid != %s UNION SELECT email FROM Students WHERE email = %s", (email, utid, email))
+    cursor.execute("SELECT email FROM Teachers WHERE email = %s AND user_id != %s UNION SELECT email FROM Students WHERE email = %s", (email, utid, email))
     if cursor.fetchone():
         flash('Email already exists. Please use a different email.', 'error')
         cursor.close()
@@ -952,7 +955,7 @@ def edit_teacher(utid):
         cursor.execute("""
             UPDATE Teachers 
             SET first_name = %s, middle_name = %s, last_name = %s, department = %s, email = %s, status = %s
-            WHERE utid = %s
+            WHERE user_id = %s
         """, (first_name, middle_name, last_name, department, email, status, utid))
         
         # Audit Logging
@@ -974,15 +977,15 @@ def delete_teacher(utid):
     Deletes a teacher record only if they have no active assignments.
     """
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     try:
         # Check for assignments or sessions
-        cursor.execute("SELECT COUNT(*) as count FROM Teacher_Assignments WHERE utid = %s", (utid,))
+        cursor.execute("SELECT COUNT(*) as count FROM Teacher_Assignments WHERE teacher_id = %s", (utid,))
         if cursor.fetchone()['count'] > 0:
             flash('Cannot delete: teacher has assigned classes.', 'error')
             return redirect(url_for('admin.manage_teachers'))
             
-        cursor.execute("DELETE FROM Teachers WHERE utid = %s", (utid,))
+        cursor.execute("DELETE FROM Teachers WHERE user_id = %s", (utid,))
         
         # Audit Logging
         log_system_action(cursor, 'Teachers', utid, 'Delete', session['user_id'], session['role'], f"Teacher deleted (ID: {utid})")
@@ -999,24 +1002,36 @@ def delete_teacher(utid):
 @admin.route('/manage_subjects', methods=['GET', 'POST'])
 def manage_subjects():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
+    
+    # Ensure is_archived column exists in subjects table
+    try:
+        cursor.execute("SELECT is_archived FROM subjects LIMIT 1")
+        cursor.fetchall()  # Consume any results
+    except:
+        cursor.execute("ALTER TABLE subjects ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+        conn.commit()
     
     if request.method == 'POST':
         subject_code = request.form.get('subject_code')
         subject_name = request.form.get('subject_name')
         
-        cursor.execute("INSERT INTO Subjects (subject_code, subject_name) VALUES (%s, %s) RETURNING subject_id", (subject_code, subject_name))
-        subject_id = cursor.fetchone()['subject_id']
+        cursor.execute("INSERT INTO Subjects (subject_code, subject_name) VALUES (%s, %s)", (subject_code, subject_name))
+        subject_id = cursor.lastrowid
         
         # Audit Logging
         log_system_action(cursor, 'Subjects', subject_id, 'Create', session['user_id'], session['role'], f"Subject created: {subject_code} - {subject_name}")
         
         conn.commit()
         flash('Subject added successfully.', 'success')
+        cursor.close()
+        conn.close()
         return redirect(url_for('admin.manage_subjects'))
         
     if request.args.get('clear'):
         session.pop('subjects_search', None)
+        cursor.close()
+        conn.close()
         return redirect(url_for('admin.manage_subjects'))
 
     # Persist search in session
@@ -1025,9 +1040,18 @@ def manage_subjects():
         session['subjects_search'] = search_param.strip()
     search = session.get('subjects_search', '')
     
+    # Check view parameter (active or archived)
+    view = request.args.get('view', 'active')
     
     query = "SELECT * FROM Subjects WHERE 1=1"
     params = []
+    
+    # Filter by archive status
+    if view == 'archived':
+        query += " AND is_archived = 1"
+    else:
+        query += " AND (is_archived IS NULL OR is_archived = 0)"
+    
     if search:
         query += " AND (subject_code LIKE %s OR subject_name LIKE %s)"
         search_val = f"%{search}%"
@@ -1036,12 +1060,12 @@ def manage_subjects():
     cursor.execute(query, params)
     subjects = cursor.fetchall()
     
-    cursor.execute("SELECT COUNT(*) as total FROM Subjects")
+    cursor.execute("SELECT COUNT(*) as total FROM Subjects WHERE (is_archived IS NULL OR is_archived = 0)")
     total_count = cursor.fetchone()['total']
     
     cursor.close()
     conn.close()
-    return render_template('admin_manage_subjects.html', subjects=subjects, total_count=total_count, search=search)
+    return render_template('admin_manage_subjects.html', subjects=subjects, total_count=total_count, search=search, view=view)
 
 @admin.route('/edit_subject/<int:subject_id>', methods=['POST'])
 def edit_subject(subject_id):
@@ -1049,7 +1073,7 @@ def edit_subject(subject_id):
     subject_name = request.form.get('subject_name')
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     cursor.execute("UPDATE Subjects SET subject_code = %s, subject_name = %s WHERE subject_id = %s", 
                    (subject_code, subject_name, subject_id))
     
@@ -1065,7 +1089,64 @@ def edit_subject(subject_id):
 @admin.route('/delete_subject/<int:subject_id>')
 def delete_subject(subject_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
+    cursor.execute("DELETE FROM Subjects WHERE subject_id = %s", (subject_id,))
+    
+    # Audit Logging
+    log_system_action(cursor, 'Subjects', subject_id, 'Delete', session['user_id'], session['role'], f"Subject deleted: ID {subject_id}")
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Subject deleted successfully.', 'success')
+    return redirect(url_for('admin.manage_subjects'))
+
+@admin.route('/archive_subject/<int:subject_id>', methods=['POST'])
+def archive_subject(subject_id):
+    """Archive a subject by setting is_archived flag"""
+    conn = get_db_connection()
+    cursor = get_cursor(conn)
+    try:
+        # Ensure is_archived column exists
+        try:
+            cursor.execute("SELECT is_archived FROM subjects LIMIT 1")
+            cursor.fetchall()  # Consume any results
+        except:
+            cursor.execute("ALTER TABLE subjects ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+            conn.commit()
+        
+        cursor.execute("UPDATE subjects SET is_archived = 1 WHERE subject_id = %s", (subject_id,))
+        
+        # Audit Logging
+        log_system_action(cursor, 'subjects', subject_id, 'Update', session['user_id'], session['role'], f"Subject archived (ID: {subject_id})")
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Subject archived successfully.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    finally:
+        cursor.close()
+        conn.close()
+
+@admin.route('/unarchive_subject/<int:subject_id>', methods=['POST'])
+def unarchive_subject(subject_id):
+    """Unarchive a subject by setting is_archived flag to 0"""
+    conn = get_db_connection()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("UPDATE subjects SET is_archived = 0 WHERE subject_id = %s", (subject_id,))
+        
+        # Audit Logging
+        log_system_action(cursor, 'subjects', subject_id, 'Update', session['user_id'], session['role'], f"Subject unarchived (ID: {subject_id})")
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Subject unarchived successfully.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    finally:
+        cursor.close()
+        conn.close()
+    cursor = get_cursor(conn)
     try:
         cursor.execute("DELETE FROM Subjects WHERE subject_id = %s", (subject_id,))
         
@@ -1081,50 +1162,56 @@ def delete_subject(subject_id):
         conn.close()
     return redirect(url_for('admin.manage_subjects'))
 
-@admin.route('/archive_subject/<int:subject_id>', methods=['POST', 'GET'])
-def archive_subject(subject_id):
-    """Archive a subject (currently removes it - can be updated to use status column)"""
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    try:
-        cursor.execute("DELETE FROM Subjects WHERE subject_id = %s", (subject_id,))
-        
-        # Audit Logging
-        log_system_action(cursor, 'Subjects', subject_id, 'Delete', session['user_id'], session['role'], f"Subject archived (ID: {subject_id})")
-        
-        conn.commit()
-        flash('Subject archived successfully.', 'success')
-    except Exception as e:
-        flash('Cannot archive: subject has attendance records or assignments.', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-    return redirect(url_for('admin.manage_subjects'))
-
-
-
 @admin.route('/assign_classes', methods=['GET', 'POST'])
 def assign_classes():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
+    
+    # Ensure is_archived column exists in subjects table
+    try:
+        cursor.execute("SELECT is_archived FROM subjects LIMIT 1")
+        cursor.fetchall()  # Consume any results
+    except:
+        cursor.execute("ALTER TABLE subjects ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+        conn.commit()
+    
+    # Ensure is_archived column exists in teacher_assignments table (already done in manage_schedules)
+    try:
+        cursor.execute("SELECT is_archived FROM teacher_assignments LIMIT 1")
+        cursor.fetchall()  # Consume any results
+    except:
+        cursor.execute("ALTER TABLE teacher_assignments ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+        conn.commit()
     
     if request.method == 'POST':
-        utid = request.form.get('utid')
+        utid = request.form.get('teacher_id')
         subject_id = request.form.get('subject_id')
         section = request.form.get('section')
+
+        print("DEBUG form data:", dict(request.form))  # temporary debug
+
+        if not utid or not subject_id or not section:
+            flash('Please fill in all fields.', 'danger')
+            cursor.close()
+            conn.close()
+            return redirect(url_for('admin.assign_classes'))
         
-        cursor.execute("INSERT INTO Teacher_Assignments (utid, subject_id, section) VALUES (%s, %s, %s) RETURNING assignment_id", (utid, subject_id, section))
-        assignment_id = cursor.fetchone()['assignment_id']
+        cursor.execute("INSERT INTO Teacher_Assignments (teacher_id, subject_id, section) VALUES (%s, %s, %s)", (utid, subject_id, section))
+        assignment_id = cursor.lastrowid
         
         # Audit Logging
         log_system_action(cursor, 'Teacher_Assignments', assignment_id, 'Create', session['user_id'], session['role'], f"Class assigned to teacher {utid}: Subject ID {subject_id}, Section {section}")
         
         conn.commit()
         flash('Class successfully assigned to teacher.', 'success')
+        cursor.close()
+        conn.close()
         return redirect(url_for('admin.assign_classes'))
 
     if request.args.get('clear'):
         session.pop('assignments_search', None)
+        cursor.close()
+        conn.close()
         return redirect(url_for('admin.assign_classes'))
 
     # Persist search in session
@@ -1133,21 +1220,30 @@ def assign_classes():
         session['assignments_search'] = search_param.strip()
     search = session.get('assignments_search', '')
     
+    # Check view parameter (active or archived)
+    view = request.args.get('view', 'active')
 
     cursor.execute("SELECT * FROM Teachers WHERE status = 'Active'")
     teachers = cursor.fetchall()
     
-    cursor.execute("SELECT * FROM Subjects")
+    cursor.execute("SELECT * FROM Subjects WHERE (is_archived IS NULL OR is_archived = 0)")
     subjects = cursor.fetchall()
     
     query = """
         SELECT ta.assignment_id, t.first_name, t.middle_name, t.last_name, s.subject_code, s.subject_name, ta.section
         FROM Teacher_Assignments ta
-        JOIN Teachers t ON ta.utid = t.utid
+        JOIN Teachers t ON ta.teacher_id = t.user_id
         JOIN Subjects s ON ta.subject_id = s.subject_id
         WHERE 1=1
     """
     params = []
+    
+    # Filter by archive status
+    if view == 'archived':
+        query += " AND ta.is_archived = 1"
+    else:
+        query += " AND (ta.is_archived IS NULL OR ta.is_archived = 0)"
+    
     if search:
         query += " AND (s.subject_code LIKE %s OR s.subject_name LIKE %s OR t.first_name LIKE %s OR t.last_name LIKE %s OR ta.section LIKE %s)"
         search_val = f"%{search}%"
@@ -1158,15 +1254,15 @@ def assign_classes():
     
     cursor.close()
     conn.close()
-    return render_template('admin_assign_classes.html', teachers=teachers, subjects=subjects, assignments=assignments, search=search)
+    return render_template('admin_assign_classes.html', teachers=teachers, subjects=subjects, assignments=assignments, search=search, view=view)
 
 @admin.route('/enroll_student', methods=['POST'])
 def enroll_student():
-    usid = request.form.get('usid')
+    user_id = request.form.get('user_id')
     assignment_id = request.form.get('assignment_id') # Selected from Teacher_Assignments
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     try:
         # Get assignment details
@@ -1179,25 +1275,25 @@ def enroll_student():
             
         # Check if already enrolled in this specific SUBJECT or with this TEACHER
         cursor.execute("""
-            SELECT s.subject_name, (t.first_name || ' ' || t.last_name) as teacher_name, 
-                   ta.subject_id, ta.utid
+            SELECT s.subject_name, CONCAT(t.first_name, ' ', t.last_name) as teacher_name, 
+                   ta.subject_id, ta.teacher_id
             FROM Enrollments e
             JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
             JOIN Subjects s ON ta.subject_id = s.subject_id
-            JOIN Teachers t ON ta.utid = t.utid
-            WHERE e.usid = %s AND ta.subject_id = %s
-        """, (usid, assignment['subject_id']))
+            JOIN Teachers t ON ta.teacher_id = t.user_id
+            WHERE e.user_id = %s AND ta.subject_id = %s
+        """, (user_id, assignment['subject_id']))
         
         conflict = cursor.fetchone()
         if conflict:
             flash(f"Student is already enrolled in '{conflict['subject_name']}'. Duplicate subject enrollment is not allowed.", 'warning')
         else:
-            cursor.execute("INSERT INTO Enrollments (usid, assignment_id) VALUES (%s, %s) RETURNING enrollment_id", 
-                           (usid, assignment_id))
-            enrollment_id = cursor.fetchone()['enrollment_id']
+            cursor.execute("INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s)", 
+                           (user_id, assignment_id))
+            enrollment_id = cursor.lastrowid
             
             # Audit Logging
-            log_system_action(cursor, 'Enrollments', enrollment_id, 'Create', session['user_id'], session['role'], f"Student {usid} enrolled in Assignment ID {assignment_id} (Subject: {assignment['subject_id']}, Section: {assignment['section']})")
+            log_system_action(cursor, 'Enrollments', enrollment_id, 'Create', session['user_id'], session['role'], f"Student {user_id} enrolled in Assignment ID {assignment_id} (Subject: {assignment['subject_id']}, Section: {assignment['section']})")
             
             conn.commit()
             flash('Student successfully enrolled in the class.', 'success')
@@ -1217,7 +1313,23 @@ def manage_schedules():
     Validates that the time falls within school hours (07:00 to 18:00).
     """
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
+    
+    # Ensure is_archived column exists in schedule table
+    try:
+        cursor.execute("SELECT is_archived FROM schedule LIMIT 1")
+        cursor.fetchall()  # Consume any results
+    except:
+        cursor.execute("ALTER TABLE schedule ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+        conn.commit()
+    
+    # Ensure is_archived column exists in teacher_assignments table
+    try:
+        cursor.execute("SELECT is_archived FROM teacher_assignments LIMIT 1")
+        cursor.fetchall()  # Consume any results
+    except:
+        cursor.execute("ALTER TABLE teacher_assignments ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+        conn.commit()
     
     if request.method == 'POST':
         assignment_id = request.form.get('assignment_id')
@@ -1236,13 +1348,19 @@ def manage_schedules():
             
             if start_dt < school_start or end_dt > school_end:
                 flash('Schedule must be within school hours (07:00 to 18:00).', 'error')
+                cursor.close()
+                conn.close()
                 return redirect(url_for('admin.manage_schedules'))
                 
             if start_dt >= end_dt:
                 flash('End time must be after start time.', 'error')
+                cursor.close()
+                conn.close()
                 return redirect(url_for('admin.manage_schedules'))
         except ValueError:
             flash('Invalid time format.', 'error')
+            cursor.close()
+            conn.close()
             return redirect(url_for('admin.manage_schedules'))
         
         # Get details from Teacher_Assignments
@@ -1257,30 +1375,37 @@ def manage_schedules():
                 JOIN Subjects s ON sch.subject_id = s.subject_id
                 WHERE sch.day_of_week = %s 
                 AND (%s < sch.end_time AND %s > sch.start_time)
-                AND (sch.utid = %s OR sch.room = %s)
+                AND (sch.teacher_id = %s OR sch.room = %s)
+                AND (sch.is_archived IS NULL OR sch.is_archived = 0)
             """
-            cursor.execute(conflict_query, (day, start, end, ta['utid'], room))
+            cursor.execute(conflict_query, (day, start, end, ta['teacher_id'], room))
             conflict = cursor.fetchone()
             
             if conflict:
-                conflict_type = "Teacher" if conflict['utid'] == ta['utid'] else "Room"
+                conflict_type = "Teacher" if conflict['teacher_id'] == ta['teacher_id'] else "Room"
                 flash(f"Conflict Detected! {conflict_type} is already busy with {conflict['subject_code']} at this time.", "error")
             else:
                 cursor.execute("""
-                    INSERT INTO schedule (subject_id, utid, section, day_of_week, start_time, end_time, room)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING schedule_id
-                """, (ta['subject_id'], ta['utid'], ta['section'], day, start, end, room))
-                schedule_id = cursor.fetchone()['schedule_id']
+                    INSERT INTO schedule (subject_id, teacher_id, section, day_of_week, start_time, end_time, room, is_archived)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+                """, (ta['subject_id'], ta['teacher_id'], ta['section'], day, start, end, room))
+                schedule_id = cursor.lastrowid
                 
                 # Audit Logging
                 log_system_action(cursor, 'schedule', schedule_id, 'Create', session['user_id'], session['role'], f"Schedule created for {ta['subject_id']} - {ta['section']} on {day} ({start}-{end})")
                 
                 conn.commit()
                 flash('Schedule added successfully.', 'success')
+                
+        # Close cursor after POST operations to prevent unread result issues
+        cursor.close()
+        conn.close()
+        return redirect(url_for('admin.manage_schedules'))
 
     if request.args.get('clear'):
         session.pop('schedules_search', None)
+        cursor.close()
+        conn.close()
         return redirect(url_for('admin.manage_schedules'))
 
     # Persist search in session
@@ -1289,23 +1414,46 @@ def manage_schedules():
         session['schedules_search'] = search_param.strip()
     search = session.get('schedules_search', '')
     
+    # Check view parameter (active or archived)
+    view = request.args.get('view', 'active')
 
-    cursor.execute("""
+    # Get fresh cursor for SELECT operations
+    cursor.close()
+    cursor = get_cursor(conn)
+    
+    # Get assignments (filtered by archive status)
+    assignments_query = """
         SELECT ta.assignment_id, t.first_name, t.middle_name, t.last_name, s.subject_code, s.subject_name, ta.section
-        FROM Teacher_Assignments ta
-        JOIN Teachers t ON ta.utid = t.utid
+        FROM teacher_assignments ta
+        JOIN Teachers t ON ta.teacher_id = t.user_id
         JOIN Subjects s ON ta.subject_id = s.subject_id
-    """)
+        WHERE 1=1
+    """
+    
+    # Filter assignments by archive status
+    if view == 'archived':
+        assignments_query += " AND ta.is_archived = 1"
+    else:
+        assignments_query += " AND (ta.is_archived IS NULL OR ta.is_archived = 0)"
+    
+    cursor.execute(assignments_query)
     assignments = cursor.fetchall()
     
     query = """
         SELECT sch.*, s.subject_code, s.subject_name, t.first_name, t.middle_name, t.last_name
         FROM schedule sch
         JOIN Subjects s ON sch.subject_id = s.subject_id
-        JOIN Teachers t ON sch.utid = t.utid
+        JOIN Teachers t ON sch.teacher_id = t.user_id
         WHERE 1=1
     """
     params = []
+    
+    # Filter by archive status
+    if view == 'archived':
+        query += " AND sch.is_archived = 1"
+    else:
+        query += " AND (sch.is_archived IS NULL OR sch.is_archived = 0)"
+    
     if search:
         query += " AND (s.subject_code LIKE %s OR s.subject_name LIKE %s OR t.first_name LIKE %s OR t.last_name LIKE %s OR sch.room LIKE %s OR sch.section LIKE %s)"
         search_val = f"%{search}%"
@@ -1316,12 +1464,12 @@ def manage_schedules():
     
     cursor.close()
     conn.close()
-    return render_template('admin_manage_schedules.html', assignments=assignments, schedules=schedules, search=search)
+    return render_template('admin_manage_schedules.html', assignments=assignments, schedules=schedules, search=search, view=view)
 
 @admin.route('/remove_schedule/<int:schedule_id>')
 def remove_schedule(schedule_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     cursor.execute("DELETE FROM schedule WHERE schedule_id = %s", (schedule_id,))
     conn.commit()
     cursor.close()
@@ -1332,7 +1480,7 @@ def remove_schedule(schedule_id):
 @admin.route('/remove_enrollment/<int:enrollment_id>')
 def remove_enrollment(enrollment_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     cursor.execute("DELETE FROM Enrollments WHERE enrollment_id = %s", (enrollment_id,))
     conn.commit()
     cursor.close()
@@ -1340,14 +1488,14 @@ def remove_enrollment(enrollment_id):
     flash('Enrollment removed successfully.', 'success')
     return redirect(url_for('admin.manage_students'))
 
-@admin.route('/archive_student/<usid>')
-def archive_student(usid):
+@admin.route('/archive_student/<user_id>')
+def archive_student(user_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("UPDATE Students SET status = 'Archived' WHERE usid = %s", (usid,))
+    cursor = get_cursor(conn)
+    cursor.execute("UPDATE Students SET status = 'Archived' WHERE user_id = %s", (user_id,))
     
     # Audit Logging
-    log_system_action(cursor, 'Students', usid, 'Update', session['user_id'], session['role'], f"Student archived: {usid}")
+    log_system_action(cursor, 'Students', user_id, 'Update', session['user_id'], session['role'], f"Student archived: {user_id}")
     
     conn.commit()
     cursor.close()
@@ -1355,14 +1503,14 @@ def archive_student(usid):
     flash('Student archived successfully.', 'success')
     return redirect(url_for('admin.manage_students'))
 
-@admin.route('/unarchive_student/<usid>')
-def unarchive_student(usid):
+@admin.route('/unarchive_student/<user_id>')
+def unarchive_student(user_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("UPDATE Students SET status = 'Active' WHERE usid = %s", (usid,))
+    cursor = get_cursor(conn)
+    cursor.execute("UPDATE Students SET status = 'Active' WHERE user_id = %s", (user_id,))
     
     # Audit Logging
-    log_system_action(cursor, 'Students', usid, 'Update', session['user_id'], session['role'], f"Student unarchived: {usid}")
+    log_system_action(cursor, 'Students', user_id, 'Update', session['user_id'], session['role'], f"Student unarchived: {user_id}")
     
     conn.commit()
     cursor.close()
@@ -1373,8 +1521,8 @@ def unarchive_student(usid):
 @admin.route('/archive_teacher/<utid>')
 def archive_teacher(utid):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("UPDATE Teachers SET status = 'Archived' WHERE utid = %s", (utid,))
+    cursor = get_cursor(conn)
+    cursor.execute("UPDATE Teachers SET status = 'Archived' WHERE user_id = %s", (utid,))
     
     # Audit Logging
     log_system_action(cursor, 'Teachers', utid, 'Update', session['user_id'], session['role'], f"Teacher archived: {utid}")
@@ -1388,8 +1536,8 @@ def archive_teacher(utid):
 @admin.route('/unarchive_teacher/<utid>')
 def unarchive_teacher(utid):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("UPDATE Teachers SET status = 'Active' WHERE utid = %s", (utid,))
+    cursor = get_cursor(conn)
+    cursor.execute("UPDATE Teachers SET status = 'Active' WHERE user_id = %s", (utid,))
     
     # Audit Logging
     log_system_action(cursor, 'Teachers', utid, 'Update', session['user_id'], session['role'], f"Teacher unarchived: {utid}")
@@ -1403,7 +1551,7 @@ def unarchive_teacher(utid):
 @admin.route('/remove_assignment/<int:assignment_id>')
 def remove_assignment(assignment_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     try:
         cursor.execute("DELETE FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
@@ -1419,12 +1567,22 @@ def remove_assignment(assignment_id):
 
 @admin.route('/archive_schedule/<int:schedule_id>', methods=['POST'])
 def archive_schedule(schedule_id):
-    """Archive a schedule (currently removes it - can be updated to use status column)"""
+    """Archive a schedule by setting is_archived flag"""
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     try:
-        # For now, archive means delete. Future: Update to use archived status column
-        cursor.execute("DELETE FROM schedule WHERE schedule_id = %s", (schedule_id,))
+        # Ensure is_archived column exists
+        try:
+            cursor.execute("SELECT is_archived FROM schedule LIMIT 1")
+        except:
+            cursor.execute("ALTER TABLE schedule ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+            conn.commit()
+        
+        cursor.execute("UPDATE schedule SET is_archived = 1 WHERE schedule_id = %s", (schedule_id,))
+        
+        # Audit Logging
+        log_system_action(cursor, 'schedule', schedule_id, 'Update', session['user_id'], session['role'], f"Schedule archived (ID: {schedule_id})")
+        
         conn.commit()
         return jsonify({'success': True, 'message': 'Schedule archived successfully.'})
     except Exception as e:
@@ -1433,16 +1591,65 @@ def archive_schedule(schedule_id):
         cursor.close()
         conn.close()
 
+@admin.route('/unarchive_schedule/<int:schedule_id>', methods=['POST'])
+def unarchive_schedule(schedule_id):
+    """Unarchive a schedule by setting is_archived flag to 0"""
+    conn = get_db_connection()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("UPDATE schedule SET is_archived = 0 WHERE schedule_id = %s", (schedule_id,))
+        
+        # Audit Logging
+        log_system_action(cursor, 'schedule', schedule_id, 'Update', session['user_id'], session['role'], f"Schedule unarchived (ID: {schedule_id})")
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Schedule unarchived successfully.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    finally:
+        cursor.close()
+        conn.close()
+
 @admin.route('/archive_assignment/<int:assignment_id>', methods=['POST'])
 def archive_assignment(assignment_id):
-    """Archive an assignment (currently removes it - can be updated to use status column)"""
+    """Archive an assignment by setting is_archived flag"""
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     try:
-        # For now, archive means delete. Future: Update to use archived status column
-        cursor.execute("DELETE FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
+        # Ensure is_archived column exists in teacher_assignments table
+        try:
+            cursor.execute("SELECT is_archived FROM teacher_assignments LIMIT 1")
+            cursor.fetchall()  # Consume any results
+        except:
+            cursor.execute("ALTER TABLE teacher_assignments ADD COLUMN is_archived TINYINT(1) DEFAULT 0")
+            conn.commit()
+        
+        cursor.execute("UPDATE teacher_assignments SET is_archived = 1 WHERE assignment_id = %s", (assignment_id,))
+        
+        # Audit Logging
+        log_system_action(cursor, 'teacher_assignments', assignment_id, 'Update', session['user_id'], session['role'], f"Assignment archived (ID: {assignment_id})")
+        
         conn.commit()
         return jsonify({'success': True, 'message': 'Assignment archived successfully.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    finally:
+        cursor.close()
+        conn.close()
+
+@admin.route('/unarchive_assignment/<int:assignment_id>', methods=['POST'])
+def unarchive_assignment(assignment_id):
+    """Unarchive an assignment by setting is_archived flag to 0"""
+    conn = get_db_connection()
+    cursor = get_cursor(conn)
+    try:
+        cursor.execute("UPDATE teacher_assignments SET is_archived = 0 WHERE assignment_id = %s", (assignment_id,))
+        
+        # Audit Logging
+        log_system_action(cursor, 'teacher_assignments', assignment_id, 'Update', session['user_id'], session['role'], f"Assignment unarchived (ID: {assignment_id})")
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Assignment unarchived successfully.'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
     finally:
@@ -1452,7 +1659,7 @@ def archive_assignment(assignment_id):
 @admin.route('/drop_requests')
 def drop_requests():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     if request.args.get('clear'):
         session.pop('drops_search', None)
@@ -1470,15 +1677,15 @@ def drop_requests():
                sub.subject_code, sub.subject_name,
                t.first_name as t_first, t.middle_name as t_middle, t.last_name as t_last
         FROM Drop_Requests dr
-        JOIN Students s ON dr.usid = s.usid
+        JOIN Students s ON dr.user_id = s.user_id
         JOIN Subjects sub ON dr.subject_id = sub.subject_id
-        JOIN Teachers t ON dr.utid = t.utid
+        JOIN Teachers t ON dr.teacher_id = t.user_id
         WHERE dr.status = 'Pending'
     """
     params = []
     
     if search:
-        query += " AND (s.first_name LIKE %s OR s.last_name LIKE %s OR s.usid LIKE %s OR sub.subject_code LIKE %s OR sub.subject_name LIKE %s)"
+        query += " AND (s.first_name LIKE %s OR s.last_name LIKE %s OR s.user_id LIKE %s OR sub.subject_code LIKE %s OR sub.subject_name LIKE %s)"
         search_val = f"%{search}%"
         params.extend([search_val, search_val, search_val, search_val, search_val])
         
@@ -1493,7 +1700,7 @@ def drop_requests():
 @admin.route('/approve_drop/<int:request_id>')
 def approve_drop(request_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     cursor.execute("SELECT * FROM Drop_Requests WHERE request_id = %s", (request_id,))
     req = cursor.fetchone()
@@ -1506,19 +1713,19 @@ def approve_drop(request_id):
         # We need to find the assignment_id for this subject and teacher
         cursor.execute("""
             SELECT assignment_id FROM Teacher_Assignments 
-            WHERE utid = %s AND subject_id = %s
-        """, (req['utid'], req['subject_id']))
+            WHERE teacher_id = %s AND subject_id = %s
+        """, (req['teacher_id'], req['subject_id']))
         ta = cursor.fetchone()
         
         if ta:
-            cursor.execute("DELETE FROM Enrollments WHERE usid = %s AND assignment_id = %s", (req['usid'], ta['assignment_id']))
+            cursor.execute("DELETE FROM Enrollments WHERE user_id = %s AND assignment_id = %s", (req['user_id'], ta['assignment_id']))
         else:
             # Fallback if assignment not found (though it should be)
-            cursor.execute("DELETE FROM Enrollments WHERE usid = %s AND assignment_id IN (SELECT assignment_id FROM Teacher_Assignments WHERE subject_id = %s)", (req['usid'], req['subject_id']))
+            cursor.execute("DELETE FROM Enrollments WHERE user_id = %s AND assignment_id IN (SELECT assignment_id FROM Teacher_Assignments WHERE subject_id = %s)", (req['user_id'], req['subject_id']))
         
         # 3. Optional: Global Archive (Keeping it as per previous logic, but usually a drop is per subject)
         # If the user wants the student to be 'Archived' globally, we keep this.
-        cursor.execute("UPDATE Students SET status = 'Archived' WHERE usid = %s", (req['usid'],))
+        cursor.execute("UPDATE Students SET status = 'Archived' WHERE user_id = %s", (req['user_id'],))
         
         conn.commit()
         flash('Drop request approved. Student has been unenrolled from the subject and archived.', 'success')
@@ -1530,7 +1737,7 @@ def approve_drop(request_id):
 @admin.route('/reject_drop/<int:request_id>')
 def reject_drop(request_id):
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     cursor.execute("UPDATE Drop_Requests SET status = 'Rejected' WHERE request_id = %s", (request_id,))
     conn.commit()
     cursor.close()
@@ -1552,7 +1759,7 @@ def bulk_enroll():
         return redirect(url_for('admin.manage_students'))
         
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     try:
         # Get assignment details
@@ -1565,10 +1772,10 @@ def bulk_enroll():
             
         # Get students who are NOT enrolled in THIS subject AND do NOT have THIS teacher
         query = """
-            SELECT usid FROM Students 
+            SELECT user_id FROM Students 
             WHERE status = 'Active'
-            AND usid NOT IN (
-                SELECT e.usid FROM Enrollments e
+            AND user_id NOT IN (
+                SELECT e.user_id FROM Enrollments e
                 JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
                 WHERE ta.subject_id = %s
             )
@@ -1579,7 +1786,7 @@ def bulk_enroll():
             query += " AND course = %s"
             params.append(course_filter)
             
-        query += " ORDER BY RANDOM() LIMIT %s"
+        query += " ORDER BY RAND() LIMIT %s"
         params.append(count)
         
         cursor.execute(query, tuple(params))
@@ -1588,12 +1795,12 @@ def bulk_enroll():
         if not students_to_enroll:
             flash('No eligible students found for bulk enrollment matching your criteria.', 'warning')
         else:
-            enroll_query = "INSERT INTO Enrollments (usid, assignment_id) VALUES (%s, %s)"
-            enroll_data = [(s['usid'], assignment_id) for s in students_to_enroll]
+            enroll_query = "INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s)"
+            enroll_data = [(s['user_id'], assignment_id) for s in students_to_enroll]
             
             cursor.executemany(enroll_query, enroll_data)
             conn.commit()
-            flash(f'Successfully enrolled {len(students_to_enroll)} students into {assignment["section"]} with teacher {assignment["utid"]}.', 'success')
+            flash(f'Successfully enrolled {len(students_to_enroll)} students into {assignment["section"]} with teacher {assignment["teacher_id"]}.', 'success')
             
     except Exception as e:
         flash(f'Error in bulk enrollment: {str(e)}', 'error')
@@ -1606,14 +1813,14 @@ def bulk_enroll():
 @admin.route('/bulk_enroll_selected', methods=['POST'])
 def bulk_enroll_selected():
     assignment_id = request.form.get('assignment_id')
-    selected_usids = request.form.get('selected_usids', '').split(',')
+    selected_user_ids = request.form.get('selected_user_ids', '').split(',')
     
-    if not assignment_id or not selected_usids or selected_usids == ['']:
+    if not assignment_id or not selected_user_ids or selected_user_ids == ['']:
         flash('Please select at least one student and a target class.', 'error')
         return redirect(url_for('admin.manual_enroll'))
         
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     try:
         # Get assignment details
@@ -1626,19 +1833,19 @@ def bulk_enroll_selected():
             
         # Filter out students already enrolled in this subject or with this teacher
         cursor.execute("""
-            SELECT e.usid FROM Enrollments e
+            SELECT e.user_id FROM Enrollments e
             JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
             WHERE ta.subject_id = %s
         """, (assignment['subject_id'],))
-        ineligible_usids = {row['usid'] for row in cursor.fetchall()}
+        ineligible_usids = {row['user_id'] for row in cursor.fetchall()}
         
-        to_enroll = [usid for usid in selected_usids if usid not in ineligible_usids]
+        to_enroll = [uid for uid in selected_user_ids if uid not in ineligible_usids]
         
         if not to_enroll:
             flash('All selected students are already enrolled in this subject or assigned to this teacher.', 'warning')
         else:
-            enroll_query = "INSERT INTO Enrollments (usid, assignment_id) VALUES (%s, %s)"
-            enroll_data = [(usid, assignment_id) for usid in to_enroll]
+            enroll_query = "INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s)"
+            enroll_data = [(uid, assignment_id) for uid in to_enroll]
             
             cursor.executemany(enroll_query, enroll_data)
             
@@ -1693,7 +1900,7 @@ def audit_logs():
     
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Base query
     query = "FROM System_Audit_Log WHERE 1=1"
@@ -1746,19 +1953,20 @@ def audit_logs():
 @admin.route('/attendance_analytics')
 def attendance_analytics():
     subject_id = request.args.get('subject_id', type=int)
-    utid = request.args.get('utid')
+    utid = request.args.get('utid')  # Changed from 'teacher_id' to 'utid'
     section = request.args.get('section')
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Fetch all assigned classes for the selector
     cursor.execute("""
-        SELECT s.subject_id, s.subject_code, s.subject_name, ta.section, ta.utid,
+        SELECT s.subject_id, s.subject_code, s.subject_name, ta.section, ta.teacher_id as utid,
                t.first_name, t.middle_name, t.last_name
         FROM Teacher_Assignments ta
         JOIN Subjects s ON ta.subject_id = s.subject_id
-        JOIN Teachers t ON ta.utid = t.utid
+        JOIN Teachers t ON ta.teacher_id = t.user_id
+        WHERE (ta.is_archived IS NULL OR ta.is_archived = 0)
         ORDER BY s.subject_code, ta.section
     """)
     all_classes = cursor.fetchall()
@@ -1777,37 +1985,37 @@ def attendance_analytics():
         if selected_class:
             # Weekly Trends
             cursor.execute("""
-                SELECT CONCAT('Week ', CEIL(EXTRACT(DAY FROM a.scan_time) / 7), ' - ', TO_CHAR(a.scan_time, 'Month'), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
-                       EXTRACT(YEAR FROM a.scan_time) as yr,
-                       EXTRACT(MONTH FROM a.scan_time) as mo,
-                       CEIL(EXTRACT(DAY FROM a.scan_time) / 7) as wk,
-                       MIN(a.scan_time::date) as week_start,
-                       MAX(a.scan_time::date) as week_end,
-                       COUNT(DISTINCT (a.usid, a.scan_time::date)) as total_students,
+                SELECT CONCAT('Week ', CEIL(DAY(a.scan_time) / 7), ' - ', DATE_FORMAT(a.scan_time, '%M'), ' ', YEAR(a.scan_time)) as period,
+                       YEAR(a.scan_time) as yr,
+                       MONTH(a.scan_time) as mo,
+                       CEIL(DAY(a.scan_time) / 7) as wk,
+                       MIN(DATE(a.scan_time)) as week_start,
+                       MAX(DATE(a.scan_time)) as week_end,
+                       COUNT(DISTINCT CONCAT(a.user_id, '_', DATE(a.scan_time))) as total_students,
                        SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present_count,
                        SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent_count,
                        SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) as late_count
                 FROM Attendance a
                 JOIN Sessions ses ON a.session_id = ses.session_id
-                WHERE ses.subject_id = %s AND ses.utid = %s AND ses.section = %s
-                GROUP BY yr, mo, wk, period
+                WHERE ses.subject_id = %s AND ses.teacher_id = %s AND ses.section = %s
+                GROUP BY YEAR(a.scan_time), MONTH(a.scan_time), CEIL(DAY(a.scan_time) / 7), period
                 ORDER BY yr DESC, mo DESC, wk DESC
             """, (subject_id, utid, section))
             weekly_trends = cursor.fetchall()
             
             # Monthly Trends
             cursor.execute("""
-                SELECT CONCAT(TO_CHAR(a.scan_time, 'Month'), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
-                       EXTRACT(YEAR FROM a.scan_time) as yr,
-                       EXTRACT(MONTH FROM a.scan_time) as mo,
-                       COUNT(DISTINCT (a.usid, a.scan_time::date)) as total_students,
+                SELECT CONCAT(DATE_FORMAT(a.scan_time, '%M'), ' ', YEAR(a.scan_time)) as period,
+                       YEAR(a.scan_time) as yr,
+                       MONTH(a.scan_time) as mo,
+                       COUNT(DISTINCT CONCAT(a.user_id, '_', DATE(a.scan_time))) as total_students,
                        SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present_count,
                        SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent_count,
                        SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) as late_count
                 FROM Attendance a
                 JOIN Sessions ses ON a.session_id = ses.session_id
-                WHERE ses.subject_id = %s AND ses.utid = %s AND ses.section = %s
-                GROUP BY yr, mo, period
+                WHERE ses.subject_id = %s AND ses.teacher_id = %s AND ses.section = %s
+                GROUP BY YEAR(a.scan_time), MONTH(a.scan_time), period
                 ORDER BY yr DESC, mo DESC
             """, (subject_id, utid, section))
             monthly_trends = cursor.fetchall()
@@ -1829,72 +2037,103 @@ def manual_enroll():
     Allows searching any active student and enrolling them in any assigned class.
     """
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     if request.method == 'POST':
-        usid = request.form.get('usid')
+        user_id = request.form.get('user_id')
         assignment_id = request.form.get('assignment_id')
         
+        if not user_id or not assignment_id:
+            flash('Invalid request. Student and class must be selected.', 'error')
+            cursor.close()
+            conn.close()
+            return redirect(url_for('admin.manual_enroll'))
+
         # Get assignment details
         cursor.execute("SELECT * FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
         assignment = cursor.fetchone()
         
         if assignment:
-            # Check if already enrolled in this SUBJECT or with this TEACHER
+            # Check if already enrolled in this exact assignment
             cursor.execute("""
-                SELECT s.subject_name, (t.first_name || ' ' || t.last_name) as teacher_name,
-                       ta.subject_id, ta.utid
+                SELECT e.enrollment_id FROM Enrollments e
+                WHERE e.user_id = %s AND e.assignment_id = %s
+            """, (user_id, assignment_id))
+            if cursor.fetchone():
+                flash('Student is already enrolled in this class.', 'warning')
+                cursor.close()
+                conn.close()
+                return redirect(url_for('admin.manual_enroll'))
+
+            # Check if already enrolled in the same subject (different section/teacher)
+            cursor.execute("""
+                SELECT s.subject_name
                 FROM Enrollments e
                 JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
                 JOIN Subjects s ON ta.subject_id = s.subject_id
-                JOIN Teachers t ON ta.utid = t.utid
-                WHERE e.usid = %s AND (ta.subject_id = %s OR ta.utid = %s)
-            """, (usid, assignment['subject_id'], assignment['utid']))
-            
+                WHERE e.user_id = %s AND ta.subject_id = %s
+            """, (user_id, assignment['subject_id']))
             conflict = cursor.fetchone()
-            if not conflict:
-                cursor.execute("INSERT INTO Enrollments (usid, assignment_id) VALUES (%s, %s) RETURNING enrollment_id", 
-                               (usid, assignment_id))
-                enrollment_id = cursor.fetchone()['enrollment_id']
-                
+
+            if conflict:
+                flash(f"Student is already enrolled in '{conflict['subject_name']}'. Cannot enroll in the same subject twice.", 'warning')
+            else:
+                cursor.execute("INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s)",
+                               (user_id, assignment_id))
+                enrollment_id = cursor.lastrowid
+
                 # Audit Logging
-                log_system_action(cursor, 'Enrollments', enrollment_id, 'Create', session['user_id'], session['role'], 
-                                   f"Manual Enrollment: Student {usid} enrolled in Assignment ID {assignment_id}")
-                
+                log_system_action(cursor, 'Enrollments', enrollment_id, 'Create', session['user_id'], session['role'],
+                                  f"Manual Enrollment: Student {user_id} enrolled in Assignment ID {assignment_id}")
+
                 conn.commit()
                 flash('Student successfully enrolled.', 'success')
-            else:
-                flash(f"Student is already enrolled in '{conflict['subject_name']}'. Duplicate subject enrollment is not allowed.", 'warning')
         else:
             flash('Selected class not found.', 'error')
-            
+
+        cursor.close()
+        conn.close()
         return redirect(url_for('admin.manual_enroll'))
 
-    # GET Logic
-    search = request.args.get('search', '').strip()
-    
+    # GET Logic — clear session filters
+    if request.args.get('clear'):
+        session.pop('manual_enroll_search', None)
+        cursor.close()
+        conn.close()
+        return redirect(url_for('admin.manual_enroll'))
+
+    # Persist search in session
+    search_param = request.args.get('search')
+    if search_param is not None:
+        session['manual_enroll_search'] = search_param.strip()
+    search = session.get('manual_enroll_search', '')
+
     # Fetch all assigned classes for selection
     cursor.execute("""
-        SELECT ta.assignment_id, s.subject_code, s.subject_name, ta.section, t.first_name, t.last_name
+        SELECT ta.assignment_id, s.subject_code, s.subject_name, ta.section,
+               t.first_name, t.last_name
         FROM Teacher_Assignments ta
         JOIN Subjects s ON ta.subject_id = s.subject_id
-        JOIN Teachers t ON ta.utid = t.utid
+        JOIN Teachers t ON ta.teacher_id = t.user_id
         ORDER BY s.subject_code, ta.section
     """)
     all_assignments = cursor.fetchall()
-    
-    # Fetch students based on search
-    query = "SELECT * FROM Students WHERE status = 'Active'"
+
+    # Fetch active students; always show all when no search, filter when searching
+    query = """
+        SELECT user_id, first_name, middle_name, last_name, email, course, level, section, status
+        FROM Students WHERE status = 'Active'
+    """
     params = []
     if search:
-        query += " AND (first_name LIKE %s OR last_name LIKE %s OR usid LIKE %s OR email LIKE %s)"
+        query += " AND (first_name LIKE %s OR middle_name LIKE %s OR last_name LIKE %s OR user_id LIKE %s OR email LIKE %s)"
         val = f"%{search}%"
-        params.extend([val, val, val, val])
-    
-    query += " ORDER BY level, last_name LIMIT 50" # Limit for performance, search will find specific ones
+        params.extend([val, val, val, val, val])
+
+    query += " ORDER BY level, last_name"
     cursor.execute(query, params)
     students = cursor.fetchall()
-    
+
     cursor.close()
     conn.close()
     return render_template('manual_enroll.html', students=students, all_assignments=all_assignments, search=search)

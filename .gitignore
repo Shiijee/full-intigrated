@@ -13,7 +13,14 @@ integrated/voxify_app/Voxify/SuperAdmin/__pycache__/routes.cpython-314.pyc
 integrated/voxify_app/Voxify/utils/__pycache__/__init__.cpython-314.pyc
 integrated/voxify_app/Voxify/utils/__pycache__/election_status.cpython-314.pyc
 integrated/voxify_app/Voxify/utils/__pycache__/otp.cpython-314.pyc
-integrated/voxify_app/Voxify/Voter/__pycache__/routes.cpython-314.pyc
+integrated/voxify_app/Voxify/Voter/__pycache__/routes.cpython-314.pyca
 integrated/voxify_app/Voxify/utils/__pycache__/__init__.cpython-314.pyc
 integrated/voxify_app/Voxify/utils/__pycache__/election_status.cpython-314.pyc
 integrated/voxify_app/Voxify/utils/__pycache__/otp.cpython-314.pyc
+integrated/newchange_app/Main/auth/__pycache__/loginPY.cpython-314.pyc
+integrated/newchange_app/Main/__pycache__/__init__.cpython-314.pyc
+.gitignore
+integrated/newchange_app/Main/__pycache__/db.cpython-314.pyc
+integrated/newchange_app/Main/__pycache__/sso.cpython-314.pyc
+integrated/newchange_app/Main/admin/__pycache__/adminPY.cpython-314.pyc
+integrated/newchange_app/Main/admin/__pycache__/crudPY.cpython-314.pyc

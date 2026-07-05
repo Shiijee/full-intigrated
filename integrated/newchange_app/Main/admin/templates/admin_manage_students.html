@@ -13,13 +13,13 @@
                         <aside class="sidebar">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('admin.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
                 <div class="user-menu-container">
-                    <button class="burger-btn" onclick="toggleUserMenu()">
-                        <i class="fas fa-ellipsis-v"></i>
+                    <button class="burger-btn" onclick="toggleUserMenu()" aria-label="Open account options">
+                        <i class="fas fa-ellipsis-h"></i>
                     </button>
                     <div id="user-dropdown" class="user-dropdown">
                         <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
@@ -27,19 +27,20 @@
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
                         </div>
                         <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
-                            <i class="fas fa-key"></i> Change Password
+                            <i class="fas fa-lock"></i> Change Password
                         </a>
                         <a href="#" class="dropdown-item" onclick="openChangePinModal()">
-                            <i class="fas fa-shield-alt"></i> Security PIN
+                            <i class="fas fa-shield-halved"></i> Security PIN
                         </a>
                         <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                            <i class="fas fa-right-from-bracket"></i> Logout
                         </a>
                     </div>
                 </div>
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
                 <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
                 <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
                 <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
@@ -58,8 +59,8 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <button class="sidebar-toggle" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open navigation menu">
+                    <i class="fas fa-grip-lines"></i>
                 </button>
                 <div class="header-left">
                     <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Manage Students</h2>
@@ -170,11 +171,11 @@
                             <tbody>
                                 {% for student in students if student.status == 'Active' %}
                                 <tr>
-                                    <td class="hide-on-mobile" data-label="Student ID">{{ student.usid }}</td>
+                                    <td class="hide-on-mobile" data-label="Student ID">{{ student.user_id }}</td>
                                     <td data-label="Student Details">
                                         <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
                                         <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
-                                            ID: {{ student.usid }} &bull; {{ student.course }} - {{ student.level }}
+                                            ID: {{ student.user_id }} &bull; {{ student.course }} - {{ student.level }}
                                         </div>
                                     </td>
                                     <td class="hide-on-mobile" data-label="Course & Level">{{ student.course }} - {{ student.level }}</td>
@@ -192,7 +193,7 @@
                                     <td class="action-cell" data-label="Action">
                                         <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
                                         {% if student.lockout_time and student.lockout_time > now %}
-                                        <a href="{{ url_for('admin.unlock_user', user_type='student', user_id=student.usid) }}" 
+                                        <a href="{{ url_for('admin.unlock_user', user_type='student', user_id=student.user_id) }}" 
                                            class="btn btn-success" 
                                            style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;" title="Unlock">
                                             <i class="fas fa-unlock"></i>
@@ -201,28 +202,21 @@
                                         <button class="btn btn-secondary" 
                                                 style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
                                                 title="Edit"
-                                                onclick="openEditModal(`{{ student.usid }}`, `{{ student.first_name }}`, `{{ student.middle_name }}`, `{{ student.last_name }}`, `{{ student.email }}`, `{{ student.course }}`, `{{ student.level }}`, `{{ student.section }}`, `{{ student.status }}`)">
+                                                onclick="openEditModal(`{{ student.user_id }}`, `{{ student.first_name }}`, `{{ student.middle_name }}`, `{{ student.last_name }}`, `{{ student.email }}`, `{{ student.course }}`, `{{ student.level }}`, `{{ student.section }}`, `{{ student.status }}`)">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         <button class="btn btn-primary" 
                                                 style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
                                                 title="Enroll"
-                                                onclick="openEnrollModal(`{{ student.usid }}`, `{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}`)">
+                                                onclick="openEnrollModal(`{{ student.user_id }}`, `{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}`)">
                                             <i class="fas fa-user-plus"></i>
                                         </button>
-                                        <a href="{{ url_for('admin.archive_student', usid=student.usid) }}" 
+                                        <a href="{{ url_for('admin.archive_student', user_id=student.user_id) }}" 
                                            class="btn btn-warning" 
                                            style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
                                            title="Archive"
                                            onclick="return confirm('Are you sure you want to archive this student?')">
                                             <i class="fas fa-archive"></i>
-                                        </a>
-                                        <a href="#" 
-                                           class="btn btn-danger" 
-                                           style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
-                                           title="Delete"
-                                           onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_student', usid=student.usid) }}`)">
-                                            <i class="fas fa-trash-alt"></i>
                                         </a>
                                         </div>
                                     </td>
@@ -308,11 +302,11 @@
                                     {% if estudent.assignment_id == subject.assignment_id %}
                                     {% set ns.found = true %}
                                     <tr>
-                                        <td class="hide-on-mobile" data-label="Student ID">{{ estudent.usid }}</td>
+                                        <td class="hide-on-mobile" data-label="Student ID">{{ estudent.user_id }}</td>
                                         <td data-label="Student Details">
                                             <div style="font-weight: 600; color: var(--text-main);">{{ estudent.first_name }} {{ estudent.middle_name }} {{ estudent.last_name }}</div>
                                             <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
-                                                ID: {{ estudent.usid }} &bull; Sec: {{ estudent.section }}
+                                                ID: {{ estudent.user_id }} &bull; Sec: {{ estudent.section }}
                                             </div>
                                         </td>
                                         <td class="hide-on-mobile" data-label="Section">{{ estudent.section }}</td>
@@ -327,10 +321,10 @@
                                             <button class="btn btn-secondary" 
                                                     style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
                                                     title="Edit"
-                                                    onclick="openEditModal('{{ estudent.usid }}', '{{ estudent.first_name }}', '{{ estudent.middle_name }}', '{{ estudent.last_name }}', '{{ estudent.email }}', '{{ estudent.course }}', '{{ estudent.level }}', '{{ estudent.section }}', '{{ estudent.status }}')">
+                                                    onclick="openEditModal('{{ estudent.user_id }}', '{{ estudent.first_name }}', '{{ estudent.middle_name }}', '{{ estudent.last_name }}', '{{ estudent.email }}', '{{ estudent.course }}', '{{ estudent.level }}', '{{ estudent.section }}', '{{ estudent.status }}')">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <a href="{{ url_for('admin.archive_student', usid=estudent.usid) }}" 
+                                            <a href="{{ url_for('admin.archive_student', user_id=estudent.user_id) }}" 
                                                class="btn btn-warning" 
                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
                                                title="Archive"
@@ -348,7 +342,7 @@
                                                class="btn btn-danger" 
                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
                                                title="Delete"
-                                               onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_student', usid=estudent.usid) }}`)">
+                                               onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_student', user_id=estudent.user_id) }}`)">
                                                 <i class="fas fa-trash-alt"></i>
                                             </a>
                                             </div>
@@ -397,11 +391,11 @@
                             <tbody>
                                 {% for student in unassigned_students %}
                                 <tr>
-                                    <td class="hide-on-mobile" style="font-weight: 600;" data-label="Student ID">{{ student.usid }}</td>
+                                    <td class="hide-on-mobile" style="font-weight: 600;" data-label="Student ID">{{ student.user_id }}</td>
                                     <td data-label="Student Details">
                                         <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
                                         <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
-                                            ID: {{ student.usid }} &bull; {{ student.course }} - {{ student.level }}
+                                            ID: {{ student.user_id }} &bull; {{ student.course }} - {{ student.level }}
                                         </div>
                                     </td>
                                     <td class="hide-on-mobile" data-label="Course & Year">{{ student.course }} - {{ student.level }}</td>
@@ -410,7 +404,7 @@
                                         <button class="btn btn-primary" 
                                                 style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
                                                 title="Enroll Now"
-                                                onclick="openEnrollModal(`{{ student.usid }}`, `{{ student.first_name }} {{ student.last_name }}`)">
+                                                onclick="openEnrollModal(`{{ student.user_id }}`, `{{ student.first_name }} {{ student.last_name }}`)">
                                             <i class="fas fa-plus-circle"></i>
                                         </button>
                                     </td>
@@ -449,21 +443,28 @@
                             <tbody>
                                 {% for student in students if student.status == 'Archived' %}
                                 <tr>
-                                    <td class="hide-on-mobile" data-label="Student ID">{{ student.usid }}</td>
+                                    <td class="hide-on-mobile" data-label="Student ID">{{ student.user_id }}</td>
                                     <td data-label="Student Details">
                                         <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
                                         <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
-                                            ID: {{ student.usid }} &bull; {{ student.course }} - {{ student.level }}
+                                            ID: {{ student.user_id }} &bull; {{ student.course }} - {{ student.level }}
                                         </div>
                                     </td>
                                     <td class="hide-on-mobile" data-label="Course & Level">{{ student.course }} - {{ student.level }}</td>
                                     <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ student.email }}">{{ student.email }}</td>
                                     <td class="action-cell" data-label="Action">
-                                        <a href="{{ url_for('admin.unarchive_student', usid=student.usid) }}" 
+                                        <a href="{{ url_for('admin.unarchive_student', user_id=student.user_id) }}" 
                                            class="btn btn-success" 
                                            style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
                                            title="Unarchive">
                                             <i class="fas fa-undo"></i>
+                                        </a>
+                                        <a href="#"
+                                           class="btn btn-danger"
+                                           style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
+                                           title="Delete"
+                                           onclick="event.preventDefault(); confirmWithPin(`{{ url_for('admin.delete_student', user_id=student.user_id) }}`)">
+                                            <i class="fas fa-trash-alt"></i>
                                         </a>
                                     </td>
                                 </tr>
@@ -623,7 +624,7 @@
             <h3 class="mb-4">Enroll <span id="enroll_student_name"></span></h3>
             <form method="POST" action="{{ url_for('admin.enroll_student') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <input type="hidden" name="usid" id="enroll_usid">
+                <input type="hidden" name="user_id" id="enroll_usid">
                 <div class="form-group mb-4">
                     <label class="form-label">Select Subject & Section</label>
                     <select name="assignment_id" class="form-control" required>
@@ -887,6 +888,7 @@
     </nav>
 
 
-<script src="{{ url_for('static', filename='js/main.js') }}?v=1.1"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
+<script src="{{ url_for('admin.static', filename='Astyle.js') }}"></script>
 </body>
 </html>

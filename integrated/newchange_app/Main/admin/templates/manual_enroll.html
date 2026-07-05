@@ -36,13 +36,13 @@
                 <aside class="sidebar">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('admin.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
                 <div class="user-menu-container">
-                    <button class="burger-btn" onclick="toggleUserMenu()">
-                        <i class="fas fa-ellipsis-v"></i>
+                    <button class="burger-btn" onclick="toggleUserMenu()" aria-label="Open account options">
+                        <i class="fas fa-ellipsis-h"></i>
                     </button>
                     <div id="user-dropdown" class="user-dropdown">
                         <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
@@ -50,19 +50,20 @@
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
                         </div>
                         <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
-                            <i class="fas fa-key"></i> Change Password
+                            <i class="fas fa-lock"></i> Change Password
                         </a>
                         <a href="#" class="dropdown-item" onclick="openChangePinModal()">
-                            <i class="fas fa-shield-alt"></i> Security PIN
+                            <i class="fas fa-shield-halved"></i> Security PIN
                         </a>
                         <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                            <i class="fas fa-right-from-bracket"></i> Logout
                         </a>
                     </div>
                 </div>
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
                 <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
                 <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
                 <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
@@ -81,8 +82,8 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <button class="sidebar-toggle" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open navigation menu">
+                    <i class="fas fa-grip-lines"></i>
                 </button>
                 <div class="header-left">
                     <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Admin Portal</h2>
@@ -114,7 +115,7 @@
 
                 <!-- Search and Selection Panel -->
                 <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
-                    <form method="GET" action="{{ url_for('admin.manual_enroll') }}" class="filter-grid" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+                    <form method="GET" action="{{ url_for('admin.manual_enroll') }}" class="filter-grid" style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: flex-end;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Search Student</label>
                             <input type="text" name="search" class="form-control" placeholder="Search by ID, Name, or Email..." value="{{ search }}">
@@ -123,7 +124,7 @@
                             <button type="submit" class="btn btn-primary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <a href="{{ url_for('admin.manual_enroll', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                            <a href="{{ url_for('admin.manual_enroll', clear=1) }}" class="btn btn-secondary" style="height: 45px; width: 45px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;" title="Clear search">
                                 <i class="fas fa-rotate"></i>
                             </a>
                         </div>
@@ -141,6 +142,9 @@
                     {% endfor %}
 
                     {% if students %}
+                    <p class="text-muted mb-4" style="font-size: 0.9rem;">
+                        Showing <strong>{{ students | length }}</strong> active student(s){% if search %} matching "<strong>{{ search }}</strong>"{% endif %}.
+                    </p>
                         {% for group_name in ['BSIT - 1st Year', 'BSIT - 2nd Year', 'BSIT - 3rd Year', 'BSIT - 4th Year', 'BSCS - 1st Year', 'BSCS - 2nd Year', 'BSCS - 3rd Year', 'BSCS - 4th Year', 'OTHER - 1st Year', 'OTHER - 2nd Year', 'OTHER - 3rd Year', 'OTHER - 4th Year'] %}
                             {% if group_name in grouped_students and grouped_students[group_name]|length > 0 %}
                             <div class="enrollment-group" style="margin-bottom: 2rem;">
@@ -174,9 +178,9 @@
                                         <tbody>
                                             {% for student in grouped_students[group_name] %}
                                             <tr>
-                                                <td><input type="checkbox" class="student-checkbox group-{{ safe_group_name }}" value="{{ student.usid }}" onclick="updateBulkCount()"></td>
+                                                <td><input type="checkbox" class="student-checkbox group-{{ safe_group_name }}" value="{{ student.user_id }}" onclick="updateBulkCount()"></td>
 
-                                                <td class="hide-on-mobile" data-label="Student ID"><span class="badge badge-secondary">{{ student.usid }}</span></td>
+                                                <td class="hide-on-mobile" data-label="Student ID"><span class="badge badge-secondary">{{ student.user_id }}</span></td>
                                                 <td data-label="Student Name" style="font-weight: 600;">
                                                     {{ student.first_name }} {{ student.middle_name if student.middle_name else '' }} {{ student.last_name }}
                                                     {% if student.level == 'Irregular Student' %}
@@ -186,7 +190,7 @@
                                                 <td class="hide-on-mobile" data-label="Email" style="font-size: 0.9rem; color: var(--text-muted);">{{ student.email if student.email else 'N/A' }}</td>
                                                 <td class="hide-on-mobile" data-label="Status"><span class="badge badge-success">{{ student.status }}</span></td>
                                                 <td class="action-cell" data-label="Action">
-                                                    <button type="button" class="btn btn-primary btn-sm" onclick="openEnrollModal(`{{ student.usid }}`, `{{ student.first_name }} {{ student.last_name }}`)">
+                                                    <button type="button" class="btn btn-primary btn-sm" onclick="openEnrollModal(`{{ student.user_id }}`, `{{ student.first_name }} {{ student.last_name }}`)">
                                                         <i class="fas fa-user-plus"></i> <span class="btn-text">Enroll</span>
                                                     </button>
                                                 </td>
@@ -218,7 +222,7 @@
             
             <form method="POST" action="{{ url_for('admin.manual_enroll') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <input type="hidden" name="usid" id="enroll_usid">
+                <input type="hidden" name="user_id" id="enroll_usid">
                 
                 <div class="form-group mb-4">
                     <label class="form-label">Select Class Assignment</label>
@@ -249,7 +253,7 @@
             
             <form method="POST" action="{{ url_for('admin.bulk_enroll_selected') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <input type="hidden" name="selected_usids" id="bulk_usids">
+                <input type="hidden" name="selected_user_ids" id="bulk_usids">
                 
                 <div class="form-group mb-4">
                     <label class="form-label">Select Class Assignment</label>
@@ -347,6 +351,6 @@
     </nav>
 
 
-<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
 </body>
 </html>

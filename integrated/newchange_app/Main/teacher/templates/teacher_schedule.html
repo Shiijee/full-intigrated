@@ -12,10 +12,10 @@
         <!-- Sidebar -->
                         <aside class="sidebar">
             <div class="sidebar-logo">
-                <div>
+                <a href="{{ url_for('teacher.dashboard') }}" class="logo-link">
                     <i class="fas fa-fingerprint"></i>
                     <span>Attendeez</span>
-                </div>
+                </a>
             <nav class="sidebar-nav">
                 <a href="{{ url_for('teacher.profile') }}" class="nav-item profile-nav-item" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
                 <a href="{{ url_for('teacher.dashboard') }}" class="nav-item active" data-tooltip="Teacher Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Teacher Dashboard</span></a>

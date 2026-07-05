@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
-from Main.db import get_db_connection, log_system_action
-from psycopg2.extras import RealDictCursor
+from Main.db import get_db_connection, get_cursor, log_system_action
 from datetime import datetime, timedelta
 import json
 import os
@@ -10,21 +9,15 @@ user = Blueprint('user', __name__, template_folder='templates')
 
 @user.before_request
 def require_login():
-    from Main.sso import require_sso
-    result = require_sso()
-    # require_sso returns a redirect Response when not authenticated
-    if hasattr(result, 'status_code'):
-        return result
-    # Enforce role — only students may access /user/* routes
-    if result.get('role') != 'student':
-        from flask import abort
-        abort(403)
+    if 'user_id' not in session or session.get('role') != 'student':
+        flash('Please login as student first.', 'error')
+        return redirect(url_for('auth.student_login'))
 
 @user.route('/dashboard')
 def dashboard():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Get Enrolled Subjects with their specific stats
     cursor.execute("""
@@ -32,8 +25,8 @@ def dashboard():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    JOIN Teachers t ON ta.utid = t.utid
-    WHERE e.usid = %s
+    JOIN Teachers t ON ta.teacher_id = t.user_id
+    WHERE e.user_id = %s
     """, (usid,))
     subjects_raw = cursor.fetchall()
     
@@ -45,9 +38,9 @@ def dashboard():
             SELECT a.status, COUNT(*) as count 
             FROM Attendance a
             JOIN Sessions s_tab ON a.session_id = s_tab.session_id
-            JOIN Teacher_Assignments ta ON s_tab.utid = ta.utid AND s_tab.subject_id = ta.subject_id AND s_tab.section = ta.section
+            JOIN Teacher_Assignments ta ON s_tab.teacher_id = ta.teacher_id AND s_tab.subject_id = ta.subject_id AND s_tab.section = ta.section
             JOIN Enrollments e ON ta.assignment_id = e.assignment_id
-            WHERE a.usid = %s AND s_tab.subject_id = %s AND e.usid = %s
+            WHERE a.user_id = %s AND s_tab.subject_id = %s AND e.user_id = %s
             GROUP BY a.status
         """, (usid, s['subject_id'], usid))
         s_stats = {row['status']: row['count'] for row in cursor.fetchall()}
@@ -72,7 +65,7 @@ def dashboard():
     low_attendance = attendance_pct < 75
     
     # Get Notifications
-    cursor.execute("SELECT * FROM Notifications WHERE usid = %s ORDER BY created_at DESC", (usid,))
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC", (usid,))
     notifications = cursor.fetchall()
     unread_notifs = [n for n in notifications if not n['is_read']]
     
@@ -92,7 +85,7 @@ def dashboard():
 def subject_performance(subject_id):
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Get Subject Info and Teacher Info
     cursor.execute("""
@@ -100,8 +93,8 @@ def subject_performance(subject_id):
         FROM Subjects s
         JOIN Teacher_Assignments ta ON s.subject_id = ta.subject_id
         JOIN Enrollments e ON ta.assignment_id = e.assignment_id
-        JOIN Teachers t ON ta.utid = t.utid
-        WHERE s.subject_id = %s AND e.usid = %s
+        JOIN Teachers t ON ta.teacher_id = t.user_id
+        WHERE s.subject_id = %s AND e.user_id = %s
     """, (subject_id, usid))
     subject = cursor.fetchone()
     
@@ -114,7 +107,7 @@ def subject_performance(subject_id):
         SELECT a.status, COUNT(*) as count 
         FROM Attendance a
         JOIN Sessions s_tab ON a.session_id = s_tab.session_id
-        WHERE a.usid = %s AND s_tab.subject_id = %s
+        WHERE a.user_id = %s AND s_tab.subject_id = %s
         GROUP BY a.status
     """, (usid, subject_id))
     stats = {row['status']: row['count'] for row in cursor.fetchall()}
@@ -126,9 +119,9 @@ def subject_performance(subject_id):
     cursor.execute("""
         SELECT sch.day_of_week, sch.start_time, sch.end_time, sch.room
         FROM schedule sch
-        JOIN Teacher_Assignments ta ON sch.subject_id = ta.subject_id AND sch.section = ta.section AND sch.utid = ta.utid
+        JOIN Teacher_Assignments ta ON sch.subject_id = ta.subject_id AND sch.section = ta.section AND sch.teacher_id = ta.teacher_id
         JOIN Enrollments e ON ta.assignment_id = e.assignment_id
-        WHERE sch.subject_id = %s AND e.usid = %s
+        WHERE sch.subject_id = %s AND e.user_id = %s
         ORDER BY CASE sch.day_of_week
             WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3
             WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7
@@ -153,11 +146,11 @@ def subject_performance(subject_id):
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    WHERE e.usid = %s
+    WHERE e.user_id = %s
     """, (usid,))
     subjects = cursor.fetchall()
     
-    cursor.execute("SELECT * FROM Notifications WHERE usid = %s AND is_read = FALSE", (usid,))
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s AND is_read = 0", (usid,))
     unread_count = len(cursor.fetchall())
     
     cursor.close()
@@ -178,12 +171,12 @@ def mark_notifications_read():
     notif_id = data.get('notification_id')
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     if notif_id:
-        cursor.execute("UPDATE Notifications SET is_read = TRUE WHERE notification_id = %s AND usid = %s", (notif_id, usid))
+        cursor.execute("UPDATE Notifications SET is_read = 1 WHERE notification_id = %s AND user_id = %s", (notif_id, usid))
     else:
-        cursor.execute("UPDATE Notifications SET is_read = TRUE WHERE usid = %s", (usid,))
+        cursor.execute("UPDATE Notifications SET is_read = 1 WHERE user_id = %s", (usid,))
         
     conn.commit()
     cursor.close()
@@ -194,8 +187,8 @@ def mark_notifications_read():
 def delete_all_notifications():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM Notifications WHERE usid = %s", (usid,))
+    cursor = get_cursor(conn)
+    cursor.execute("DELETE FROM Notifications WHERE user_id = %s", (usid,))
     conn.commit()
     cursor.close()
     conn.close()
@@ -205,8 +198,8 @@ def delete_all_notifications():
 def get_notifications():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("SELECT * FROM Notifications WHERE usid = %s ORDER BY created_at DESC LIMIT 10", (usid,))
+    cursor = get_cursor(conn)
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC LIMIT 10", (usid,))
     notifications = cursor.fetchall()
     
     # Convert datetime to string for JSON serialization
@@ -222,7 +215,7 @@ def get_notifications():
 def notifications_page():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Get Enrolled Subjects for Sidebar
     cursor.execute("""
@@ -230,12 +223,12 @@ def notifications_page():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    WHERE e.usid = %s
+    WHERE e.user_id = %s
     """, (usid,))
     subjects = cursor.fetchall()
     
     # Get all notifications
-    cursor.execute("SELECT * FROM Notifications WHERE usid = %s ORDER BY created_at DESC", (usid,))
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC", (usid,))
     notifications = cursor.fetchall()
     unread_count = len([n for n in notifications if not n['is_read']])
     
@@ -252,7 +245,7 @@ def notifications_page():
 def scan_qr():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Get Enrolled Subjects for Sidebar
     cursor.execute("""
@@ -260,12 +253,12 @@ def scan_qr():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    WHERE e.usid = %s
+    WHERE e.user_id = %s
     """, (usid,))
     subjects = cursor.fetchall()
     
     # Get Notifications for Sidebar
-    cursor.execute("SELECT * FROM Notifications WHERE usid = %s ORDER BY created_at DESC", (usid,))
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC", (usid,))
     notifications = cursor.fetchall()
     unread_count = len([n for n in notifications if not n['is_read']])
 
@@ -303,7 +296,7 @@ def submit_attendance():
     usid = session['user_id']
     
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     try:
         # 1. Validate Session and Token
@@ -327,7 +320,7 @@ def submit_attendance():
             SELECT a.attendance_id 
             FROM Attendance a
             JOIN Sessions s ON a.session_id = s.session_id
-            WHERE a.usid = %s AND s.subject_id = %s AND a.scan_time::date = CURRENT_DATE
+            WHERE a.user_id = %s AND s.subject_id = %s AND DATE(a.scan_time) = CURDATE()
         """, (usid, ses['subject_id']))
         if cursor.fetchone():
             return jsonify({'success': False, 'message': 'Attendance already recorded for this subject today.'})
@@ -357,10 +350,10 @@ def submit_attendance():
         status = 'Present' if is_valid == 'Valid' else 'Flagged'
         cursor.execute("""
             INSERT INTO Attendance 
-            (session_id, usid, scan_time, status, remarks, is_valid, student_lat, student_lon, distance_meters, behavior_flags)
-            VALUES (%s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s) RETURNING attendance_id
+            (session_id, user_id, scan_time, status, remarks, is_valid, student_lat, student_lon, distance_meters, behavior_flags)
+            VALUES (%s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s)
         """, (session_id, usid, status, f"Distance: {round(distance)}m", is_valid, s_lat, s_lon, distance, json.dumps(behavior_flags)))
-        attendance_id = cursor.fetchone()['attendance_id']
+        attendance_id = cursor.lastrowid
         
         # Audit Logging
         log_system_action(cursor, 'Attendance', attendance_id, 'Create', usid, 'student', f"Attendance recorded via QR. Status: {status}")
@@ -382,7 +375,7 @@ def submit_attendance():
 def timetable():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     query = """
     SELECT s.subject_code, s.subject_name, t.first_name, t.middle_name, t.last_name, 
@@ -390,9 +383,9 @@ def timetable():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    JOIN schedule sch ON ta.subject_id = sch.subject_id AND ta.section = sch.section AND ta.utid = sch.utid
-    JOIN Teachers t ON ta.utid = t.utid
-    WHERE e.usid = %s
+    JOIN schedule sch ON ta.subject_id = sch.subject_id AND ta.section = sch.section AND ta.teacher_id = sch.teacher_id
+    JOIN Teachers t ON ta.teacher_id = t.user_id
+    WHERE e.user_id = %s
     """
     cursor.execute(query, (usid,))
     schedule_raw = cursor.fetchall()
@@ -430,12 +423,12 @@ def timetable():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    WHERE e.usid = %s
+    WHERE e.user_id = %s
     """, (usid,))
     subjects = cursor.fetchall()
     
     # Get Notifications for Sidebar
-    cursor.execute("SELECT * FROM Notifications WHERE usid = %s ORDER BY created_at DESC", (usid,))
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC", (usid,))
     notifications = cursor.fetchall()
     unread_count = len([n for n in notifications if not n['is_read']])
 
@@ -467,10 +460,10 @@ def timetable():
 def profile():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     # Get Student Profile
-    cursor.execute("SELECT * FROM Students WHERE usid = %s", (usid,))
+    cursor.execute("SELECT * FROM Students WHERE user_id = %s", (usid,))
     student = cursor.fetchone()
     
     # Get Enrolled Subjects with Teacher Info
@@ -479,8 +472,8 @@ def profile():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    LEFT JOIN Teachers t ON ta.utid = t.utid
-    WHERE e.usid = %s
+    LEFT JOIN Teachers t ON ta.teacher_id = t.user_id
+    WHERE e.user_id = %s
     """
     cursor.execute(query, (usid,))
     enrollments = cursor.fetchall()
@@ -491,11 +484,11 @@ def profile():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    WHERE e.usid = %s
+    WHERE e.user_id = %s
     """, (usid,))
     subjects = cursor.fetchall()
     
-    cursor.execute("SELECT * FROM Notifications WHERE usid = %s ORDER BY created_at DESC", (usid,))
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC", (usid,))
     notifications = cursor.fetchall()
     unread_count = len([n for n in notifications if not n['is_read']])
     
@@ -543,9 +536,9 @@ def verify_email_change():
         new_email = session.get('pending_new_email')
         
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = get_cursor(conn)
         try:
-            cursor.execute("UPDATE Students SET email = %s WHERE usid = %s", (new_email, usid))
+            cursor.execute("UPDATE Students SET email = %s WHERE user_id = %s", (new_email, usid))
             conn.commit()
             
             # Clear session
@@ -566,10 +559,10 @@ def verify_email_change():
 def submit_excuse():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = get_cursor(conn)
     
     if request.method == 'POST':
-        class_data = request.form.get('class_id') # Format: subject_id|utid
+        class_data = request.form.get('class_id') # Format: subject_id|teacher_id
         message = request.form.get('message')
         file = request.files.get('excuse_file')
         
@@ -580,12 +573,12 @@ def submit_excuse():
             return redirect(url_for('user.submit_excuse'))
         else:
             try:
-                subject_id, utid = class_data.split('|')
+                subject_id, teacher_id = class_data.split("|")
                 
                 # Check daily limit (max 3 per day)
                 cursor.execute("""
                     SELECT COUNT(*) as count FROM Excuse_Letters
-                    WHERE usid = %s AND created_at::date = CURRENT_DATE
+                    WHERE user_id = %s AND DATE(created_at) = CURDATE()
                 """, (usid,))
                 if cursor.fetchone()['count'] >= 3:
                     flash('You have reached the maximum of 3 excuse letter submissions for today.', 'error')
@@ -632,10 +625,10 @@ def submit_excuse():
                         raise e
 
                 cursor.execute("""
-                    INSERT INTO Excuse_Letters (usid, utid, subject_id, message, file_path)
-                    VALUES (%s, %s, %s, %s, %s) RETURNING letter_id
-                """, (usid, utid, subject_id, message, filename))
-                letter_id = cursor.fetchone()['letter_id']
+                    INSERT INTO Excuse_Letters (user_id, teacher_id, subject_id, message, file_path)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (usid, teacher_id, subject_id, message, filename))
+                letter_id = cursor.lastrowid
                 
                 # Audit Logging
                 log_system_action(cursor, 'Excuse_Letters', letter_id, 'Create', usid, 'student', f"Excuse letter submitted for Subject {subject_id}")
@@ -649,12 +642,12 @@ def submit_excuse():
     # GET request: Prepare data for the form
     # 1. Enrollments with Teacher Info
     query = """
-    SELECT s.subject_id, s.subject_code, s.subject_name, ta.utid, t.first_name, t.middle_name, t.last_name
+    SELECT s.subject_id, s.subject_code, s.subject_name, ta.teacher_id, t.user_id as teacher_user_id, t.first_name, t.middle_name, t.last_name
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    JOIN Teachers t ON ta.utid = t.utid
-    WHERE e.usid = %s
+    JOIN Teachers t ON ta.teacher_id = t.user_id
+    WHERE e.user_id = %s
     """
     cursor.execute(query, (usid,))
     enrollments = cursor.fetchall()
@@ -664,8 +657,8 @@ def submit_excuse():
         SELECT el.*, s.subject_code, t.first_name, t.middle_name, t.last_name
         FROM Excuse_Letters el
         JOIN Subjects s ON el.subject_id = s.subject_id
-        JOIN Teachers t ON el.utid = t.utid
-        WHERE el.usid = %s
+        JOIN Teachers t ON el.teacher_id = t.user_id
+        WHERE el.user_id = %s
         ORDER BY el.created_at DESC
     """, (usid,))
     previous_letters = cursor.fetchall()
@@ -676,11 +669,11 @@ def submit_excuse():
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
-    WHERE e.usid = %s
+    WHERE e.user_id = %s
     """, (usid,))
     subjects = cursor.fetchall()
     
-    cursor.execute("SELECT COUNT(*) as count FROM Notifications WHERE usid = %s AND is_read = FALSE", (usid,))
+    cursor.execute("SELECT COUNT(*) as count FROM Notifications WHERE user_id = %s AND is_read = 0", (usid,))
     unread_count = cursor.fetchone()['count']
     
     cursor.close()
