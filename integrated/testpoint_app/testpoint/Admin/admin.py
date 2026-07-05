@@ -8,6 +8,7 @@ from testpoint import email as SENDER_EMAIL
 from testpoint import db_config, mail
 from flask_mail import Message
 import os
+import pandas as pd
 
 admin = Blueprint('admin', __name__, template_folder='templates', static_folder='static',
                     static_url_path='/admin/static')
@@ -939,8 +940,25 @@ def manage_classes():
         t_id = request.form.get('teacher_id')
 
         try:
-            # 1. DUPLICATION CHECK (Fixes the Anomaly)
-            # Check if this specific Block is already assigned this Course in an active class
+            # 1. COLLEGE HIERARCHY RESTRICTION
+            # Check if the Course's college matches the Block's program's college
+            cursor.execute("""
+                SELECT
+                    (SELECT college_id FROM courses WHERE course_code = %s) as course_college,
+                    (SELECT p.college_id FROM blocks b
+                     JOIN programs p ON b.program_id = p.program_id
+                     WHERE b.block_id = %s) as block_college,
+                    (SELECT college_name FROM colleges WHERE college_id = (SELECT college_id FROM courses WHERE course_code = %s)) as c_name,
+                    (SELECT college_name FROM colleges WHERE college_id = (SELECT p.college_id FROM blocks b JOIN programs p ON b.program_id = p.program_id WHERE b.block_id = %s)) as b_name
+            """, (co_code, b_id, co_code, b_id))
+
+            validation = cursor.fetchone()
+
+            if validation['course_college'] != validation['block_college']:
+                flash(f"College Mismatch: Course belongs to '{validation['c_name']}', but the target block is under '{validation['b_name']}'. Cross-college scheduling is restricted.", "danger")
+                return redirect(url_for('admin.manage_classes'))
+
+            # 2. DUPLICATION CHECK
             cursor.execute("""
                 SELECT class_code FROM classes
                 WHERE course_code = %s AND block_id = %s AND is_active = 1
@@ -948,28 +966,25 @@ def manage_classes():
 
             duplicate = cursor.fetchone()
             if duplicate:
-                # EXPLICIT DISALLOWED MESSAGE
-                flash(f"Action Disallowed: This block is already scheduled for this subject in Class {duplicate['class_code']}. Duplicate sessions for the same block are not permitted.", "warning")
+                flash(f"Action Disallowed: This block is already scheduled for this subject in Class {duplicate['class_code']}.", "warning")
                 return redirect(url_for('admin.manage_classes'))
 
-            # 2. AUTO-GENERATE CLASS CODE (#101, #102...)
+            # 3. AUTO-GENERATE CLASS CODE
             cursor.execute("SELECT class_code FROM classes WHERE class_code LIKE '#%'")
             all_codes = cursor.fetchall()
 
             highest_num = 0
             for row in all_codes:
                 try:
-                    # Strip the '#' and convert the remaining string to an integer
                     num = int(row['class_code'][1:])
                     if num > highest_num: highest_num = num
                 except (ValueError, IndexError):
                     continue
 
-            # Start at #101 if no classes exist, otherwise increment
             new_code_val = 101 if highest_num == 0 else highest_num + 1
             new_class_code = f"#{new_code_val}"
 
-            # 3. DATABASE INSERTION
+            # 4. DATABASE INSERTION
             cursor.execute("""
                 INSERT INTO classes (class_code, course_code, block_id, teacher_id, is_active)
                 VALUES (%s, %s, %s, %s, 1)
@@ -984,9 +999,8 @@ def manage_classes():
             cursor.close(); connection.close()
         return redirect(url_for('admin.manage_classes'))
 
-    # --- GET LOGIC: Fetch Data for the Table and Dropdowns ---
+    # --- GET LOGIC ---
     try:
-        # Fetch current active classes for the table view
         cursor.execute("""
             SELECT cl.*, c.course_name, b.block_name, p.program_name, t.firstname, t.lastname
             FROM classes cl
@@ -998,11 +1012,9 @@ def manage_classes():
         """)
         classes_data = cursor.fetchall()
 
-        # Fetch active Subjects (Catalog) for dropdown
         cursor.execute("SELECT course_code, course_name FROM courses WHERE is_active = 1 ORDER BY course_name")
         subjects = cursor.fetchall()
 
-        # Fetch active Blocks for dropdown
         cursor.execute("""
             SELECT b.block_id, b.block_name, p.program_name
             FROM blocks b
@@ -1012,7 +1024,6 @@ def manage_classes():
         """)
         blocks_data = cursor.fetchall()
 
-        # Fetch all Teachers for dropdown
         cursor.execute("SELECT teacher_id, firstname, lastname FROM teachers ORDER BY lastname")
         teachers = cursor.fetchall()
 
@@ -1026,19 +1037,83 @@ def manage_classes():
                            teachers=teachers,
                            firstname=session.get('firstname'))
 
-@admin.route('/archive_class/<string:class_code>', methods=['POST'])
-def archive_class(class_code):
-    if admin_logged_in():
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
-        cursor.execute("UPDATE classes SET is_active = 0 WHERE class_code = %s", (class_code,))
-        connection.commit(); cursor.close(); connection.close()
-        flash(f'Class {class_code} moved to trash.', 'warning')
+@admin.route('/edit_class/<path:class_code>', methods=['POST'])
+def edit_class(class_code):
+    if not admin_logged_in():
+        return redirect(url_for('auth.login'))
+
+    connection = mysql.connector.connect(**db_config)
+    cursor = connection.cursor(dictionary=True)
+
+    co_code = request.form.get('course_code')
+    b_id = request.form.get('block_id')
+    t_id = request.form.get('teacher_id')
+
+    try:
+        # 1. COLLEGE HIERARCHY RESTRICTION
+        cursor.execute("""
+            SELECT
+                (SELECT college_id FROM courses WHERE course_code = %s) as course_college,
+                (SELECT p.college_id FROM blocks b
+                 JOIN programs p ON b.program_id = p.program_id
+                 WHERE b.block_id = %s) as block_college
+        """, (co_code, b_id))
+
+        colleges = cursor.fetchone()
+
+        if colleges['course_college'] != colleges['block_college']:
+            flash("Update Blocked: Course and Block must belong to the same college.", "danger")
+            return redirect(url_for('admin.manage_classes'))
+
+        # 2. DUPLICATION CHECK
+        cursor.execute("""
+            SELECT class_code FROM classes
+            WHERE course_code = %s AND block_id = %s AND class_code != %s AND is_active = 1
+        """, (co_code, b_id, class_code))
+
+        duplicate = cursor.fetchone()
+        if duplicate:
+            flash(f"Update Failed: This block is already scheduled for this subject in Class {duplicate['class_code']}.", "warning")
+        else:
+            # 3. DATABASE UPDATE
+            cursor.execute("""
+                UPDATE classes
+                SET course_code = %s, block_id = %s, teacher_id = %s
+                WHERE class_code = %s
+            """, (co_code, b_id, t_id, class_code))
+            connection.commit()
+            flash(f"Class {class_code} successfully updated.", "success")
+
+    except mysql.connector.Error as err:
+        flash(f"Database Error: {err}", "danger")
+    finally:
+        cursor.close()
+        connection.close()
+
     return redirect(url_for('admin.manage_classes'))
 
-@admin.route('/trashed_classes')
+
+@admin.route("/archive_class/<string:class_code>", methods=["POST"])
+def archive_class(class_code):
+    if admin_logged_in():
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE classes SET is_active = 0 WHERE class_code = %s", (class_code,)
+        )
+        connection.commit()
+        cursor.close()
+        connection.close()
+        flash(f"Class {class_code} moved to trash.", "warning")
+    return redirect(url_for("admin.manage_classes"))
+
+
+@admin.route("/trashed_classes")
 def trashed_classes():
-    if not admin_logged_in(): return redirect(url_for('auth.login'))
-    connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
+    if not admin_logged_in():
+        return redirect(url_for("auth.login"))
+    connection = mysql.connector.connect(**db_config)
+    cursor = connection.cursor(dictionary=True)
     cursor.execute("""
         SELECT cl.*, c.course_name, b.block_name, p.program_name
         FROM classes cl
@@ -1047,74 +1122,42 @@ def trashed_classes():
         JOIN programs p ON b.program_id = p.program_id
         WHERE cl.is_active = 0
     """)
-    trashed = cursor.fetchall(); cursor.close(); connection.close()
-    return render_template('admin_trashed_classes.html', trashed_classes=trashed, firstname=session.get('firstname'))
+    trashed = cursor.fetchall()
+    cursor.close()
+    connection.close()
+    return render_template(
+        "admin_trashed_classes.html",
+        trashed_classes=trashed,
+        firstname=session.get("firstname"),
+    )
 
-@admin.route('/restore_class/<string:class_code>', methods=['POST'])
+
+@admin.route("/restore_class/<string:class_code>", methods=["POST"])
 def restore_class(class_code):
     if admin_logged_in():
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
-        cursor.execute("UPDATE classes SET is_active = 1 WHERE class_code = %s", (class_code,))
-        connection.commit(); cursor.close(); connection.close()
-        flash(f'Class {class_code} restored.', 'success')
-    return redirect(url_for('admin.trashed_classes'))
-
-@admin.route('/delete_class_permanently/<string:class_code>', methods=['POST'])
-def delete_class_permanently(class_code):
-    if admin_logged_in():
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
-        cursor.execute("DELETE FROM classes WHERE class_code = %s", (class_code,))
-        connection.commit(); cursor.close(); connection.close()
-        flash(f'Class {class_code} deleted permanently.', 'danger')
-    return redirect(url_for('admin.trashed_classes'))
-
-#! 6. BULK ENROLLMENT (By Block)
-@admin.route('/enroll_block', methods=['POST'])
-def enroll_block():
-    if not admin_logged_in():
-        return redirect(url_for('auth.login'))
-
-    class_code = request.form.get('class_code')
-    connection = mysql.connector.connect(**db_config)
-    cursor = connection.cursor(dictionary=True)
-
-    try:
-        # Get target class and its course_code
-        cursor.execute("SELECT block_id, course_code FROM classes WHERE class_code = %s", (class_code,))
-        class_info = cursor.fetchone()
-
-        if class_info:
-            # Insert students from the block ONLY if they are not already enrolled
-            # in any class that has the same course_code
-            cursor.execute("""
-                INSERT INTO enrollments (student_id, class_code)
-                SELECT s.student_id, %s
-                FROM students s
-                WHERE s.block_id = %s
-                AND NOT EXISTS (
-                    SELECT 1 FROM enrollments e
-                    JOIN classes cl ON e.class_code = cl.class_code
-                    WHERE e.student_id = s.student_id
-                    AND cl.course_code = %s
-                )
-            """, (class_code, class_info['block_id'], class_info['course_code']))
-
-            enrolled_count = cursor.rowcount
-            connection.commit()
-
-            if enrolled_count > 0:
-                flash(f"Processed block enrollment. {enrolled_count} students added to {class_code}.", "success")
-            else:
-                flash("No students were added. All students in this block are already enrolled in this course.", "info")
-
-    except mysql.connector.Error as err:
-        connection.rollback()
-        flash(f"Error during bulk enrollment: {err}", "danger")
-    finally:
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE classes SET is_active = 1 WHERE class_code = %s", (class_code,)
+        )
+        connection.commit()
         cursor.close()
         connection.close()
+        flash(f"Class {class_code} restored.", "success")
+    return redirect(url_for("admin.trashed_classes"))
 
-    return redirect(url_for('admin.manage_classes'))
+
+@admin.route("/delete_class_permanently/<string:class_code>", methods=["POST"])
+def delete_class_permanently(class_code):
+    if admin_logged_in():
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM classes WHERE class_code = %s", (class_code,))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        flash(f"Class {class_code} deleted permanently.", "danger")
+    return redirect(url_for("admin.trashed_classes"))
 
 
 #! 7. OVERSEE EXAMS (Linked to Class Code)
@@ -1233,7 +1276,6 @@ def profile():
         connection.close()
 
 
-#! 11. ENROLLMENT MANAGEMENT
 #! 11. ENROLLMENT MANAGEMENT - REFINED FILTERING
 @admin.route('/manage_enrollments/<path:class_code>')
 def manage_enrollments(class_code):
@@ -1243,7 +1285,7 @@ def manage_enrollments(class_code):
         try:
             # 1. Fetch current class info and its associated course_code
             cursor.execute("""
-                SELECT cl.*, c.course_name, c.course_code
+                SELECT cl.*, c.course_name, c.course_code, c.college_id
                 FROM classes cl
                 JOIN courses c ON cl.course_code = c.course_code
                 WHERE cl.class_code = %s
@@ -1264,22 +1306,28 @@ def manage_enrollments(class_code):
             """, (class_code,))
             enrollees = cursor.fetchall()
 
-            # 3. Fetch "Verified Students" for the dropdown
-            # RULE: Exclude students who are already enrolled in ANY class that shares this same course_code
+            # 3. Fetch Eligible Students for the dropdown
+            # RESTRICTIONS:
+            # - Must be Verified and Active.
+            # - Must belong to the same College as the Course.
+            # - Must NOT be enrolled in ANY class section of this specific course_code.
             cursor.execute("""
-                SELECT s.student_id, s.firstname, s.lastname
+                SELECT s.student_id, s.firstname, s.lastname, p.program_name, b.block_name
                 FROM students s
                 JOIN users u ON s.student_id = u.user_id
+                JOIN blocks b ON s.block_id = b.block_id
+                JOIN programs p ON b.program_id = p.program_id
                 WHERE u.is_verified = 1
                 AND u.is_active = 1
+                AND p.college_id = %s
                 AND s.student_id NOT IN (
                     SELECT e.student_id
                     FROM enrollments e
                     JOIN classes cl ON e.class_code = cl.class_code
                     WHERE cl.course_code = %s
                 )
-                ORDER BY s.lastname ASC
-            """, (class_info['course_code'],))
+                ORDER BY p.program_name ASC, b.block_name ASC, s.lastname ASC
+            """, (class_info['college_id'], class_info['course_code']))
             all_students = cursor.fetchall()
 
             return render_template('admin_enrollees.html',
@@ -1292,6 +1340,7 @@ def manage_enrollments(class_code):
 
     return redirect(url_for('auth.login'))
 
+#! 11. ENROLLMENT MANAGEMENT - WITH COLLEGE RESTRICTON
 @admin.route('/enroll_student', methods=['POST'])
 def enroll_student():
     if not admin_logged_in():
@@ -1303,33 +1352,57 @@ def enroll_student():
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
     try:
-        # 1. Get the course_code for the class we are trying to enroll them in
-        cursor.execute("SELECT course_code FROM classes WHERE class_code = %s", (class_code,))
-        target_class = cursor.fetchone()
-
-        if not target_class:
-            flash('Invalid class selection.', 'danger')
-            return redirect(url_for('admin.manage_classes'))
-
-        course_code = target_class['course_code']
-
-        # 2. Check if the student is already enrolled in ANY class with this same course_code
+        # 1. COLLEGE HIERARCHY VERIFICATION
+        # We check the College ID of the student's program vs the College ID of the class's subject
         cursor.execute("""
-            SELECT e.class_code
-            FROM enrollments e
+            SELECT
+                (SELECT p.college_id FROM students s
+                 JOIN blocks b ON s.block_id = b.block_id
+                 JOIN programs p ON b.program_id = p.program_id
+                 WHERE s.student_id = %s) as student_college,
+                (SELECT co.college_id FROM classes cl
+                 JOIN courses co ON cl.course_code = co.course_code
+                 WHERE cl.class_code = %s) as course_college,
+                (SELECT college_name FROM colleges WHERE college_id = (
+                    SELECT p.college_id FROM students s
+                    JOIN blocks b ON s.block_id = b.block_id
+                    JOIN programs p ON b.program_id = p.program_id
+                    WHERE s.student_id = %s)) as s_coll_name,
+                (SELECT college_name FROM colleges WHERE college_id = (
+                    SELECT co.college_id FROM classes cl
+                    JOIN courses co ON cl.course_code = co.course_code
+                    WHERE cl.class_code = %s)) as c_coll_name
+        """, (student_id, class_code, student_id, class_code))
+
+        verify = cursor.fetchone()
+
+        # Check if student is even assigned to a program/block
+        if verify['student_college'] is None:
+            flash("Enrollment Failed: Student must be assigned to a Program/Block first to determine College eligibility.", "danger")
+            return redirect(url_for('admin.manage_enrollments', class_code=class_code))
+
+        # The actual restriction check
+        if verify['student_college'] != verify['course_college']:
+            flash(f"Access Denied: Student is under '{verify['s_coll_name']}', but this course is offered by '{verify['c_coll_name']}'. Cross-college enrollment is not permitted.", "danger")
+            return redirect(url_for('admin.manage_enrollments', class_code=class_code))
+
+        # 2. DUPLICATE COURSE CHECK (Student already in another section of this same subject)
+        cursor.execute("SELECT course_code FROM classes WHERE class_code = %s", (class_code,))
+        target_course = cursor.fetchone()['course_code']
+
+        cursor.execute("""
+            SELECT e.class_code FROM enrollments e
             JOIN classes cl ON e.class_code = cl.class_code
             WHERE e.student_id = %s AND cl.course_code = %s
-        """, (student_id, course_code))
+        """, (student_id, target_course))
 
-        existing_enrollment = cursor.fetchone()
-
-        if existing_enrollment:
-            flash(f'Student is already enrolled in this course via Class {existing_enrollment["class_code"]}.', 'warning')
+        if cursor.fetchone():
+            flash('Student is already enrolled in this course through a different class section.', 'warning')
         else:
-            # 3. Proceed with enrollment if no duplicate course found
+            # 3. PROCEED WITH ENROLLMENT
             cursor.execute("INSERT INTO enrollments (student_id, class_code) VALUES (%s, %s)", (student_id, class_code))
             connection.commit()
-            flash('Student successfully enrolled.', 'success')
+            flash('Student successfully enrolled in their college course.', 'success')
 
     except mysql.connector.Error as err:
         connection.rollback()
@@ -1339,6 +1412,66 @@ def enroll_student():
         connection.close()
 
     return redirect(url_for('admin.manage_enrollments', class_code=class_code))
+
+
+@admin.route('/enroll_block', methods=['POST'])
+def enroll_block():
+    if not admin_logged_in():
+        return redirect(url_for('auth.login'))
+
+    class_code = request.form.get('class_code')
+    connection = mysql.connector.connect(**db_config)
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        # Get target class info
+        cursor.execute("SELECT block_id, course_code FROM classes WHERE class_code = %s", (class_code,))
+        class_info = cursor.fetchone()
+
+        if class_info:
+            # 1. VERIFY BLOCK COLLEGE VS COURSE COLLEGE
+            cursor.execute("""
+                SELECT
+                    (SELECT college_id FROM programs p JOIN blocks b ON p.program_id = b.program_id WHERE b.block_id = %s) as b_coll,
+                    (SELECT college_id FROM courses WHERE course_code = %s) as c_coll
+            """, (class_info['block_id'], class_info['course_code']))
+
+            check = cursor.fetchone()
+
+            if check['b_coll'] != check['c_coll']:
+                flash("Bulk Enrollment Blocked: The block's program and the subject belong to different colleges.", "danger")
+                return redirect(url_for('admin.manage_classes'))
+
+            # 2. PROCEED WITH BULK ENROLLMENT (Ignoring students already in this course elsewhere)
+            cursor.execute("""
+                INSERT INTO enrollments (student_id, class_code)
+                SELECT s.student_id, %s
+                FROM students s
+                WHERE s.block_id = %s
+                AND NOT EXISTS (
+                    SELECT 1 FROM enrollments e
+                    JOIN classes cl ON e.class_code = cl.class_code
+                    WHERE e.student_id = s.student_id
+                    AND cl.course_code = %s
+                )
+            """, (class_code, class_info['block_id'], class_info['course_code']))
+
+            enrolled_count = cursor.rowcount
+            connection.commit()
+
+            if enrolled_count > 0:
+                flash(f"Success: {enrolled_count} students enrolled. College verification passed.", "success")
+            else:
+                flash("No new students added (They may already be enrolled in this subject).", "info")
+
+    except mysql.connector.Error as err:
+        connection.rollback()
+        flash(f"Error: {err}", "danger")
+    finally:
+        cursor.close()
+        connection.close()
+
+    return redirect(url_for('admin.manage_classes'))
 
 @admin.route('/unenroll_student/<int:enrollment_id>/<path:class_code>', methods=['POST'])
 def unenroll_student(enrollment_id, class_code):
@@ -1590,3 +1723,142 @@ def resubmit_user(pending_id):
             cursor.close()
             connection.close()
     return jsonify({"error": "User not found"}), 404
+
+
+@admin.route("/download_user_template")
+def download_user_template():
+    return redirect(
+        "https://docs.google.com/spreadsheets/d/1EBgMF1eZRewSn41HML28RPFEyNzcfyDowS-icgewbj8/copy"
+    )
+
+
+@admin.route('/import_users', methods=['POST'])
+def import_users():
+    if not admin_logged_in(): return redirect(url_for('auth.login'))
+
+    if 'excel_file' not in request.files:
+        flash('No file uploaded.', 'danger')
+        return redirect(url_for('admin.manage_accounts'))
+
+    file = request.files['excel_file']
+    if file.filename == '':
+        flash('No file selected.', 'danger')
+        return redirect(url_for('admin.manage_accounts'))
+
+    connection = None
+    cursor = None
+
+    try:
+        df = pd.read_excel(file)
+        # Standardize column names to remove leading/trailing spaces
+        df.columns = df.columns.str.strip()
+
+        required_cols = ['First Name', 'Last Name', 'Email', 'Password', 'Role']
+        for col in required_cols:
+            if col not in df.columns:
+                flash(f'Missing required column: {col}', 'danger')
+                return redirect(url_for('admin.manage_accounts'))
+
+        connection = mysql.connector.connect(**db_config)
+        # CRITICAL FIX: Use buffered=True to prevent "Unread result found" error
+        cursor = connection.cursor(dictionary=True, buffered=True)
+
+        success_count = 0
+        error_logs = []
+
+        for index, row in df.iterrows():
+            try:
+                email = str(row['Email']).strip()
+                role = str(row['Role']).lower().strip()
+
+                # Check duplicate email
+                cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+                if cursor.fetchone():
+                    error_logs.append(f"Row {index+2}: Email {email} exists.")
+                    continue
+
+                if role not in ['student', 'teacher', 'admin']:
+                    error_logs.append(f"Row {index+2}: Invalid role '{role}'.")
+                    continue
+
+                # Generate ID
+                prefix = {'admin': 'A', 'teacher': 'T', 'student': 'S'}.get(role, 'U')
+                custom_user_id = generate_id_internal(cursor, prefix)
+                hashed_pw = generate_password_hash(str(row['Password']))
+
+                # 1. Insert Core User
+                cursor.execute("""
+                    INSERT INTO users (user_id, email, password, role, is_verified, is_active)
+                    VALUES (%s, %s, %s, %s, 1, 1)
+                """, (custom_user_id, email, hashed_pw, role))
+
+                # Extract Full Address Data
+                mname = row.get('Middle Name') if pd.notnull(row.get('Middle Name')) else None
+                reg = row.get('Region') if pd.notnull(row.get('Region')) else None
+                prov = row.get('Province') if pd.notnull(row.get('Province')) else None
+                cit = row.get('City') if pd.notnull(row.get('City')) else None
+                bar = row.get('Barangay') if pd.notnull(row.get('Barangay')) else None
+
+                if role == 'student':
+                    block_id = None
+                    block_name = str(row.get('Block Name', '')).strip()
+                    if block_name and block_name != 'nan':
+                        cursor.execute("SELECT block_id FROM blocks WHERE block_name = %s", (block_name,))
+                        blk_res = cursor.fetchone()
+                        if blk_res: block_id = blk_res['block_id']
+
+                    cursor.execute("""
+                        INSERT INTO students (student_id, email, firstname, middlename, lastname, block_id, region, province, city, barangay)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], block_id, reg, prov, cit, bar))
+
+                elif role == 'teacher':
+                    cursor.execute("""
+                        INSERT INTO teachers (teacher_id, email, firstname, middlename, lastname, region, province, city, barangay)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], reg, prov, cit, bar))
+
+                else: # Admin
+                    cursor.execute("""
+                        INSERT INTO admins (admin_id, email, firstname, middlename, lastname, region, province, city, barangay)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], reg, prov, cit, bar))
+
+                success_count += 1
+
+            except Exception as row_err:
+                error_logs.append(f"Row {index+2}: {str(row_err)}")
+                connection.rollback() # Rollback the specific failed user
+                continue
+
+        connection.commit()
+        flash(f'Successfully imported {success_count} users!', 'success')
+
+        if error_logs:
+            # Join errors into a readable format, limited to first 5 to avoid alert overflow
+            err_msg = "Issues found: " + " | ".join(error_logs[:5])
+            flash(err_msg, 'warning')
+
+    except Exception as e:
+        if connection: connection.rollback()
+        flash(f'Critical file error: {str(e)}', 'danger')
+    finally:
+        if cursor: cursor.close()
+        if connection: connection.close()
+
+    return redirect(url_for('admin.manage_accounts'))
+
+def generate_id_internal(cursor, role_prefix):
+    # This assumes the cursor passed is already buffered
+    year_suffix = datetime.now().strftime("%y")
+    like_pattern = f"{role_prefix}{year_suffix}-%"
+    cursor.execute("SELECT user_id FROM users WHERE user_id LIKE %s ORDER BY user_id DESC LIMIT 1", (like_pattern,))
+    result = cursor.fetchone()
+
+    if result:
+        last_id = result['user_id']
+        new_num = int(last_id.split('-')[1]) + 1
+    else:
+        new_num = 1
+
+    return f"{role_prefix}{year_suffix}-{str(new_num).zfill(4)}"

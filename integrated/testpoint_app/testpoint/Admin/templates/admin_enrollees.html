@@ -101,15 +101,18 @@
                 <div class="modal-body p-4">
                     <input type="hidden" name="class_code" value="{{ class_info.class_code }}">
                     <div class="form-group mb-0">
-                        <label class="small font-weight-bold">Verified Students</label>
+                        <label class="small font-weight-bold">Eligible Students (Same College)</label>
                         <select name="student_id" class="form-control" required>
                             <option value="">-- Select student --</option>
                             {% for s in all_students %}
-                            <option value="{{ s.student_id }}">{{ s.firstname }} {{ s.lastname }} ({{ s.student_id }})</option>
+                            <option value="{{ s.student_id }}">
+                                {{ s.firstname }} {{ s.lastname }} ({{ s.student_id }}) — {{ s.program_name }} {{ s.block_name }}
+                            </option>
                             {% endfor %}
                         </select>
-                        <div class="mt-3 p-2 px-3 bg-light rounded text-muted" style="font-size: 11px; border: 1.5px dashed var(--tp-admin-border);">
-                            Only verified students not currently in this class are listed.
+                        <div class="mt-3 p-3 bg-light rounded text-muted" style="font-size: 11px; border: 1.5px dashed var(--tp-admin-border);">
+                            <i class="fas fa-info-circle mr-1 text-primary"></i>
+                            <strong>Filters applied:</strong> Only showing students whose program belongs to the same college as this course. Students already enrolled in this course are hidden.
                         </div>
                     </div>
                 </div>
@@ -149,10 +152,11 @@
     $(document).ready(function() {
         "use strict";
 
-        // 1. Initialize Pagination and Search Logic
+        // Move modals to body root to prevent backdrop/shadow issues
+        $('#enrollModal, #confirmUnenrollModal').appendTo('body');
+
         const rows = Array.from(document.querySelectorAll('#enrollTable tbody tr.enrollee-row'));
         let filtered = [...rows];
-        
         const paginator = createPaginator({
             tableBodySelector: '#enrollTable tbody',
             paginationSelector: '#enrollee-pagination',
@@ -161,32 +165,25 @@
         });
         paginator.render();
 
-        // 2. Real-time Search Filter
         $('#enrolleeSearch').on('keyup', function() {
             const val = $(this).val().toLowerCase();
             filtered = rows.filter(r => r.textContent.toLowerCase().includes(val));
             paginator.reset();
         });
 
-        // 3. Dynamic URL Generation for Unenrollment Modal
         $('#confirmUnenrollModal').on('show.bs.modal', function (e) {
             var btn = $(e.relatedTarget);
             var enrollmentId = btn.data('enrollment');
             var studentName = btn.data('name');
-            var classCode = "{{ class_info.class_code }}"; // e.g., "#104"
-
+            var classCode = "{{ class_info.class_code }}";
             $('#studentNameDisplay').text(studentName);
 
-            var encodedClassCode = encodeURIComponent(classCode);
-            
+            // Use encodeURIComponent to handle '#' in class_code
             var actionUrl = '{{ url_for("admin.unenroll_student", enrollment_id=0, class_code="_code_") }}'
                 .replace('0', enrollmentId)
-                .replace('_code_', encodedClassCode);
-
+                .replace('_code_', encodeURIComponent(classCode));
             $(this).find('form').attr('action', actionUrl);
         });
-
-        $('#enrollModal, #confirmUnenrollModal').appendTo('body');
     });
 </script>
 {% endblock %}

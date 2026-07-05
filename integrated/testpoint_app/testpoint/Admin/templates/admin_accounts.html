@@ -108,7 +108,12 @@
         <p class="text-muted small mb-0">Oversee and manage institutional user profiles.</p>
     </div>
     <div class="d-flex" style="gap: 12px;">
-        <button class="btn btn-dark shadow-sm px-4 rounded-pill font-weight-bold small" data-toggle="modal"
+        <!--
+            <button class="btn btn-outline-success shadow-sm px-4 rounded-pill font-weight-bold small" data-toggle="modal" data-target="#importExcelModal">
+                <i class="fas fa-file-excel mr-2"></i> Bulk Import
+            </button>
+        -->
+            <button class="btn btn-dark shadow-sm px-4 rounded-pill font-weight-bold small" data-toggle="modal"
             data-target="#addUserModal">
             <i class="fas fa-user-plus mr-2"></i> Add New User
         </button>
@@ -265,7 +270,7 @@
 
 {% for user in users %}
 <!-- EDIT USER MODAL -->
-<div class="modal fade" id="editUserModal{{ user.user_id }}" tabindex="-1" role="dialog"
+<div class="modal fade edit-user-modal" id="editUserModal{{ user.user_id }}" tabindex="-1" role="dialog"
     aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
@@ -284,7 +289,7 @@
                             <span class="field-feedback"></span>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="small font-weight-bold">Middle Name </label>
+                            <label class="small font-weight-bold">Middle Name</label>
                             <input type="text" class="form-control validate-me" data-type="name-optional" name="middlename" value="{{ user.middlename if user.middlename else '' }}">
                             <span class="field-feedback"></span>
                         </div>
@@ -307,7 +312,7 @@
                         <select class="form-control" name="block_id">
                             <option value="">-- No Block Assigned --</option>
                             {% for b in blocks %}
-                            <option value="{{ b.block_id }}" {% if b.block_name==user.block_name %}selected{% endif %}>
+                            <option value="{{ b.block_id }}" {% if b.block_name == user.block_name %}selected{% endif %}>
                                 {{ b.program_name }} - {{ b.block_name }}</option>
                             {% endfor %}
                         </select>
@@ -324,8 +329,8 @@
                         <div class="col-md-6">
                             <label class="small font-weight-bold">Account Status</label>
                             <select class="form-control" name="is_active">
-                                <option value="1" {% if user.is_active==1 %}selected{% endif %}>Active</option>
-                                <option value="0" {% if user.is_active==0 %}selected{% endif %}>Deactivated</option>
+                                <option value="1" {% if user.is_active == 1 %}selected{% endif %}>Active</option>
+                                <option value="0" {% if user.is_active == 0 %}selected{% endif %}>Deactivated</option>
                             </select>
                         </div>
                     </div>
@@ -447,6 +452,52 @@
     </div>
 </div>
 
+<!-- IMPORT EXCEL MODAL -->
+<div class="modal fade" id="importExcelModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 pb-0 pt-4 px-4">
+                <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);">
+                    <i class="fas fa-file-import mr-2 text-success"></i>Bulk User Import
+                </h5>
+                <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
+            </div>
+            <form action="{{ url_for('admin.import_users') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-body p-4">
+                    <div class="bg-light p-3 rounded-lg border mb-4">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <h6 class="font-weight-bold mb-1" style="font-size: 0.9rem;">Template Required</h6>
+                                <p class="text-muted small mb-0">Use the standard format to ensure data compatibility.</p>
+                            </div>
+                            <a href="{{ url_for('admin.download_user_template') }}" target="_blank" class="btn btn-sm btn-success rounded-pill px-3 font-weight-bold shadow-sm">
+                                <i class="fas fa-download mr-1"></i> Make Copy
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-0">
+                        <label class="small font-weight-bold text-uppercase" style="letter-spacing: 1px;">Upload Spreadsheet (.xlsx)</label>
+                        <input type="file" name="excel_file" class="form-control" accept=".xlsx" required style="padding: 6px; height: auto !important;">
+                        <div class="mt-3 p-3 bg-light rounded" style="border-left: 3px solid #10b981;">
+                            <p class="small text-dark font-weight-bold mb-1">Quick Instructions:</p>
+                            <ol class="small text-muted pl-3 mb-0">
+                                <li>Download the Google Sheets template.</li>
+                                <li>Populate rows (Student, Teacher, Admin).</li>
+                                <li>Export as <strong>.xlsx</strong> and upload here.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button class="btn btn-light px-4 rounded-pill" type="button" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-success px-4 font-weight-bold rounded-pill shadow-sm" type="submit">Execute Bulk Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- DELETE MODAL -->
 <div class="modal fade" id="deleteUserModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
@@ -478,8 +529,8 @@
         "use strict";
 
         /* ══════════════════════════════════════════
-           1. CORE VALIDATION UTILITIES
-           ══════════════════════════════════════════ */
+        1. CORE VALIDATION ENGINE
+        ══════════════════════════════════════════ */
         function setValid($el, msg) {
             $el.removeClass('is-invalid').addClass('is-valid');
             $el.nextAll('.field-feedback').first().text(msg || '✓ Looks good!').removeClass('invalid-msg').addClass('valid-msg');
@@ -495,7 +546,6 @@
             $el.nextAll('.field-feedback').first().text('');
         }
 
-        /* ── Gibberish & Pattern Logic ── */
         function checkGibberish(str, label) {
             var pure = str.replace(/[^a-z]/ig, '').toLowerCase();
             if (pure.length < 5) return null;
@@ -503,8 +553,6 @@
                 return { ok: false, msg: label + ' resembles a keyboard pattern.' };
             if (/[bcdfghjklmnpqrstvwxyz]{6,}/.test(pure))
                 return { ok: false, msg: label + ' has unnatural consonant runs.' };
-            if (pure.length >= 7 && (pure.match(/[aeiouy]/g) || []).length === 0)
-                return { ok: false, msg: label + ' appears abnormal.' };
             return null;
         }
 
@@ -553,21 +601,18 @@
             if (!v) return { ok: false, msg: 'Password is required.' };
             if (v.length < 8) return { ok: false, msg: 'Minimum 8 characters required.' };
             if (!/[A-Z]/.test(v) || !/[0-9]/.test(v) || !/[!@#$%^&*]/.test(v))
-                return { ok: false, msg: 'Complexity: Needs Uppercase, Number, and Symbol.' };
+                return { ok: false, msg: 'Needs Uppercase, Number, and Symbol.' };
 
             var common = ['password', 'password123', 'admin123', 'qwerty12345'];
             if (common.indexOf(v.toLowerCase()) !== -1) return { ok: false, msg: 'This password is too common.' };
             return { ok: true, msg: '✓ Secure' };
         }
 
-        /* ══════════════════════════════════════════
-           2. FORM LOGIC (ADD & EDIT)
-           ══════════════════════════════════════════ */
         async function validateField(input) {
             const $input = $(input);
             const type = $input.data('type');
             const val = $input.val().trim();
-            const label = $input.prev('label').text();
+            const label = $input.prev('label').text().replace('(Optional)', '').trim();
 
             let res = { ok: true, msg: '' };
 
@@ -578,7 +623,10 @@
             else if (type === 'password-optional') res = checkPasswordField(val, true);
             else if (type === 'confirm') {
                 const matchVal = $('#' + $input.data('match')).val();
-                res = (val === matchVal && val !== "") ? { ok: true, msg: '✓ Match' } : { ok: false, msg: 'Passwords do not match.' };
+                res = (val === matchVal && val !== "") ? { ok: true, msg: '✓ Passwords match' } : { ok: false, msg: 'Passwords do not match.' };
+            }
+            else if (type === 'select') {
+                res = (val !== "" && val !== null) ? { ok: true, msg: '✓ Selected' } : { ok: false, msg: 'Required' };
             }
 
             if (val === "" && type.includes('optional')) { clearValidation($input); return true; }
@@ -586,35 +634,30 @@
             return res.ok;
         }
 
-        // Attach listeners to all validated forms
-        $(document).on('input blur', '.validate-me', function() { validateField(this); });
+        $(document).on('input blur change', '.validate-me', function() { validateField(this); });
 
         $('.validated-form').on('submit', async function(e) {
-            e.preventDefault();
             const $form = $(this);
             let allOk = true;
-
-            // Check all visible fields
             const fields = $form.find('.validate-me:visible').get();
             for (const field of fields) {
                 const ok = await validateField(field);
                 if (!ok) allOk = false;
             }
-
-            // Check address selects in Add form
-            if ($form.attr('id') === 'addUserForm') {
-                ['region', 'province', 'city', 'barangay'].forEach(id => {
-                    const $sel = $('#' + id);
-                    if (!$sel.val()) { setInvalid($sel, 'Required'); allOk = false; }
-                });
+            if (!allOk) {
+                e.preventDefault();
+                const $firstError = $form.find('.is-invalid').first();
+                if ($firstError.length) {
+                    $([document.documentElement, document.body]).animate({
+                        scrollTop: $firstError.offset().top - 100
+                    }, 500);
+                }
             }
-
-            if (allOk) $form[0].submit();
         });
 
         /* ══════════════════════════════════════════
-           3. FILTERING, PAGINATION & UI
-           ══════════════════════════════════════════ */
+        2. FILTERING & PAGINATION
+        ══════════════════════════════════════════ */
         const allRows = Array.from(document.querySelectorAll('tr.user-row'));
         let filteredRows = [...allRows];
 
@@ -645,7 +688,9 @@
         });
         paginator.render();
 
-        // Details Loader
+        /* ══════════════════════════════════════════
+        3. UI ACTIONS
+        ══════════════════════════════════════════ */
         $('.view-details-btn').on('click', function () {
             var userId = $(this).data('id'), name = $(this).data('name');
             $('#detailUserName').text(name);
@@ -663,7 +708,6 @@
             });
         });
 
-        // Delete Modal
         $('#deleteUserModal').on('show.bs.modal', function (e) {
             var btn = $(e.relatedTarget);
             $('#deleteUserName').text(btn.data('name'));
@@ -675,7 +719,7 @@
         });
 
         // Hierarchy Fix
-        $('#addUserModal, #deleteUserModal, #userDetailsModal').appendTo('body');
+        $('#addUserModal, #deleteUserModal, #userDetailsModal, #importExcelModal').appendTo('body');
     })(jQuery);
 </script>
 {% endblock %}
