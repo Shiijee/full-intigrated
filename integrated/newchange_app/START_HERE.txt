@@ -119,7 +119,7 @@ You should see:
 Problem: Can't connect to database
 Solution:
    - Check XAMPP MySQL is running (should be green)
-   - Database name is: attendance_dbim
+   - Database name is: db_attendance
 
 Problem: Phone can't access the app
 Solution:

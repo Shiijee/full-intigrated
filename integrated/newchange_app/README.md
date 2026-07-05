@@ -85,7 +85,7 @@ Database settings are in `.env`:
 DB_HOST=127.0.0.1
 DB_USER=root
 DB_PASSWORD=
-DB_NAME=attendance_dbim
+DB_NAME=db_attendance
 DB_PORT=3306
 ```
 
@@ -190,7 +190,7 @@ app.py            # Main Flask application
 ### Database Connection Failed
 
 - ✅ XAMPP MySQL is running?
-- ✅ Database `attendance_dbim` exists?
+- ✅ Database `db_attendance` exists?
 - ✅ Check credentials in `.env`
 
 ### Phone Can't Access
