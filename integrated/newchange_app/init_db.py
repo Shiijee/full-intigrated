@@ -16,7 +16,7 @@ def init_db():
             port=int(os.getenv("DB_PORT", 3306)),
         )
         cursor = conn.cursor()
-        db_name = os.getenv("DB_NAME", "db_attendance")
+        db_name = os.getenv("DB_NAME", "attendance_dbim")
         cursor.execute(
             f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
         )

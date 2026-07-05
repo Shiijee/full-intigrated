@@ -24,3 +24,5 @@ integrated/newchange_app/Main/__pycache__/db.cpython-314.pyc
 integrated/newchange_app/Main/__pycache__/sso.cpython-314.pyc
 integrated/newchange_app/Main/admin/__pycache__/adminPY.cpython-314.pyc
 integrated/newchange_app/Main/admin/__pycache__/crudPY.cpython-314.pyc
+integrated/newchange_app/Main/teacher/__pycache__/teacherPY.cpython-314.pyc
+integrated/newchange_app/Main/student/__pycache__/studentPY.cpython-314.pyc
