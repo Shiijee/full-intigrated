@@ -5,9 +5,11 @@
 ## Quick Start
 
 ### 1. Start XAMPP MySQL
+
 Open XAMPP Control Panel → Start MySQL
 
 ### 2. Run the App
+
 ```bash
 cd C:\NewChangeRepo
 python app.py
@@ -16,11 +18,13 @@ python app.py
 ### 3. Access the App
 
 **From your computer:**
+
 ```
 http://127.0.0.1:5000
 ```
 
 **From your phone (same WiFi):**
+
 ```
 http://YOUR-IP-ADDRESS:5000
 ```
@@ -32,16 +36,19 @@ http://YOUR-IP-ADDRESS:5000
 ## Default Login Credentials
 
 ### Admin Account
+
 - **Username:** `admin1`
 - **Password:** `password123`
 - **Email:** `adminattendeez0218@gmail.com`
 
 ### Teacher Account (Test Data)
+
 - **Username:** `T26-0001`
 - **Password:** `password123`
 - **Email:** `maria.reyes@gmail.com`
 
 ### Student Account (Test Data)
+
 - **Username:** `S26-0001`
 - **Password:** `password123`
 - **Email:** `juan.delacruz@gmail.com`
@@ -53,16 +60,19 @@ http://YOUR-IP-ADDRESS:5000
 ### First Time Setup
 
 1. **Install Dependencies**
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. **Initialize Database** (if not already done)
+
 ```bash
 python init_db.py
 ```
 
 3. **Import Database** (alternative)
+
 - Open phpMyAdmin: http://localhost/phpmyadmin
 - Import `database.sql`
 - Import `triggers.sql` (optional)
@@ -70,11 +80,12 @@ python init_db.py
 ### Configuration
 
 Database settings are in `.env`:
+
 ```
 DB_HOST=127.0.0.1
 DB_USER=root
 DB_PASSWORD=
-DB_NAME=attendance_dbim
+DB_NAME=db_attendance
 DB_PORT=3306
 ```
 
@@ -107,11 +118,13 @@ DB_PORT=3306
 ## Testing
 
 Test database connection:
+
 ```bash
 python test_mysql_connection.py
 ```
 
 Should show:
+
 ```
 ✓ Connection successful!
 ✓ MySQL/MariaDB version: 8.4.3
@@ -175,17 +188,20 @@ app.py            # Main Flask application
 ## Troubleshooting
 
 ### Database Connection Failed
+
 - ✅ XAMPP MySQL is running?
-- ✅ Database `attendance_dbim` exists?
+- ✅ Database `db_attendance` exists?
 - ✅ Check credentials in `.env`
 
 ### Phone Can't Access
+
 - ✅ Both on SAME WiFi network?
 - ✅ Using correct IP address?
 - ✅ App is running on computer?
 - ✅ Windows Firewall allows port 5000?
 
 ### Collation Error
+
 - ✅ Already fixed! All tables use `utf8mb4_unicode_ci`
 - If still occurs, reimport `database.sql`
 
@@ -196,17 +212,20 @@ app.py            # Main Flask application
 ## What's New (Recent Changes)
 
 ### ✅ PostgreSQL → MySQL Migration
+
 - Switched from Supabase PostgreSQL to local MySQL
 - Fixed collation errors (all tables now utf8mb4_unicode_ci)
 - Updated all database code to use mysql.connector
 - Removed PostgreSQL dependencies
 
 ### ✅ Network Access Enabled
+
 - Flask now runs on `0.0.0.0` (all interfaces)
 - Phones can access from same WiFi
 - Added `find_my_ip.bat` helper script
 
 ### ✅ Code Cleanup
+
 - Removed all Supabase/PostgreSQL code
 - Updated requirements.txt
 - Fixed table name casing (lowercase)
@@ -218,6 +237,7 @@ app.py            # Main Flask application
 📧 **Email:** adminattendeez0218@gmail.com
 
 📚 **Documentation:**
+
 - Quick start: This README
 - Phone setup: `NETWORK_SETUP_GUIDE.md`
 - Migration info: `MIGRATION_COMPLETE.md`

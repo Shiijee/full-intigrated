@@ -5,23 +5,26 @@ from werkzeug.security import generate_password_hash
 
 load_dotenv()
 
+
 def init_db():
     try:
         # First connect without specifying a database to create it if needed
         conn = mysql.connector.connect(
-            host=os.getenv('DB_HOST', '127.0.0.1'),
-            user=os.getenv('DB_USER', 'root'),
-            password=os.getenv('DB_PASSWORD', ''),
-            port=int(os.getenv('DB_PORT', 3306))
+            host=os.getenv("DB_HOST", "127.0.0.1"),
+            user=os.getenv("DB_USER", "root"),
+            password=os.getenv("DB_PASSWORD", ""),
+            port=int(os.getenv("DB_PORT", 3306)),
         )
         cursor = conn.cursor()
-        db_name = os.getenv('DB_NAME', 'attendance_dbim')
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        db_name = os.getenv("DB_NAME", "db_attendance")
+        cursor.execute(
+            f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+        )
         cursor.execute(f"USE `{db_name}`")
         conn.commit()
 
         # Read and execute the SQL schema file
-        with open('database.sql', 'r') as f:
+        with open("database.sql", "r") as f:
             sql_script = f.read()
 
         print("Executing database.sql...")
@@ -33,16 +36,16 @@ def init_db():
 
         for line in sql_script.splitlines():
             stripped = line.strip()
-            if stripped.upper().startswith('DELIMITER'):
-                if '$' in stripped:
+            if stripped.upper().startswith("DELIMITER"):
+                if "$" in stripped:
                     in_delimiter_block = True
                 else:
                     in_delimiter_block = False
                 continue
 
             if in_delimiter_block:
-                if stripped == '$':
-                    stmt = '\n'.join(current).strip()
+                if stripped == "$":
+                    stmt = "\n".join(current).strip()
                     if stmt:
                         statements.append(stmt)
                     current = []
@@ -50,13 +53,13 @@ def init_db():
                     current.append(line)
             else:
                 current.append(line)
-                joined = '\n'.join(current).strip()
-                if joined.endswith(';'):
+                joined = "\n".join(current).strip()
+                if joined.endswith(";"):
                     statements.append(joined)
                     current = []
 
         for stmt in statements:
-            stmt = stmt.strip().rstrip(';')
+            stmt = stmt.strip().rstrip(";")
             if stmt:
                 try:
                     cursor.execute(stmt)
@@ -69,17 +72,20 @@ def init_db():
                         print(f"Statement: {stmt[:100]}...")
 
         # Insert/Update the admin user
-        admin_user = 'admin1'
-        admin_pass = 'password123'
-        admin_email = 'adminattendeez0218@gmail.com'
+        admin_user = "admin1"
+        admin_pass = "password123"
+        admin_email = "adminattendeez0218@gmail.com"
         hashed_pass = generate_password_hash(admin_pass)
 
         print(f"Ensuring admin user '{admin_user}' exists...")
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO admins (username, password_hash, email)
             VALUES (%s, %s, %s)
             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)
-        """, (admin_user, hashed_pass, admin_email))
+        """,
+            (admin_user, hashed_pass, admin_email),
+        )
         conn.commit()
 
         print("Database initialized successfully!")
@@ -94,6 +100,7 @@ def init_db():
 
     except Exception as e:
         print(f"Error initializing database: {e}")
+
 
 if __name__ == "__main__":
     init_db()
