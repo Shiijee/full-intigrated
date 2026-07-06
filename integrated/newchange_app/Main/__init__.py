@@ -42,7 +42,7 @@ def reg_app():
         if role == 'student': return redirect(url_for('user.dashboard'))
         if role == 'teacher': return redirect(url_for('teacher.dashboard'))
         if role == 'admin': return redirect(url_for('admin.dashboard'))
-        return redirect(url_for('auth.student_login'))
+        return redirect(PORTAL_URL)
 
     @app.route('/.well-known/appspecific/com.chrome.devtools.json')
     def chrome_devtools():
@@ -51,7 +51,7 @@ def reg_app():
     # IMPORT BLUEPRINTS
     from Main.admin.crudPY import crud
     from Main.admin.adminPY import admin
-    from Main.auth.loginPY import auth
+    from Main.auth.loginPY import auth, PORTAL_URL
     from Main.student.studentPY import user
     from Main.teacher.teacherPY import teacher
     
