@@ -273,3 +273,87 @@ def get_stats():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Provision User (called by Attendance/TestPoint to mirror a user here) ─────
+@voxify_api.route('/provision-user', methods=['POST'])
+def provision_user():
+    """
+    Called by another module (Attendance, TestPoint) right after IT creates
+    a user, so that same person gets a matching local row in db_voting.users
+    too — letting them use Voxify with the same Portal identity.
+
+    Voxify's 'voter' is equivalent to Portal's 'student'; 'teacher' is also
+    mapped to 'voter' since Voxify has no teacher concept.
+    college_id is left NULL for mirrored accounts (no college context available).
+
+    Request body (JSON):
+        {
+            "username":  "<string>",   required — used as student_id
+            "password":  "<string>",   required, PLAINTEXT
+            "full_name": "<string>",   required — split into first/middle/last
+            "role":      "<string>",   required — superadmin|admin|teacher|student
+            "email":     "<string>",   optional
+        }
+
+    Success response (201):  { "success": true }
+    Failure response:        { "success": false, "reason": "<string>" }
+    """
+    from werkzeug.security import generate_password_hash
+
+    body = request.get_json(silent=True) or {}
+
+    username  = (body.get("username") or "").strip()
+    password  = body.get("password") or ""
+    full_name = (body.get("full_name") or "").strip()
+    role      = (body.get("role") or "").strip()
+    email     = body.get("email") or f"{username}@placeholder.local"
+
+    if not username or not password or not full_name:
+        return jsonify({"success": False, "reason": "username, password, full_name are required"}), 400
+
+    # Map Portal roles to Voxify's role vocabulary per mirroring matrix:
+    #   superadmin → superadmin, admin → admin, student → voter
+    #   teacher has NO Voxify role — reject, don't mirror here
+    role_map = {
+        "superadmin": "superadmin",
+        "admin":      "admin",
+        "student":    "voter",
+    }
+    voxify_role = role_map.get(role)
+    if not voxify_role:
+        return jsonify({"success": False, "reason": f"role '{role}' has no Voxify equivalent — teachers are not mirrored to Voxify"}), 400
+
+    name_parts = full_name.split()
+    if len(name_parts) >= 3:
+        firstname, middlename, surname = name_parts[0], " ".join(name_parts[1:-1]), name_parts[-1]
+    elif len(name_parts) == 2:
+        firstname, middlename, surname = name_parts[0], "", name_parts[1]
+    else:
+        firstname, middlename, surname = full_name, "", ""
+
+    hashed_password = generate_password_hash(password)
+
+    try:
+        conn = db()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT id FROM users WHERE student_id = %s", (username,))
+        if cursor.fetchone():
+            cursor.close(); conn.close()
+            return jsonify({"success": False, "reason": f"'{username}' already exists in Voxify users"}), 409
+
+        cursor.execute(
+            """INSERT INTO users
+               (student_id, firstname, middlename, surname, email, password,
+                role, college_id, is_approved, is_active, is_archived)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, 1, 1, 0)""",
+            (username, firstname, middlename, surname, email,
+             hashed_password, voxify_role),
+        )
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({"success": True}), 201
+
+    except Exception as e:
+        return jsonify({"success": False, "reason": str(e)}), 500

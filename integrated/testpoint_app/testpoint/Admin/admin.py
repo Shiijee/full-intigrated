@@ -321,8 +321,8 @@ def add_user():
             connection.commit()
             flash(f'Account created successfully! User ID is {custom_user_id}', 'success')
 
-            # ── Sync to Portal so this user can log in via SSO ──────────────
-            from testpoint.portal_sync import sync_user_to_portal, portal_role
+            # ── Sync to Portal + mirror into Voxify and Attendance ──────────
+            from testpoint.portal_sync import sync_user_to_portal, portal_role, mirror_user_to_modules
             fullname_for_portal = ' '.join([fname, mname, lname] if mname else [fname, lname])
             sync_result = sync_user_to_portal(
                 username=custom_user_id,
@@ -334,6 +334,16 @@ def add_user():
             )
             if not sync_result["success"]:
                 print(f"[Portal sync] Failed to sync user '{custom_user_id}': {sync_result['reason']}")
+            mirror_results = mirror_user_to_modules(
+                username=custom_user_id,
+                password=password,
+                full_name=fullname_for_portal,
+                role=portal_role(role),
+                email=email,
+            )
+            for module, result in mirror_results.items():
+                if not result.get('success'):
+                    print(f"[Portal sync] Failed to mirror '{custom_user_id}' to {module}: {result.get('reason')}")
             # ─────────────────────────────────────────────────────────────────
 
         except mysql.connector.Error as err:

@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
-from Main.db import get_db_connection, get_cursor, log_system_action
+from Main.db import get_db_connection, log_system_action
 from datetime import datetime, timedelta
 import json
 import os
@@ -9,15 +9,21 @@ user = Blueprint('user', __name__, template_folder='templates')
 
 @user.before_request
 def require_login():
-    if 'user_id' not in session or session.get('role') != 'student':
-        flash('Please login as student first.', 'error')
-        return redirect(url_for('auth.student_login'))
+    from Main.sso import require_sso
+    result = require_sso()
+    # require_sso returns a redirect Response when not authenticated
+    if hasattr(result, 'status_code'):
+        return result
+    # Enforce role — only students may access /user/* routes
+    if result.get('role') != 'student':
+        from flask import abort
+        abort(403)
 
 @user.route('/dashboard')
 def dashboard():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Get Enrolled Subjects with their specific stats
     cursor.execute("""
@@ -85,7 +91,7 @@ def dashboard():
 def subject_performance(subject_id):
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Get Subject Info and Teacher Info
     cursor.execute("""
@@ -150,7 +156,7 @@ def subject_performance(subject_id):
     """, (usid,))
     subjects = cursor.fetchall()
     
-    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s AND is_read = 0", (usid,))
+    cursor.execute("SELECT * FROM Notifications WHERE user_id = %s AND is_read = FALSE", (usid,))
     unread_count = len(cursor.fetchall())
     
     cursor.close()
@@ -171,12 +177,12 @@ def mark_notifications_read():
     notif_id = data.get('notification_id')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     if notif_id:
-        cursor.execute("UPDATE Notifications SET is_read = 1 WHERE notification_id = %s AND user_id = %s", (notif_id, usid))
+        cursor.execute("UPDATE Notifications SET is_read = TRUE WHERE notification_id = %s AND user_id = %s", (notif_id, usid))
     else:
-        cursor.execute("UPDATE Notifications SET is_read = 1 WHERE user_id = %s", (usid,))
+        cursor.execute("UPDATE Notifications SET is_read = TRUE WHERE user_id = %s", (usid,))
         
     conn.commit()
     cursor.close()
@@ -187,7 +193,7 @@ def mark_notifications_read():
 def delete_all_notifications():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor()
     cursor.execute("DELETE FROM Notifications WHERE user_id = %s", (usid,))
     conn.commit()
     cursor.close()
@@ -198,7 +204,7 @@ def delete_all_notifications():
 def get_notifications():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC LIMIT 10", (usid,))
     notifications = cursor.fetchall()
     
@@ -215,7 +221,7 @@ def get_notifications():
 def notifications_page():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Get Enrolled Subjects for Sidebar
     cursor.execute("""
@@ -245,7 +251,7 @@ def notifications_page():
 def scan_qr():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Get Enrolled Subjects for Sidebar
     cursor.execute("""
@@ -296,7 +302,7 @@ def submit_attendance():
     usid = session['user_id']
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     try:
         # 1. Validate Session and Token
@@ -375,7 +381,7 @@ def submit_attendance():
 def timetable():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     query = """
     SELECT s.subject_code, s.subject_name, t.first_name, t.middle_name, t.last_name, 
@@ -398,7 +404,7 @@ def timetable():
     for item in schedule_raw:
         # Helper to convert time/timedelta to row index
         def get_row_index(t):
-            # Postgres TIME columns return datetime.time objects
+            # MySQL TIME columns return datetime.timedelta objects
             if hasattr(t, 'total_seconds'): # MySQL compatibility
                 total_seconds = t.total_seconds()
             else:
@@ -460,10 +466,12 @@ def timetable():
 def profile():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Get Student Profile
-    cursor.execute("SELECT * FROM Students WHERE user_id = %s", (usid,))
+    # NOTE: `user_id AS usid` alias kept so profile.html (which reads
+    # `student.usid`) keeps working without needing template changes.
+    cursor.execute("SELECT *, user_id AS usid FROM Students WHERE user_id = %s", (usid,))
     student = cursor.fetchone()
     
     # Get Enrolled Subjects with Teacher Info
@@ -536,7 +544,7 @@ def verify_email_change():
         new_email = session.get('pending_new_email')
         
         conn = get_db_connection()
-        cursor = get_cursor(conn)
+        cursor = conn.cursor(dictionary=True)
         try:
             cursor.execute("UPDATE Students SET email = %s WHERE user_id = %s", (new_email, usid))
             conn.commit()
@@ -559,10 +567,10 @@ def verify_email_change():
 def submit_excuse():
     usid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     if request.method == 'POST':
-        class_data = request.form.get('class_id') # Format: subject_id|teacher_id
+        class_data = request.form.get('class_id') # Format: subject_id|utid
         message = request.form.get('message')
         file = request.files.get('excuse_file')
         
@@ -573,7 +581,7 @@ def submit_excuse():
             return redirect(url_for('user.submit_excuse'))
         else:
             try:
-                subject_id, teacher_id = class_data.split("|")
+                subject_id, utid = class_data.split('|')
                 
                 # Check daily limit (max 3 per day)
                 cursor.execute("""
@@ -627,7 +635,7 @@ def submit_excuse():
                 cursor.execute("""
                     INSERT INTO Excuse_Letters (user_id, teacher_id, subject_id, message, file_path)
                     VALUES (%s, %s, %s, %s, %s)
-                """, (usid, teacher_id, subject_id, message, filename))
+                """, (usid, utid, subject_id, message, filename))
                 letter_id = cursor.lastrowid
                 
                 # Audit Logging
@@ -642,7 +650,7 @@ def submit_excuse():
     # GET request: Prepare data for the form
     # 1. Enrollments with Teacher Info
     query = """
-    SELECT s.subject_id, s.subject_code, s.subject_name, ta.teacher_id, t.user_id as teacher_user_id, t.first_name, t.middle_name, t.last_name
+    SELECT s.subject_id, s.subject_code, s.subject_name, ta.teacher_id AS utid, t.first_name, t.middle_name, t.last_name
     FROM Enrollments e
     JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
     JOIN Subjects s ON ta.subject_id = s.subject_id
@@ -673,7 +681,7 @@ def submit_excuse():
     """, (usid,))
     subjects = cursor.fetchall()
     
-    cursor.execute("SELECT COUNT(*) as count FROM Notifications WHERE user_id = %s AND is_read = 0", (usid,))
+    cursor.execute("SELECT COUNT(*) as count FROM Notifications WHERE user_id = %s AND is_read = FALSE", (usid,))
     unread_count = cursor.fetchone()['count']
     
     cursor.close()

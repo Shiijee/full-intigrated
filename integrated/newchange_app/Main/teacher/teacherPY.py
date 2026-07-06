@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 import json
-from Main.db import get_db_connection, get_cursor, log_system_action
+from Main.db import get_db_connection, log_system_action
 import uuid
 import random
 import string
@@ -10,98 +10,19 @@ teacher = Blueprint('teacher', __name__, template_folder='templates')
 
 @teacher.before_request
 def require_login():
-    if request.endpoint in ('teacher.login',):
-        return  # allow login page through without auth check
-    if 'user_id' not in session or session.get('role') != 'teacher':
-        flash('Please login as teacher first.', 'error')
-        return redirect(url_for('teacher.login'))
-
-@teacher.route('/login', methods=['GET', 'POST'])
-def login():
-    """
-    Teacher login page — renders teacher_login.html.
-    Only accepts T-prefixed user IDs.
-    """
-    from werkzeug.security import check_password_hash
-    from Main.db import get_db_connection, get_cursor
-    from Main.auth.loginPY import get_role_from_user_id
-    from datetime import datetime, timedelta
-
-    if 'user_id' in session:
-        role = session.get('role')
-        if role == 'student': return redirect(url_for('user.dashboard'))
-        if role == 'teacher': return redirect(url_for('teacher.dashboard'))
-        if role == 'admin':   return redirect(url_for('admin.dashboard'))
-
-    if request.method == 'POST':
-        uid_input = (request.form.get('user_id') or '').strip()
-        password  = request.form.get('password', '')
-
-        if not uid_input:
-            flash('Please enter your Teacher ID.', 'error')
-            return render_template('teacher_login.html', prefill_id=uid_input)
-
-        detected_role = get_role_from_user_id(uid_input)
-
-        if detected_role != 'teacher':
-            flash('Invalid ID format. Teacher IDs start with T (e.g. T26-0001).', 'error')
-            return render_template('teacher_login.html', prefill_id=uid_input)
-
-        conn = get_db_connection()
-        if not conn:
-            flash('Database connection failed.', 'error')
-            return render_template('teacher_login.html', prefill_id=uid_input)
-
-        cursor = get_cursor(conn)
-        cursor.execute("SELECT * FROM Teachers WHERE user_id = %s", (uid_input,))
-        user = cursor.fetchone()
-
-        if user:
-            if user.get('user_role') != 'teacher':
-                cursor.close(); conn.close()
-                flash('Account role mismatch. Please contact admin.', 'error')
-                return render_template('teacher_login.html', prefill_id=uid_input)
-
-            if user.get('status') == 'Archived':
-                flash('Account is disabled. Please contact admin.', 'error')
-            elif user.get('lockout_time') and user['lockout_time'] > datetime.now():
-                flash(f'Account locked. Try again after {user["lockout_time"].strftime("%Y-%m-%d %H:%M")}', 'error')
-            elif user['password_hash'] and check_password_hash(user['password_hash'], password):
-                cursor.execute("UPDATE Teachers SET failed_attempts = 0, lockout_time = NULL WHERE user_id = %s", (user['user_id'],))
-                cursor.execute("INSERT INTO login_logs (user_id, user_role, login_time) VALUES (%s, 'teacher', NOW())", (user['user_id'],))
-                conn.commit()
-                log_id = cursor.lastrowid
-                session['login_log_id'] = log_id
-                session.permanent = True
-                session['user_id']   = user['user_id']
-                session['role']      = 'teacher'
-                session['user_role'] = 'teacher'
-                session['name']      = f"{user['first_name']} {user['middle_name']} {user['last_name']}"
-                cursor.close(); conn.close()
-                return redirect(url_for('teacher.dashboard'))
-            else:
-                attempts = (user.get('failed_attempts') or 0) + 1
-                lockout  = None
-                if attempts >= 10:
-                    lockout = datetime.now() + timedelta(hours=2)
-                    flash('Account locked for 2 hours due to 10 failed attempts.', 'error')
-                else:
-                    flash(f'Invalid credentials. {10 - attempts} attempts remaining.', 'error')
-                cursor.execute("UPDATE Teachers SET failed_attempts = %s, lockout_time = %s WHERE user_id = %s", (attempts, lockout, user['user_id']))
-                conn.commit()
-        else:
-            flash('Teacher ID not found.', 'error')
-
-        cursor.close(); conn.close()
-        return render_template('teacher_login.html', prefill_id=uid_input)
-
-    return render_template('teacher_login.html')
+    from Main.sso import require_sso
+    result = require_sso()
+    if hasattr(result, 'status_code'):
+        return result
+    if result.get('role') != 'teacher':
+        from flask import abort
+        abort(403)
 
 @teacher.route('/dashboard')
 def dashboard():
     utid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Get Assigned Classes
     query = """
@@ -162,9 +83,11 @@ def dashboard():
 def profile():
     utid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM Teachers WHERE user_id = %s", (utid,))
+    # NOTE: `user_id AS utid` alias kept so teacher_profile.html
+    # (which reads `teacher.utid`) keeps working unchanged.
+    cursor.execute("SELECT *, user_id AS utid FROM Teachers WHERE user_id = %s", (utid,))
     teacher_data = cursor.fetchone()
 
     # Assigned classes with subject info
@@ -217,7 +140,7 @@ def verify_email_change():
         new_email = session.get('pending_new_email')
         
         conn = get_db_connection()
-        cursor = get_cursor(conn)
+        cursor = conn.cursor(dictionary=True)
         try:
             cursor.execute("UPDATE Teachers SET email = %s WHERE user_id = %s", (new_email, utid))
             conn.commit()
@@ -247,7 +170,7 @@ def check_attendance_today():
     section_val = request.args.get('section')
 
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT session_id, random_token, is_finalized
         FROM Sessions
@@ -278,7 +201,7 @@ def get_temp_attendance(session_id):
     """
     utid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
 
     # Verify teacher owns this session
     cursor.execute("""
@@ -294,7 +217,7 @@ def get_temp_attendance(session_id):
         return jsonify({'success': False, 'message': 'Session not found'})
 
     cursor.execute("""
-        SELECT a.attendance_id, a.user_id, a.status, a.remarks,
+        SELECT a.attendance_id, a.user_id AS usid, a.status, a.remarks,
                s.first_name, s.middle_name, s.last_name
         FROM Attendance a
         JOIN Students s ON a.user_id = s.user_id
@@ -328,7 +251,7 @@ def update_temp_status():
         return jsonify({'success': False, 'message': 'Invalid status'})
 
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     try:
         # Verify teacher owns this attendance record via session
         cursor.execute("""
@@ -360,14 +283,13 @@ def save_attendance():
     Finalizes (saves) an attendance session permanently.
     Once finalized: is_finalized = TRUE, attendance cannot be edited via temp flow.
     Validates that at least one attendance record exists before saving.
-    BLOCKS SAVING IF THERE ARE UNRESOLVED FLAGGED STUDENTS.
     """
     utid = session['user_id']
     data = request.json
     session_id = data.get('session_id')
 
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     try:
         # Verify teacher owns this session
         cursor.execute("""
@@ -385,22 +307,6 @@ def save_attendance():
         if cnt == 0:
             return jsonify({'success': False, 'message': 'No attendance records found. Cannot save empty attendance.'})
 
-        # BLOCK SAVING IF ANY FLAGGED STUDENTS HAVE PENDING RESOLUTION
-        cursor.execute("""
-            SELECT COUNT(*) as pending_count 
-            FROM Attendance 
-            WHERE session_id = %s 
-              AND status = 'Flagged' 
-              AND (flag_resolution IS NULL OR flag_resolution = 'pending')
-        """, (session_id,))
-        pending_flags = cursor.fetchone()['pending_count']
-        
-        if pending_flags > 0:
-            return jsonify({
-                'success': False, 
-                'message': f'Cannot save attendance: {pending_flags} flagged student(s) must be accepted or declined first.'
-            })
-
         # Finalize the session
         cursor.execute("UPDATE Sessions SET is_finalized = TRUE WHERE session_id = %s", (session_id,))
 
@@ -410,198 +316,6 @@ def save_attendance():
 
         conn.commit()
         return jsonify({'success': True, 'message': 'Attendance saved successfully!'})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'success': False, 'message': str(e)})
-    finally:
-        cursor.close()
-        conn.close()
-
-
-@teacher.route('/accept_flagged_student', methods=['POST'])
-def accept_flagged_student():
-    """
-    Accepts a single flagged student's attendance and changes status to Present.
-    """
-    utid = session['user_id']
-    data = request.json
-    attendance_id = data.get('attendance_id')
-
-    conn = get_db_connection()
-    cursor = get_cursor(conn)
-    try:
-        # Verify teacher owns this record and it's flagged
-        cursor.execute("""
-            SELECT a.*, ses.is_finalized 
-            FROM Attendance a
-            JOIN Sessions ses ON a.session_id = ses.session_id
-            WHERE a.attendance_id = %s AND ses.teacher_id = %s
-        """, (attendance_id, utid))
-        record = cursor.fetchone()
-        
-        if not record:
-            return jsonify({'success': False, 'message': 'Record not found'})
-        if record['is_finalized']:
-            return jsonify({'success': False, 'message': 'Attendance is already finalized'})
-        if record['status'] != 'Flagged':
-            return jsonify({'success': False, 'message': 'Student is not flagged'})
-
-        # Accept: change status to Present and mark resolution as accepted
-        cursor.execute("""
-            UPDATE Attendance 
-            SET status = 'Present', flag_resolution = 'accepted', remarks = 'Flagged attendance accepted by teacher'
-            WHERE attendance_id = %s
-        """, (attendance_id,))
-        
-        # Audit log
-        log_system_action(cursor, 'Attendance', attendance_id, 'Update', utid, 'teacher',
-                          f"Flagged attendance accepted and changed to Present")
-        
-        conn.commit()
-        return jsonify({'success': True, 'message': 'Student attendance accepted'})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'success': False, 'message': str(e)})
-    finally:
-        cursor.close()
-        conn.close()
-
-
-@teacher.route('/decline_flagged_student', methods=['POST'])
-def decline_flagged_student():
-    """
-    Declines a single flagged student's attendance and changes status to Absent.
-    """
-    utid = session['user_id']
-    data = request.json
-    attendance_id = data.get('attendance_id')
-
-    conn = get_db_connection()
-    cursor = get_cursor(conn)
-    try:
-        # Verify teacher owns this record and it's flagged
-        cursor.execute("""
-            SELECT a.*, ses.is_finalized 
-            FROM Attendance a
-            JOIN Sessions ses ON a.session_id = ses.session_id
-            WHERE a.attendance_id = %s AND ses.teacher_id = %s
-        """, (attendance_id, utid))
-        record = cursor.fetchone()
-        
-        if not record:
-            return jsonify({'success': False, 'message': 'Record not found'})
-        if record['is_finalized']:
-            return jsonify({'success': False, 'message': 'Attendance is already finalized'})
-        if record['status'] != 'Flagged':
-            return jsonify({'success': False, 'message': 'Student is not flagged'})
-
-        # Decline: change status to Absent and mark resolution as declined
-        cursor.execute("""
-            UPDATE Attendance 
-            SET status = 'Absent', flag_resolution = 'declined', remarks = 'Flagged attendance declined by teacher'
-            WHERE attendance_id = %s
-        """, (attendance_id,))
-        
-        # Audit log
-        log_system_action(cursor, 'Attendance', attendance_id, 'Update', utid, 'teacher',
-                          f"Flagged attendance declined and changed to Absent")
-        
-        conn.commit()
-        return jsonify({'success': True, 'message': 'Student attendance declined'})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'success': False, 'message': str(e)})
-    finally:
-        cursor.close()
-        conn.close()
-
-
-@teacher.route('/bulk_accept_flagged', methods=['POST'])
-def bulk_accept_flagged():
-    """
-    Accepts ALL flagged students in a session at once.
-    """
-    utid = session['user_id']
-    data = request.json
-    session_id = data.get('session_id')
-
-    conn = get_db_connection()
-    cursor = get_cursor(conn)
-    try:
-        # Verify teacher owns this session
-        cursor.execute("""
-            SELECT * FROM Sessions WHERE session_id = %s AND teacher_id = %s
-        """, (session_id, utid))
-        ses = cursor.fetchone()
-        if not ses:
-            return jsonify({'success': False, 'message': 'Session not found'})
-        if ses['is_finalized']:
-            return jsonify({'success': False, 'message': 'Attendance is already finalized'})
-
-        # Update all pending flagged students in this session
-        cursor.execute("""
-            UPDATE Attendance 
-            SET status = 'Present', flag_resolution = 'accepted', remarks = 'Bulk accepted by teacher'
-            WHERE session_id = %s 
-              AND status = 'Flagged' 
-              AND (flag_resolution IS NULL OR flag_resolution = 'pending')
-        """, (session_id,))
-        
-        affected = cursor.rowcount
-        
-        # Audit log
-        log_system_action(cursor, 'Sessions', session_id, 'Update', utid, 'teacher',
-                          f"Bulk accepted {affected} flagged student(s)")
-        
-        conn.commit()
-        return jsonify({'success': True, 'message': f'{affected} flagged student(s) accepted', 'count': affected})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'success': False, 'message': str(e)})
-    finally:
-        cursor.close()
-        conn.close()
-
-
-@teacher.route('/bulk_decline_flagged', methods=['POST'])
-def bulk_decline_flagged():
-    """
-    Declines ALL flagged students in a session at once.
-    """
-    utid = session['user_id']
-    data = request.json
-    session_id = data.get('session_id')
-
-    conn = get_db_connection()
-    cursor = get_cursor(conn)
-    try:
-        # Verify teacher owns this session
-        cursor.execute("""
-            SELECT * FROM Sessions WHERE session_id = %s AND teacher_id = %s
-        """, (session_id, utid))
-        ses = cursor.fetchone()
-        if not ses:
-            return jsonify({'success': False, 'message': 'Session not found'})
-        if ses['is_finalized']:
-            return jsonify({'success': False, 'message': 'Attendance is already finalized'})
-
-        # Update all pending flagged students in this session
-        cursor.execute("""
-            UPDATE Attendance 
-            SET status = 'Absent', flag_resolution = 'declined', remarks = 'Bulk declined by teacher'
-            WHERE session_id = %s 
-              AND status = 'Flagged' 
-              AND (flag_resolution IS NULL OR flag_resolution = 'pending')
-        """, (session_id,))
-        
-        affected = cursor.rowcount
-        
-        # Audit log
-        log_system_action(cursor, 'Sessions', session_id, 'Update', utid, 'teacher',
-                          f"Bulk declined {affected} flagged student(s)")
-        
-        conn.commit()
-        return jsonify({'success': True, 'message': f'{affected} flagged student(s) declined', 'count': affected})
     except Exception as e:
         conn.rollback()
         return jsonify({'success': False, 'message': str(e)})
@@ -637,7 +351,7 @@ def start_session():
     utid = session['user_id']
 
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     try:
         # One attendance per class per day rule
         cursor.execute("""
@@ -681,7 +395,7 @@ def end_session():
     session_id = data.get('session_id')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     try:
         # 1. Get session info
         cursor.execute("SELECT * FROM Sessions WHERE session_id = %s", (session_id,))
@@ -719,7 +433,7 @@ def end_session():
 @teacher.route('/session_monitoring/<session_id>')
 def session_monitoring(session_id):
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT ses.*, sub.subject_name, sub.subject_code 
         FROM Sessions ses
@@ -738,10 +452,10 @@ def session_monitoring(session_id):
 @teacher.route('/api/session_stats/<session_id>')
 def get_session_stats(session_id):
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT 
-            s.user_id, s.first_name, s.middle_name, s.last_name,
+            s.user_id AS usid, s.first_name, s.middle_name, s.last_name,
             a.status, a.scan_time, a.is_valid, a.behavior_flags, a.distance_meters
         FROM Sessions ses
         JOIN Teacher_Assignments ta ON ses.teacher_id = ta.teacher_id AND ses.subject_id = ta.subject_id AND ses.section = ta.section
@@ -782,10 +496,10 @@ def manage_students():
     section = request.args.get('section')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
 
     if request.method == 'POST':
-        sid = request.form.get('user_id')
+        sid = request.form.get('usid')
         action = request.form.get('action')
         reason = request.form.get('reason', 'No reason provided')
         subj_id = request.form.get('subject_id')
@@ -856,8 +570,10 @@ def manage_students():
     
 
             # Get students in this class with search filter
+            # NOTE: `user_id AS usid` alias kept so manage_students.html
+            # (which reads `student.usid`) keeps working unchanged.
             query = """
-                SELECT s.*, dr.status as drop_status
+                SELECT s.*, s.user_id AS usid, dr.status as drop_status
                 FROM Students s
                 JOIN Enrollments e ON s.user_id = e.user_id
                 JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
@@ -894,7 +610,7 @@ def reports():
     section = request.args.get('section')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Fetch all assigned classes to show in the selector
     cursor.execute("""
@@ -922,7 +638,7 @@ def reports():
         if selected_class:
             # Summary Report: Specific to THIS subject + section
             query_summary = """
-            SELECT s.user_id, s.first_name, s.middle_name, s.last_name,
+            SELECT s.user_id AS usid, s.first_name, s.middle_name, s.last_name,
                    COUNT(a.attendance_id) as total_classes,
                    SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as days_present,
                    SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as days_absent,
@@ -954,8 +670,8 @@ def reports():
             # Daily Report: Raw Logs — all records with date and time
             query_daily = """
             SELECT DATE(a.scan_time) as date,
-                   DATE_FORMAT(a.scan_time, '%h:%i %p') as time,
-                   s.user_id, s.first_name, s.middle_name, s.last_name,
+                   DATE_FORMAT(a.scan_time, '%%h:%%i %%p') as time,
+                   s.user_id AS usid, s.first_name, s.middle_name, s.last_name,
                    a.status, a.is_valid
             FROM Attendance a
             JOIN Sessions ses2 ON a.session_id = ses2.session_id
@@ -992,10 +708,10 @@ def reports():
 
             # Weekly Trends - Week 1-4 of each month with actual date range
             cursor.execute("""
-                SELECT CONCAT('Week ', CEIL(DAY(a.scan_time) / 7), ' - ', trim(DATE_FORMAT(a.scan_time, '%M')), ' ', YEAR(a.scan_time)) as period,
-                       YEAR(a.scan_time) as yr,
-                       MONTH(a.scan_time) as mo,
-                       CEIL(DAY(a.scan_time) / 7) as wk,
+                SELECT CONCAT('Week ', CEIL(EXTRACT(DAY FROM a.scan_time) / 7), ' - ', DATE_FORMAT(a.scan_time, '%%M'), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
+                       EXTRACT(YEAR FROM a.scan_time) as yr,
+                       EXTRACT(MONTH FROM a.scan_time) as mo,
+                       CEIL(EXTRACT(DAY FROM a.scan_time) / 7) as wk,
                        MIN(DATE(a.scan_time)) as week_start,
                        MAX(DATE(a.scan_time)) as week_end,
                        COUNT(a.attendance_id) as total_scans,
@@ -1011,8 +727,8 @@ def reports():
                     WHERE ses2.teacher_id = %s AND ses2.subject_id = %s AND ses2.section = %s
                     GROUP BY DATE(a2.scan_time), a2.user_id
                 ) max_a ON a.attendance_id = max_a.max_id
-                GROUP BY YEAR(a.scan_time), MONTH(a.scan_time), CEIL(DAY(a.scan_time) / 7), period
-                ORDER BY YEAR(a.scan_time) ASC, MONTH(a.scan_time) ASC, CEIL(DAY(a.scan_time) / 7) ASC
+                GROUP BY EXTRACT(YEAR FROM a.scan_time), EXTRACT(MONTH FROM a.scan_time), CEIL(EXTRACT(DAY FROM a.scan_time) / 7), period
+                ORDER BY yr ASC, mo ASC, wk ASC
             """, (utid, subject_id, section))
             weekly_trends = cursor.fetchall()
             for row in weekly_trends:
@@ -1023,9 +739,9 @@ def reports():
 
             # Monthly Trends - January through December with year
             cursor.execute("""
-                SELECT CONCAT(trim(DATE_FORMAT(a.scan_time, '%M')), ' ', YEAR(a.scan_time)) as period,
-                       YEAR(a.scan_time) as yr,
-                       MONTH(a.scan_time) as mo,
+                SELECT CONCAT(DATE_FORMAT(a.scan_time, '%%M'), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
+                       EXTRACT(YEAR FROM a.scan_time) as yr,
+                       EXTRACT(MONTH FROM a.scan_time) as mo,
                        COUNT(a.attendance_id) as total_scans,
                        SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present_count,
                        SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent_count,
@@ -1039,8 +755,8 @@ def reports():
                     WHERE ses2.teacher_id = %s AND ses2.subject_id = %s AND ses2.section = %s
                     GROUP BY DATE(a2.scan_time), a2.user_id
                 ) max_a ON a.attendance_id = max_a.max_id
-                GROUP BY YEAR(a.scan_time), MONTH(a.scan_time), period
-                ORDER BY YEAR(a.scan_time) ASC, MONTH(a.scan_time) ASC
+                GROUP BY EXTRACT(YEAR FROM a.scan_time), EXTRACT(MONTH FROM a.scan_time), period
+                ORDER BY yr ASC, mo ASC
             """, (utid, subject_id, section))
             monthly_trends = cursor.fetchall()
 
@@ -1090,11 +806,11 @@ def submit_report():
     teacher_message = request.form.get('teacher_message', '').strip()
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Calculate the summary (snapshot of current status)
     query_summary = """
-    SELECT s.user_id, s.first_name, s.middle_name, s.last_name,
+    SELECT s.user_id AS usid, s.first_name, s.middle_name, s.last_name,
            COUNT(a.attendance_id) as total_classes,
            SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as days_present,
            SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as days_absent,
@@ -1163,7 +879,7 @@ def daily_attendance_log():
     section = request.args.get('section')
 
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
         SELECT s.subject_id, s.subject_code, s.subject_name, ta.section
@@ -1188,8 +904,8 @@ def daily_attendance_log():
         if selected_class:
             cursor.execute("""
                 SELECT DATE(a.scan_time) as date,
-                       DATE_FORMAT(a.scan_time, '%h:%i %p') as time,
-                       s.user_id, s.first_name, s.middle_name, s.last_name,
+                       DATE_FORMAT(a.scan_time, '%%h:%%i %%p') as time,
+                       s.user_id AS usid, s.first_name, s.middle_name, s.last_name,
                        a.status, a.is_valid
                 FROM Attendance a
                 JOIN Sessions ses ON a.session_id = ses.session_id
@@ -1210,7 +926,7 @@ def daily_attendance_log():
                 ORDER BY start_time DESC
             """, (utid, subject_id, section))
             for sr in cursor.fetchall():
-                d = sr['date'].strftime('%Y-%m-%d') if hasattr(sr['date'], 'strftime') else str(sr['date']) if not isinstance(sr['date'], str) else sr['date']
+                d = sr['date'].strftime('%Y-%m-%d') if not isinstance(sr['date'], str) else sr['date']
                 if d not in date_finalized_map:
                     date_finalized_map[d] = {
                         'is_finalized': bool(sr['is_finalized']),
@@ -1219,7 +935,7 @@ def daily_attendance_log():
 
             # All active students (kept for compatibility)
             cursor.execute("""
-                SELECT s.user_id FROM Students s
+                SELECT s.user_id AS usid FROM Students s
                 JOIN Enrollments e ON s.user_id = e.user_id
                 JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
                 WHERE ta.teacher_id = %s AND ta.subject_id = %s AND ta.section = %s AND s.status = 'Active'
@@ -1263,7 +979,7 @@ def delete_daily_attendance():
     date_str = request.form.get('date')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     try:
         # Block deletion if the session for this date is finalized
         cursor.execute("""
@@ -1289,6 +1005,7 @@ def delete_daily_attendance():
         records_to_delete = cursor.fetchall()
         
         if records_to_delete:
+            # MySQL multi-table DELETE syntax (Postgres' DELETE...USING isn't valid here)
             cursor.execute("""
                 DELETE a FROM Attendance a
                 JOIN Sessions ses ON a.session_id = ses.session_id
@@ -1328,7 +1045,7 @@ def manage_marks():
     section = request.args.get('section')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Fetch all assigned classes for the selector
     cursor.execute("""
@@ -1415,25 +1132,14 @@ def manage_marks():
             total_pages = (total_count + per_page - 1) // per_page
 
             # Select data
-            select_query = "SELECT a.attendance_id, s.first_name, s.middle_name, s.last_name, s.user_id, sub.subject_name, a.scan_time, a.status, a.is_valid, a.remarks, a.behavior_flags, a.distance_meters, a.flag_resolution, ses.is_finalized " + query
+            # NOTE: `s.user_id AS usid` alias kept so manage_marks.html
+            # (which reads `record.usid`) keeps working unchanged.
+            select_query = "SELECT a.attendance_id, s.first_name, s.middle_name, s.last_name, s.user_id AS usid, sub.subject_name, a.scan_time, a.status, a.is_valid, a.remarks, a.behavior_flags, a.distance_meters, ses.is_finalized " + query
             select_query += " ORDER BY DATE(a.scan_time) DESC, s.last_name ASC, s.first_name ASC LIMIT %s OFFSET %s"
             params.extend([per_page, offset])
 
             cursor.execute(select_query, params)
             attendance_records = cursor.fetchall()
-            
-            # Process behavior_flags to make them more readable
-            for rec in attendance_records:
-                flags = rec.get('behavior_flags')
-                if isinstance(flags, str):
-                    try:
-                        rec['behavior_flags'] = json.loads(flags)
-                    except (json.JSONDecodeError, TypeError):
-                        rec['behavior_flags'] = []
-                elif isinstance(flags, list):
-                    rec['behavior_flags'] = flags
-                else:
-                    rec['behavior_flags'] = []
 
             # Check if today has an unsaved session (for the Save banner)
             cursor.execute("""
@@ -1484,7 +1190,7 @@ def update_mark():
     new_status = request.form.get('status')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     # Check if the session is finalized
     cursor.execute("""
@@ -1538,7 +1244,7 @@ def delete_mark():
     attendance_id = request.form.get('attendance_id')
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     try:
         cursor.execute("SELECT status FROM Attendance WHERE attendance_id = %s", (attendance_id,))
@@ -1584,7 +1290,7 @@ def delete_mark():
 def manual_attendance():
     utid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
 
     # Fetch all classes (subject + section) assigned to this teacher
     cursor.execute("""
@@ -1616,8 +1322,10 @@ def manual_attendance():
                 break
 
         # Fetch all ACTIVE students enrolled in this specific subject + section
+        # NOTE: `user_id AS usid` alias kept so manual_attendance.html
+        # (which reads `s.usid`) keeps working unchanged.
         cursor.execute("""
-            SELECT s.user_id, s.first_name, s.middle_name, s.last_name, s.email, s.level
+            SELECT s.user_id AS usid, s.first_name, s.middle_name, s.last_name, s.email, s.level
             FROM Enrollments e
             JOIN Students s ON e.user_id = s.user_id
             JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
@@ -1696,7 +1404,7 @@ def submit_manual_attendance():
     manual_session_id = f"MANUAL-{uuid.uuid4().hex[:8]}"
 
     conn   = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
 
     try:
         # Prevent duplication: once per day per class
@@ -1718,7 +1426,8 @@ def submit_manual_attendance():
         # status = 'Ended' immediately since it is teacher-submitted.
         # is_finalized = FALSE — teacher must explicitly save to finalize.
         cursor.execute("""
-            INSERT INTO Sessions (session_id, teacher_id, subject_id, section,
+            INSERT INTO Sessions
+                (session_id, teacher_id, subject_id, section,
                  random_token, start_time, expires_at,
                  latitude, longitude, status, is_finalized)
             VALUES (%s, %s, %s, %s, 'MANUAL', %s, %s, 0, 0, 'Ended', FALSE)
@@ -1729,15 +1438,15 @@ def submit_manual_attendance():
 
         # STEP 2: Loop through ALL students and insert an attendance row.
         # Checked box  → Present  |  Unchecked → Absent
-        for uid in all_ids:
-            status  = 'Present' if uid in present_ids else 'Absent'
+        for usid in all_ids:
+            status  = 'Present' if usid in present_ids else 'Absent'
             remarks = 'Manual attendance by teacher'
 
             cursor.execute("""
                 INSERT INTO Attendance
                     (session_id, user_id, scan_time, status, remarks, is_valid)
                 VALUES (%s, %s, %s, %s, %s, 'Valid')
-            """, (manual_session_id, uid, now, status, remarks))
+            """, (manual_session_id, usid, now, status, remarks))
 
             # STEP 3: Notifications are now handled automatically by the database triggers
 
@@ -1776,11 +1485,10 @@ def review_attendance(session_id):
     """
     Review page: shows attendance records for a session before finalizing.
     Teacher can edit statuses (if not finalized) and then save or discard.
-    Includes flagged student management with accept/decline functionality.
     """
     utid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
         SELECT ses.*, sub.subject_name, sub.subject_code
@@ -1797,33 +1505,14 @@ def review_attendance(session_id):
         return redirect(url_for('teacher.dashboard'))
 
     cursor.execute("""
-        SELECT a.attendance_id, a.user_id, a.status, a.remarks, a.flag_resolution,
-               a.behavior_flags, a.distance_meters,
+        SELECT a.attendance_id, a.user_id AS usid, a.status, a.remarks,
                s.first_name, s.middle_name, s.last_name
         FROM Attendance a
         JOIN Students s ON a.user_id = s.user_id
         WHERE a.session_id = %s
-        ORDER BY 
-            CASE WHEN a.status = 'Flagged' THEN 0 ELSE 1 END,
-            s.last_name, s.first_name
+        ORDER BY s.last_name, s.first_name
     """, (session_id,))
     records = cursor.fetchall()
-    
-    # Process behavior_flags to make them readable
-    for rec in records:
-        flags = rec.get('behavior_flags')
-        if isinstance(flags, str):
-            try:
-                rec['behavior_flags'] = json.loads(flags)
-            except (json.JSONDecodeError, TypeError):
-                rec['behavior_flags'] = []
-        elif isinstance(flags, list):
-            rec['behavior_flags'] = flags
-        else:
-            rec['behavior_flags'] = []
-    
-    # Count pending flagged students
-    pending_flagged_count = sum(1 for r in records if r['status'] == 'Flagged' and (not r.get('flag_resolution') or r.get('flag_resolution') == 'pending'))
 
     cursor.close()
     conn.close()
@@ -1832,14 +1521,13 @@ def review_attendance(session_id):
                            name=session.get('name'),
                            ses=ses,
                            records=records,
-                           is_finalized=bool(ses['is_finalized']),
-                           pending_flagged_count=pending_flagged_count)
+                           is_finalized=bool(ses['is_finalized']))
 
 @teacher.route('/view_excuses')
 def view_excuses():
     utid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     if request.args.get('clear'):
         session.pop('excuses_search', None)
@@ -1853,7 +1541,7 @@ def view_excuses():
     
 
     query = """
-        SELECT el.*, s.subject_code, s.subject_name, st.first_name, st.middle_name, st.last_name
+        SELECT el.*, el.user_id AS usid, s.subject_code, s.subject_name, st.first_name, st.middle_name, st.last_name
         FROM Excuse_Letters el
         JOIN Subjects s ON el.subject_id = s.subject_id
         JOIN Students st ON el.user_id = st.user_id
@@ -1881,7 +1569,7 @@ def update_excuse_status():
     utid = session['user_id']
     
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     try:
         # Verify teacher owns this letter and get subject name
@@ -1918,7 +1606,7 @@ def update_excuse_status():
 def my_schedule():
     utid = session['user_id']
     conn = get_db_connection()
-    cursor = get_cursor(conn)
+    cursor = conn.cursor(dictionary=True)
     
     query = """
     SELECT s.subject_code, s.subject_name, sch.day_of_week, sch.start_time, sch.end_time, sch.room, sch.section
@@ -1946,7 +1634,7 @@ def my_schedule():
     for item in schedule_raw:
         # Helper to convert time/timedelta to row index
         def get_row_index(t):
-            # Postgres TIME columns return datetime.time objects
+            # MySQL TIME columns return datetime.timedelta objects
             if hasattr(t, 'total_seconds'): # MySQL compatibility
                 total_seconds = t.total_seconds()
             else:
