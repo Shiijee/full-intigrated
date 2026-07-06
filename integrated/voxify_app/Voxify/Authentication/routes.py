@@ -55,14 +55,18 @@ def _map_role(portal_role: str) -> str:
     Portal roles: superadmin | admin | teacher | student
     Voxify roles: superadmin | admin | voter
 
-    'student' has no direct Voxify equivalent — every student is
-    eligible to vote, so it auto-maps to 'voter'. 'teacher' has no
-    Voxify role either; it's treated as a voter too rather than
-    locked out entirely.
+    Per the mirroring matrix:
+      - superadmin → superadmin  (Voxify has superadmin)
+      - admin      → admin       (Voxify has admin)
+      - student    → voter       (students are voters in Voxify)
+      - teacher    → None        (teachers have NO Voxify role — blocked)
     """
-    if portal_role in ("superadmin", "admin"):
-        return portal_role
-    return "voter"   # student, teacher, or anything else
+    mapping = {
+        "superadmin": "superadmin",
+        "admin":      "admin",
+        "student":    "voter",
+    }
+    return mapping.get(portal_role)   # returns None for 'teacher'
 
 
 def _resolve_local_user_id(username: str) -> int | None:
@@ -102,6 +106,12 @@ def _get_sso_user() -> dict | None:
     user = _verify_token(token)
     if user:
         mapped_role = _map_role(user.get("role", "student"))
+
+        # None means this role has no Voxify equivalent (e.g. teacher)
+        # Treat as unauthenticated so decorators redirect to Portal
+        if mapped_role is None:
+            return None
+
         local_id    = _resolve_local_user_id(user.get("username"))
 
         user = dict(user)            # don't mutate Portal's response in place

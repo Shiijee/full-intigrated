@@ -26,6 +26,22 @@ def reg_app():
             if role == 'student': return redirect(url_for('user.dashboard'))
             if role == 'teacher': return redirect(url_for('teacher.dashboard'))
             if role == 'admin': return redirect(url_for('admin.dashboard'))
+
+        # Local Flask session is empty, but the browser may still carry a
+        # valid Portal auth_token cookie (e.g. arriving fresh from the
+        # Portal hub). Verify it before bouncing back out.
+        from Main.sso import require_sso
+        result = require_sso()
+        if hasattr(result, 'status_code'):
+            # require_sso() already redirects to the Portal with ?next=
+            # set to this URL, so the Portal can bounce the user straight
+            # back here once they're authenticated.
+            return result
+
+        role = result.get('role')
+        if role == 'student': return redirect(url_for('user.dashboard'))
+        if role == 'teacher': return redirect(url_for('teacher.dashboard'))
+        if role == 'admin': return redirect(url_for('admin.dashboard'))
         return redirect(url_for('auth.student_login'))
 
     @app.route('/.well-known/appspecific/com.chrome.devtools.json')

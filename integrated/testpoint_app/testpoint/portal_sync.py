@@ -13,26 +13,18 @@ see portal/app.py's /api/create-user).
 import os
 import requests
 
-PORTAL_URL           = os.getenv("PORTAL_URL", "http://127.0.0.1:5000")
-CREATE_USER_ENDPOINT = f"{PORTAL_URL}/api/create-user"
+PORTAL_URL          = os.getenv("PORTAL_URL",     "http://127.0.0.1:5000")
+VOXIFY_URL          = os.getenv("VOXIFY_URL",      "http://127.0.0.1:5001")
+ATTENDANCE_URL      = os.getenv("ATTENDANCE_URL",  "http://127.0.0.1:5002")
+
+CREATE_USER_ENDPOINT     = f"{PORTAL_URL}/api/create-user"
+VOXIFY_PROVISION_URL     = f"{VOXIFY_URL}/api/provision-user"
+ATTENDANCE_PROVISION_URL = f"{ATTENDANCE_URL}/api/provision-user"
 
 
 def sync_user_to_portal(username: str, password: str, full_name: str,
                          role: str, email: str = None,
                          external_id: str = None) -> dict:
-    """
-    Push a new user to the Portal so they can log in via SSO.
-
-    role must be one of: 'superadmin', 'admin', 'teacher', 'student'
-
-    Returns a dict like:
-        {"success": True,  "user_id": 5}
-        {"success": False, "reason": "..."}
-
-    Never raises — if the Portal is unreachable or rejects the request,
-    the local module account still exists; this just means the person
-    won't be able to log in via the Portal until synced.
-    """
     payload = {
         "username":    username,
         "password":    password,
@@ -49,6 +41,45 @@ def sync_user_to_portal(username: str, password: str, full_name: str,
         return {"success": False, "reason": data.get("reason", "Unknown error")}
     except requests.exceptions.RequestException as e:
         return {"success": False, "reason": f"Portal unreachable: {e}"}
+
+
+def _provision(endpoint: str, username: str, password: str,
+               full_name: str, role: str, email: str = None) -> dict:
+    """Shared helper for calling a module's /api/provision-user."""
+    payload = {
+        "username":  username,
+        "password":  password,
+        "full_name": full_name,
+        "role":      role,
+        "email":     email,
+    }
+    try:
+        resp = requests.post(endpoint, json=payload, timeout=5)
+        data = resp.json()
+        if resp.status_code == 201:
+            return {"success": True}
+        return {"success": False, "reason": data.get("reason", "Unknown error")}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "reason": f"Unreachable: {e}"}
+
+
+def mirror_user_to_modules(username: str, password: str, full_name: str,
+                            role: str, email: str = None) -> dict:
+    """
+    Mirror a newly-created TestPoint user into Voxify and Attendance.
+
+    Returns:
+        {
+            "voxify":    {"success": True/False, ...},
+            "attendance": {"success": True/False, ...},
+        }
+
+    Never raises — each module is tried independently.
+    """
+    return {
+        "voxify":     _provision(VOXIFY_PROVISION_URL,     username, password, full_name, role, email),
+        "attendance": _provision(ATTENDANCE_PROVISION_URL, username, password, full_name, role, email),
+    }
 
 
 def portal_role(testpoint_role: str) -> str:
