@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from testpoint import db_config
 from testpoint.Auth.login import teacher_logged_in
 import mysql.connector
-import pandas as pd 
+import pandas as pd
 import io
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
@@ -29,7 +29,7 @@ def inject_teacher_courses():
             # Fetch courses assigned to this teacher
             cursor.execute("""
                 SELECT cl.class_code, c.course_name
-                FROM classes cl 
+                FROM classes cl
                 JOIN courses c ON cl.course_code = c.course_code
                 WHERE cl.teacher_id = %s AND cl.is_active = 1
             """, (teacher_id,))
@@ -54,20 +54,20 @@ def teacher_dashboard():
             course_count = cursor.fetchone()['count']
 
             cursor.execute("""
-                SELECT COUNT(*) as count FROM exam_attempts ea 
-                JOIN exams ex ON ea.exam_id = ex.exam_id 
-                JOIN classes cl ON ex.class_code = cl.class_code 
+                SELECT COUNT(*) as count FROM exam_attempts ea
+                JOIN exams ex ON ea.exam_id = ex.exam_id
+                JOIN classes cl ON ex.class_code = cl.class_code
                 WHERE cl.teacher_id = %s AND ea.status = 'in-progress'
             """, (teacher_id,))
             active_examinees = cursor.fetchone()['count']
-            
+
             cursor.execute("SELECT COUNT(*) as count FROM questions WHERE teacher_id = %s AND is_isolated = 0", (teacher_id,))
             total_q = cursor.fetchone()['count']
 
             cursor.execute("""
-                SELECT SUM(ea.tab_switches) as total FROM exam_attempts ea 
-                JOIN exams ex ON ea.exam_id = ex.exam_id 
-                JOIN classes cl ON ex.class_code = cl.class_code 
+                SELECT SUM(ea.tab_switches) as total FROM exam_attempts ea
+                JOIN exams ex ON ea.exam_id = ex.exam_id
+                JOIN classes cl ON ex.class_code = cl.class_code
                 WHERE cl.teacher_id = %s
             """, (teacher_id,))
             total_violations = cursor.fetchone()['total'] or 0
@@ -94,9 +94,9 @@ def teacher_dashboard():
 
             # 4. Upcoming Schedule
             cursor.execute("""
-                SELECT ex.title, ex.date_time, c.course_name 
-                FROM exams ex 
-                JOIN classes cl ON ex.class_code = cl.class_code 
+                SELECT ex.title, ex.date_time, c.course_name
+                FROM exams ex
+                JOIN classes cl ON ex.class_code = cl.class_code
                 JOIN courses c ON cl.course_code = c.course_code
                 WHERE cl.teacher_id = %s AND ex.date_time > NOW() AND ex.archived = 0
                 ORDER BY ex.date_time ASC LIMIT 3
@@ -122,24 +122,34 @@ def teacher_dashboard():
             """, (teacher_id,))
             recent_submissions = cursor.fetchall()
 
-            return render_template('teacher_dashboard.html', 
+            cursor.execute("""
+                SELECT t.*, u.created_at, u.email
+                FROM teachers t
+                JOIN users u ON t.teacher_id = u.user_id
+                WHERE t.teacher_id = %s
+            """, (teacher_id,))
+            user = cursor.fetchone()
+
+
+            return render_template('teacher_dashboard.html',
+                                   user = user,
                                    firstname=session.get('firstname'),
                                    course_count=course_count,
                                    active_examinees=active_examinees,
-                                   total_q=total_q, 
-                                   total_violations=total_violations, 
+                                   total_q=total_q,
+                                   total_violations=total_violations,
                                    draft_count=draft_count,
                                    published_count=published_count,
                                    course_labels=course_labels,
                                    course_avgs=course_avgs,
                                    upcoming_exams=upcoming_exams,
-                                   dist_labels=dist_labels, 
-                                   dist_values=dist_values, 
+                                   dist_labels=dist_labels,
+                                   dist_values=dist_values,
                                    recent_submissions=recent_submissions)
-        finally: 
+        finally:
             cursor.close()
             connection.close()
-            
+
     return redirect(url_for('auth.login'))
 
 @teacher.route('/question_bank')
@@ -148,9 +158,9 @@ def question_bank():
         connection = mysql.connector.connect(**db_config)
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
-            SELECT DISTINCT c.*, (SELECT COUNT(*) FROM questions WHERE course_code = c.course_code AND teacher_id = %s AND is_isolated = 0) as question_count 
-            FROM courses c 
-            JOIN classes cl ON c.course_code = cl.course_code 
+            SELECT DISTINCT c.*, (SELECT COUNT(*) FROM questions WHERE course_code = c.course_code AND teacher_id = %s AND is_isolated = 0) as question_count
+            FROM courses c
+            JOIN classes cl ON c.course_code = cl.course_code
             WHERE cl.teacher_id = %s
         """, (session.get('user_id'), session.get('user_id')))
         courses = cursor.fetchall(); cursor.close(); connection.close()
@@ -163,7 +173,7 @@ def course_question_bank(course_code):
         connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT * FROM courses WHERE course_code = %s", (course_code,))
         course = cursor.fetchone()
-     
+
         cursor.execute("SELECT * FROM questions WHERE course_code = %s AND is_isolated = 0 AND teacher_id = %s", (course_code, session.get('user_id')))
         questions = cursor.fetchall()
         for q in questions:
@@ -180,8 +190,8 @@ def my_courses():
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
             SELECT c.*, cl.class_code, b.block_name, b.program_id, p.program_name
-            FROM courses c 
-            JOIN classes cl ON c.course_code = cl.course_code 
+            FROM courses c
+            JOIN classes cl ON c.course_code = cl.course_code
             JOIN blocks b ON cl.block_id = b.block_id
             JOIN programs p ON p.program_id = b.program_id
             WHERE cl.teacher_id = %s
@@ -194,21 +204,21 @@ def my_courses():
 
 @teacher.route('/exam_analysis')
 def exam_analysis():
-    if not teacher_logged_in(): 
+    if not teacher_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     teacher_id = session.get('user_id')
     exam_id = request.args.get('exam_id', type=int)
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     try:
         cursor.execute("""
-            SELECT e.exam_id, e.title, c.course_name 
-            FROM exams e 
-            JOIN classes cl ON e.class_code = cl.class_code 
-            JOIN courses c ON cl.course_code = c.course_code 
+            SELECT e.exam_id, e.title, c.course_name
+            FROM exams e
+            JOIN classes cl ON e.class_code = cl.class_code
+            JOIN courses c ON cl.course_code = c.course_code
             WHERE cl.teacher_id = %s AND e.archived = 0
         """, (teacher_id,))
         all_exams = cursor.fetchall()
@@ -226,16 +236,16 @@ def exam_analysis():
                 passing_threshold = float(selected_exam['question_limit']) * (float(selected_exam['pass_percentage']) / 100)
 
                 cursor.execute("""
-                    SELECT 
+                    SELECT
                         COUNT(attempt_id) as total_takers,
                         AVG(score) as avg_raw_score,
                         SUM(tab_switches) as total_violations,
                         SUM(CASE WHEN score >= %s THEN 1 ELSE 0 END) as passed_count
-                    FROM exam_attempts 
+                    FROM exam_attempts
                     WHERE exam_id = %s AND status = 'finished'
                 """, (passing_threshold, exam_id))
                 summary = cursor.fetchone()
-                
+
                 if summary and summary['total_takers'] > 0:
                     stats = {
                         'total_takers': summary['total_takers'],
@@ -257,8 +267,8 @@ def exam_analysis():
 
                     # FETCH ALL ITEMS (for modal), ORDER BY FAIL RATE
                     cursor.execute("""
-                        SELECT 
-                            q.question_text, 
+                        SELECT
+                            q.question_text,
                             COUNT(sa.answer_id) as total,
                             SUM(CASE WHEN sa.is_correct = 1 THEN 1 ELSE 0 END) as correct_count,
                             SUM(CASE WHEN sa.is_correct = 0 THEN 1 ELSE 0 END) as incorrect_count
@@ -270,7 +280,7 @@ def exam_analysis():
                         ORDER BY incorrect_count DESC
                     """, (exam_id,))
                     items = cursor.fetchall()
-                    
+
                     for item in items:
                         total = item['total']
                         item_analysis.append({
@@ -280,8 +290,8 @@ def exam_analysis():
                             'incorrect_count': item['incorrect_count']
                         })
 
-        return render_template('teacher_analysis.html', 
-                               all_exams=all_exams, 
+        return render_template('teacher_analysis.html',
+                               all_exams=all_exams,
                                selected_exam=selected_exam,
                                stats=stats,
                                rankings=rankings,
@@ -343,9 +353,9 @@ def manage_exams():
             SELECT e.*, c.course_name, cl.class_code, cl.course_code, b.block_name,
                 (SELECT COUNT(*) FROM exam_questions WHERE exam_id = e.exam_id) as q_count,
                 (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.exam_id) as attempt_count
-            FROM exams e 
-            JOIN classes cl ON e.class_code = cl.class_code 
-            JOIN courses c ON cl.course_code = c.course_code 
+            FROM exams e
+            JOIN classes cl ON e.class_code = cl.class_code
+            JOIN courses c ON cl.course_code = c.course_code
             JOIN blocks b ON cl.block_id = b.block_id
             WHERE cl.teacher_id = %s AND e.archived = 0
         """, (session.get('user_id'),))
@@ -353,8 +363,8 @@ def manage_exams():
 
         cursor.execute("""
             SELECT cl.class_code, c.course_name, cl.course_code, b.block_name, p.program_name
-            FROM classes cl 
-            JOIN courses c ON cl.course_code = c.course_code 
+            FROM classes cl
+            JOIN courses c ON cl.course_code = c.course_code
             JOIN blocks b ON cl.block_id = b.block_id
             JOIN programs p ON b.program_id = p.program_id
             WHERE cl.teacher_id = %s
@@ -378,12 +388,12 @@ def manage_exams():
 
 @teacher.route('/publish_exam_to_classes', methods=['POST'])
 def publish_exam_to_classes():
-    if not teacher_logged_in(): 
+    if not teacher_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     source_exam_id = request.form.get('source_exam_id')
     selected_class_codes = request.form.getlist('target_class_codes[]')
-    
+
     if not selected_class_codes:
         flash("No target classes selected.", "warning")
         return redirect(url_for('teacher.manage_exams'))
@@ -393,7 +403,7 @@ def publish_exam_to_classes():
     try:
         cursor.execute("SELECT * FROM exams WHERE exam_id = %s", (source_exam_id,))
         src = cursor.fetchone()
-        
+
         if src:
             # Fix: Handle potentially empty datetime
             exam_schedule = src['date_time'] if src['date_time'] else None
@@ -402,15 +412,15 @@ def publish_exam_to_classes():
                 cursor.execute("""
                     INSERT INTO exams (class_code, title, duration_minutes, pass_percentage, date_time, created_by, question_limit, is_active)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
-                """, (class_code, src['title'], src['duration_minutes'], src['pass_percentage'], 
+                """, (class_code, src['title'], src['duration_minutes'], src['pass_percentage'],
                       exam_schedule, session.get('user_id'), src['question_limit']))
-                
+
                 new_exam_id = cursor.lastrowid
                 cursor.execute("""
                     INSERT INTO exam_questions (exam_id, question_id)
                     SELECT %s, question_id FROM exam_questions WHERE exam_id = %s
                 """, (new_exam_id, source_exam_id))
-            
+
             connection.commit()
             flash(f"Exam published successfully.", "success")
     except Exception as e:
@@ -448,20 +458,20 @@ def update_exam():
 def delete_exam(exam_id):
     """Handles direct deletion from the main management page if applicable."""
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
     try:
         # 1. Delete isolated questions associated with this exam first
         cursor.execute("""
-            DELETE FROM questions 
-            WHERE is_isolated = 1 
+            DELETE FROM questions
+            WHERE is_isolated = 1
             AND question_id IN (SELECT question_id FROM exam_questions WHERE exam_id = %s)
         """, (exam_id,))
-        
+
         # 2. Delete the exam (This will CASCADE delete records in exam_questions and exam_attempts)
         cursor.execute("DELETE FROM exams WHERE exam_id = %s AND created_by = %s", (exam_id, session.get('user_id')))
-        
+
         connection.commit()
         flash("Exam and its isolated questions deleted successfully.", "success")
     except Exception as e:
@@ -498,20 +508,20 @@ def restore_exam(exam_id):
 def delete_exam_permanently(exam_id):
     """Handles permanent deletion from the Trash Bin."""
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
     try:
         # 1. Find and delete isolated questions linked to this archived exam
         cursor.execute("""
-            DELETE FROM questions 
-            WHERE is_isolated = 1 
+            DELETE FROM questions
+            WHERE is_isolated = 1
             AND question_id IN (SELECT question_id FROM exam_questions WHERE exam_id = %s)
         """, (exam_id,))
-        
+
         # 2. Physically remove the exam record
         cursor.execute("DELETE FROM exams WHERE exam_id = %s AND created_by = %s", (exam_id, session.get('user_id')))
-        
+
         connection.commit()
         flash("Exam permanently removed along with its isolated questions.", "success")
     except Exception as e:
@@ -525,26 +535,26 @@ def delete_exam_permanently(exam_id):
 def empty_exam_trash():
     """Bulk cleanup of all archived exams and their isolated questions."""
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    
+
     teacher_id = session.get('user_id')
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
     try:
         # 1. Delete all isolated questions belonging to any of this teacher's archived exams
         cursor.execute("""
-            DELETE FROM questions 
-            WHERE is_isolated = 1 
+            DELETE FROM questions
+            WHERE is_isolated = 1
             AND question_id IN (
-                SELECT eq.question_id 
-                FROM exam_questions eq 
-                JOIN exams e ON eq.exam_id = e.exam_id 
+                SELECT eq.question_id
+                FROM exam_questions eq
+                JOIN exams e ON eq.exam_id = e.exam_id
                 WHERE e.archived = 1 AND e.created_by = %s
             )
         """, (teacher_id,))
-        
+
         # 2. Delete all archived exams for this teacher
         cursor.execute("DELETE FROM exams WHERE archived = 1 AND created_by = %s", (teacher_id,))
-        
+
         connection.commit()
         flash("Trash bin emptied. All isolated questions were also removed.", "success")
     except Exception as e:
@@ -560,17 +570,17 @@ def manage_questions(exam_id):
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     # 1. Fetch Exam and Verify Ownership, including attempt_count for lockdown logic
     cursor.execute("""
         SELECT e.*, cl.course_code,
             (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.exam_id) as attempt_count
-        FROM exams e 
-        JOIN classes cl ON e.class_code = cl.class_code 
+        FROM exams e
+        JOIN classes cl ON e.class_code = cl.class_code
         WHERE e.exam_id = %s AND cl.teacher_id = %s
     """, (exam_id, session.get('user_id')))
     exam = cursor.fetchone()
-    
+
     if not exam:
         cursor.close(); connection.close()
         flash("Exam not found or unauthorized.", "danger")
@@ -578,12 +588,12 @@ def manage_questions(exam_id):
 
     # 2. Fetch Questions linked to this Exam
     cursor.execute("""
-        SELECT q.* FROM questions q 
-        JOIN exam_questions eq ON q.question_id = eq.question_id 
+        SELECT q.* FROM questions q
+        JOIN exam_questions eq ON q.question_id = eq.question_id
         WHERE eq.exam_id = %s
     """, (exam_id,))
     questions = cursor.fetchall()
-    
+
     # 3. Fetch options for each question
     for q in questions:
         cursor.execute("SELECT * FROM options WHERE question_id = %s", (q['question_id'],))
@@ -591,13 +601,13 @@ def manage_questions(exam_id):
 
     # 4. Fetch Master Bank questions (for the modal)
     cursor.execute("""
-        SELECT * FROM questions 
-        WHERE course_code = %s AND teacher_id = %s 
+        SELECT * FROM questions
+        WHERE course_code = %s AND teacher_id = %s
         AND question_id NOT IN (SELECT question_id FROM exam_questions WHERE exam_id = %s)
         AND is_isolated = 0
     """, (exam['course_code'], session.get('user_id'), exam_id))
     bank_questions = cursor.fetchall()
-    
+
     for bq in bank_questions:
         cursor.execute("SELECT * FROM options WHERE question_id = %s", (bq['question_id'],))
         bq['options'] = cursor.fetchall()
@@ -611,22 +621,22 @@ def clone_exam_logic(old_exam_id, user_id):
     try:
         cursor.execute("SELECT * FROM exams WHERE exam_id = %s", (old_exam_id,))
         old_exam = cursor.fetchone()
-        
+
         # Insert New Exam (is_active=0 as it is a draft)
         cursor.execute("""
             INSERT INTO exams (class_code, title, duration_minutes, pass_percentage, date_time, created_by, question_limit, is_active)
             VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
-        """, (old_exam['class_code'], f"{old_exam['title']} (Copy)", old_exam['duration_minutes'], 
+        """, (old_exam['class_code'], f"{old_exam['title']} (Copy)", old_exam['duration_minutes'],
               old_exam['pass_percentage'], old_exam['date_time'], user_id, old_exam['question_limit']))
-        
+
         new_exam_id = cursor.lastrowid
-        
+
         # Copy Question Links
         cursor.execute("""
             INSERT INTO exam_questions (exam_id, question_id)
             SELECT %s, question_id FROM exam_questions WHERE exam_id = %s
         """, (new_exam_id, old_exam_id))
-        
+
         connection.commit()
         return new_exam_id
     finally:
@@ -654,7 +664,7 @@ def is_exam_locked(exam_id):
     attempts = cursor.fetchone()['attempts']
     cursor.close()
     connection.close()
-    
+
     if exam and exam['is_active'] == 1:
         return True, "Exam is currently active. Modifications are not allowed."
     if attempts > 0:
@@ -664,9 +674,9 @@ def is_exam_locked(exam_id):
 @teacher.route('/add_question/<int:exam_id>', methods=['POST'])
 def add_question(exam_id):
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    
+
     locked, msg = is_exam_locked(exam_id)
-    if locked: 
+    if locked:
         flash(msg, "danger")
         return redirect(url_for('teacher.manage_questions', exam_id=exam_id))
 
@@ -676,7 +686,7 @@ def add_question(exam_id):
         cursor.execute("SELECT cl.course_code FROM exams e JOIN classes cl ON e.class_code = cl.class_code WHERE e.exam_id = %s AND cl.teacher_id = %s", (exam_id, session.get('user_id')))
         res = cursor.fetchone()
         if not res: return "Unauthorized", 403
-        
+
         course_code = res['course_code']; teacher_id = session.get('user_id')
         q_text = request.form.get('question_text'); q_type = request.form.get('question_type'); difficulty = request.form.get('difficulty')
         cursor.execute("INSERT INTO questions (course_code, teacher_id, question_text, question_type, difficulty, is_isolated) VALUES (%s, %s, %s, %s, %s, %s)", (course_code, teacher_id, q_text, q_type, difficulty, is_iso))
@@ -705,7 +715,7 @@ def delete_isolated_question(q_id, exam_id):
     locked, msg = is_exam_locked(exam_id)
     if locked:
         flash(msg, "danger"); return redirect(url_for('teacher.manage_questions', exam_id=exam_id))
-        
+
     connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
     cursor.execute("DELETE FROM questions WHERE question_id = %s AND is_isolated = 1", (q_id,))
     connection.commit(); cursor.close(); connection.close()
@@ -714,13 +724,13 @@ def delete_isolated_question(q_id, exam_id):
 @teacher.route('/import_ai_questions/<int:exam_id>', methods=['POST'])
 def import_ai_questions(exam_id):
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    
+
     # 1. Lockdown Check (Reuse your existing locking logic)
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
     cursor.execute("SELECT is_active, (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = %s) as attempt_count FROM exams WHERE exam_id = %s", (exam_id, exam_id))
     exam_status = cursor.fetchone()
-    
+
     if exam_status['is_active'] == 1 or exam_status['attempt_count'] > 0:
         flash("Exam is locked. Cannot add questions.", "danger")
         return redirect(url_for('teacher.manage_questions', exam_id=exam_id))
@@ -747,7 +757,7 @@ def import_ai_questions(exam_id):
         with pdfplumber.open(file) as pdf:
             for page in pdf.pages:
                 raw_text += (page.extract_text() or "")
-        
+
         # 5. Prompt Gemini with strict JSON requirement
         prompt = f"""
         ### ROLE
@@ -766,8 +776,8 @@ def import_ai_questions(exam_id):
         - **identification**: Answer must be a single word or a short academic phrase.
 
         ### OUTPUT REQUIREMENTS
-        - Return ONLY a raw JSON array. 
-        - No markdown formatting, no ```json blocks, no introductory text. 
+        - Return ONLY a raw JSON array.
+        - No markdown formatting, no ```json blocks, no introductory text.
         - If the pdf's content is empty, return an empty array `[]`.
 
         ### JSON SCHEMA
@@ -792,16 +802,16 @@ def import_ai_questions(exam_id):
         # 6. Database Insertion Loop
         for q in questions_list:
             cursor.execute("""
-                INSERT INTO questions (course_code, teacher_id, question_text, question_type, difficulty, is_isolated) 
+                INSERT INTO questions (course_code, teacher_id, question_text, question_type, difficulty, is_isolated)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (course_code, teacher_id, q['text'], q['type'], q['diff'], is_iso))
-            
+
             q_id = cursor.lastrowid
             cursor.execute("INSERT INTO exam_questions (exam_id, question_id) VALUES (%s, %s)", (exam_id, q_id))
 
             if q['type'] == 'multiple_choice':
                 for opt in q['options']:
-                    cursor.execute("INSERT INTO options (question_id, option_text, is_correct) VALUES (%s, %s, %s)", 
+                    cursor.execute("INSERT INTO options (question_id, option_text, is_correct) VALUES (%s, %s, %s)",
                                    (q_id, opt, 1 if opt == q['answer'] else 0))
             elif q['type'] == 'true_false':
                 cursor.execute("INSERT INTO options (question_id, option_text, is_correct) VALUES (%s, %s, %s)", (q_id, 'True', 1 if q['answer'].lower() == 'true' else 0))
@@ -824,10 +834,10 @@ def import_ai_questions(exam_id):
 def download_template():
     if not teacher_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     from flask import current_app
     file_path = os.path.join(current_app.root_path, 'static', 'templates', 'TEMPLATE TESTPOINT.xlsx')
-    
+
     if os.path.exists(file_path):
         return send_file(
             file_path,
@@ -843,7 +853,7 @@ def download_template():
 def import_questions():
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
     exam_id = request.form.get('exam_id')
-    
+
     if exam_id:
         locked, msg = is_exam_locked(exam_id)
         if locked:
@@ -879,7 +889,7 @@ def link_from_bank(exam_id, q_id):
     locked, msg = is_exam_locked(exam_id)
     if locked:
         flash(msg, "danger"); return redirect(url_for('teacher.manage_questions', exam_id=exam_id))
-    
+
     connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
     cursor.execute("INSERT IGNORE INTO exam_questions (exam_id, question_id) VALUES (%s, %s)", (exam_id, q_id))
     connection.commit(); cursor.close(); connection.close()
@@ -907,7 +917,7 @@ def bulk_unlink_questions(exam_id):
 @teacher.route('/exam/<int:exam_id>/questions/bulk_action', methods=['POST'])
 def bulk_question_action(exam_id):
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    
+
     locked, msg = is_exam_locked(exam_id)
     if locked:
         flash(msg, "danger")
@@ -950,16 +960,16 @@ def delete_question(q_id, exam_id):
 def export_bank_questions(course_code):
     if not teacher_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     teacher_id = session.get('user_id')
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     try:
         # 1. Fetch all bank questions for this course
         cursor.execute("""
-            SELECT question_id, question_text, question_type, difficulty 
-            FROM questions 
+            SELECT question_id, question_text, question_type, difficulty
+            FROM questions
             WHERE course_code = %s AND teacher_id = %s AND is_isolated = 0
         """, (course_code, teacher_id))
         questions = cursor.fetchall()
@@ -1006,11 +1016,11 @@ def export_bank_questions(course_code):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False, sheet_name='Questions')
-        
+
         output.seek(0)
-        
+
         filename = f"Bank_{course_code}_{datetime.now().strftime('%Y%m%d')}.xlsx"
-        
+
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1028,12 +1038,12 @@ def export_bank_questions(course_code):
 #! 5. ENROLLEE MANAGEMENT
 @teacher.route('/manage_enrollees/<string:class_code>')
 def manage_enrollees(class_code):
-    if not teacher_logged_in(): 
+    if not teacher_logged_in():
         return redirect(url_for('auth.login'))
-        
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     try:
         # 1. Fetch Course and Class Metadata
         cursor.execute("""
@@ -1052,10 +1062,10 @@ def manage_enrollees(class_code):
 
         # 2. Fetch Exams specifically for this class
         cursor.execute("""
-            SELECT e.*, 
+            SELECT e.*,
                 (SELECT COUNT(*) FROM exam_questions WHERE exam_id = e.exam_id) as q_count,
                 (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.exam_id) as attempt_count
-            FROM exams e 
+            FROM exams e
             WHERE e.class_code = %s AND e.archived = 0
         """, (class_code,))
         class_exams = cursor.fetchall()
@@ -1064,19 +1074,19 @@ def manage_enrollees(class_code):
         cursor.execute("""
             SELECT s.student_id, s.firstname, s.lastname, s.email,
                    CONCAT(p.program_name, ' - ', b.block_name) AS academic_block
-            FROM enrollments e 
-            JOIN students s ON e.student_id = s.student_id 
+            FROM enrollments e
+            JOIN students s ON e.student_id = s.student_id
             LEFT JOIN blocks b ON s.block_id = b.block_id
             LEFT JOIN programs p ON b.program_id = p.program_id
             WHERE e.class_code = %s
             ORDER BY s.lastname ASC
         """, (class_code,))
         enrollees = cursor.fetchall()
-        
-        return render_template('teacher_enrollees.html', 
-                               course=course, 
-                               class_exams=class_exams, 
-                               enrollees=enrollees, 
+
+        return render_template('teacher_enrollees.html',
+                               course=course,
+                               class_exams=class_exams,
+                               enrollees=enrollees,
                                class_code=class_code)
     finally:
         cursor.close()
@@ -1088,16 +1098,16 @@ def student_monitor():
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     # Updated query to get the LATEST latitude and longitude for each attempt
     query = """
-        SELECT 
+        SELECT
             ea.*, s.firstname, s.lastname, ex.title,
             vl.latitude, vl.longitude
-        FROM exam_attempts ea 
-        JOIN students s ON ea.student_id = s.student_id 
-        JOIN exams ex ON ea.exam_id = ex.exam_id 
-        JOIN classes cl ON ex.class_code = cl.class_code 
+        FROM exam_attempts ea
+        JOIN students s ON ea.student_id = s.student_id
+        JOIN exams ex ON ea.exam_id = ex.exam_id
+        JOIN classes cl ON ex.class_code = cl.class_code
         LEFT JOIN (
             SELECT attempt_id, latitude, longitude
             FROM violation_logs
@@ -1105,7 +1115,7 @@ def student_monitor():
         ) vl ON ea.attempt_id = vl.attempt_id
         WHERE cl.teacher_id = %s AND ea.status = 'in-progress'
     """
-    
+
     cursor.execute(query, (session.get('user_id'),))
     attempts = cursor.fetchall()
     cursor.close()
@@ -1120,21 +1130,21 @@ def exam_results(exam_id):
     cursor = connection.cursor(dictionary=True)
     try:
         cursor.execute("""
-            SELECT e.*, c.course_name 
+            SELECT e.*, c.course_name
             FROM exams e
             JOIN classes cl ON e.class_code = cl.class_code
             JOIN courses c ON cl.course_code = c.course_code
             WHERE e.exam_id = %s AND cl.teacher_id = %s
         """, (exam_id, teacher_id))
         exam = cursor.fetchone()
-        
-        
+
+
         if not exam:
             flash("Exam not found or access denied.", "danger")
             return redirect(url_for('teacher.manage_exams'))
 
         cursor.execute("""
-            SELECT 
+            SELECT
                 s.student_id, s.firstname, s.lastname,
                 ea.attempt_id, ea.score, ea.status as attempt_status, ea.tab_switches,
                 (SELECT COUNT(*) FROM exam_questions WHERE exam_id = %s) as total_questions
@@ -1145,7 +1155,7 @@ def exam_results(exam_id):
             ORDER BY s.lastname ASC
         """, (exam_id, exam_id, exam['class_code']))
         results = cursor.fetchall()
-        
+
         now = datetime.now()
         exam_end_time = exam['date_time'] + timedelta(minutes=exam['duration_minutes']) if exam['date_time'] else None
         is_past_due = (now > exam_end_time) if exam_end_time else False
@@ -1154,17 +1164,17 @@ def exam_results(exam_id):
     finally:
         cursor.close(); connection.close()
 
-        
+
 @teacher.route('/toggle_block_student/<string:student_id>/<int:exam_id>', methods=['POST'])
 def toggle_block_student(student_id, exam_id):
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     # Check if an attempt record already exists for this specific exam
     cursor.execute("SELECT status FROM exam_attempts WHERE student_id = %s AND exam_id = %s", (student_id, exam_id))
     attempt = cursor.fetchone()
-    
+
     if attempt:
         if attempt['status'] == 'blocked':
             # Unblock: Since we want them to be able to take it, we can just delete the blocked record
@@ -1178,7 +1188,7 @@ def toggle_block_student(student_id, exam_id):
         # Create a new attempt record with status 'blocked'
         cursor.execute("INSERT INTO exam_attempts (student_id, exam_id, status) VALUES (%s, %s, 'blocked')", (student_id, exam_id))
         flash("Student has been blocked from this exam.", "warning")
-        
+
     connection.commit()
     cursor.close(); connection.close()
     return redirect(url_for('teacher.exam_results', exam_id=exam_id))
@@ -1189,7 +1199,7 @@ def update_exam_schedule(exam_id):
     if not teacher_logged_in(): return redirect(url_for('auth.login'))
     new_time = request.form.get('new_time')
     new_duration = request.form.get('new_duration')
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor()
     cursor.execute("UPDATE exams SET date_time = %s, duration_minutes = %s WHERE exam_id = %s", (new_time, new_duration, exam_id))
@@ -1222,18 +1232,18 @@ def teacher_review(attempt_id):
 
 @teacher.route('/review_student_attempt/<int:attempt_id>')
 def review_student_attempt(attempt_id):
-    if not teacher_logged_in(): 
+    if not teacher_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True, buffered=True)
-    
+
     try:
         cursor.execute("""
-            SELECT ea.*, s.firstname, s.lastname, e.title, e.pass_percentage 
-            FROM exam_attempts ea 
-            JOIN students s ON ea.student_id = s.student_id 
-            JOIN exams e ON ea.exam_id = e.exam_id 
+            SELECT ea.*, s.firstname, s.lastname, e.title, e.pass_percentage
+            FROM exam_attempts ea
+            JOIN students s ON ea.student_id = s.student_id
+            JOIN exams e ON ea.exam_id = e.exam_id
             WHERE ea.attempt_id = %s
         """, (attempt_id,))
         attempt = cursor.fetchone()
@@ -1243,10 +1253,10 @@ def review_student_attempt(attempt_id):
             return redirect(url_for('teacher.manage_exams'))
 
         cursor.execute("""
-            SELECT q.*, sa.submitted_answer, sa.is_correct 
-            FROM questions q 
-            JOIN attempt_questions aq ON q.question_id = aq.question_id 
-            LEFT JOIN student_answers sa ON q.question_id = sa.question_id AND sa.attempt_id = %s 
+            SELECT q.*, sa.submitted_answer, sa.is_correct
+            FROM questions q
+            JOIN attempt_questions aq ON q.question_id = aq.question_id
+            LEFT JOIN student_answers sa ON q.question_id = sa.question_id AND sa.attempt_id = %s
             WHERE aq.attempt_id = %s
         """, (attempt_id, attempt_id))
         questions = cursor.fetchall()
@@ -1257,16 +1267,16 @@ def review_student_attempt(attempt_id):
 
         # Fetch logs including Latitude and Longitude
         cursor.execute("""
-            SELECT violation_type, violation_time, latitude, longitude 
-            FROM violation_logs 
-            WHERE attempt_id = %s 
+            SELECT violation_type, violation_time, latitude, longitude
+            FROM violation_logs
+            WHERE attempt_id = %s
             ORDER BY violation_time ASC
         """, (attempt_id,))
         violation_logs = cursor.fetchall()
 
-        return render_template('teacher_review_attempt.html', 
-                               attempt=attempt, 
-                               questions=questions, 
+        return render_template('teacher_review_attempt.html',
+                               attempt=attempt,
+                               questions=questions,
                                violation_logs=violation_logs)
     finally:
         cursor.close(); connection.close()
@@ -1276,11 +1286,11 @@ def review_student_attempt(attempt_id):
 def profile():
     if not teacher_logged_in():
         return redirect(url_for('auth.login'))
-        
+
     user_id = session.get('user_id')
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     try:
         if request.method == 'POST':
             # Handle profile update logic (keeping your existing logic)
@@ -1288,7 +1298,7 @@ def profile():
             middlename = request.form.get('middlename')
             lastname = request.form.get('lastname')
             cursor.execute("""
-                UPDATE teachers SET firstname = %s, middlename = %s, lastname = %s 
+                UPDATE teachers SET firstname = %s, middlename = %s, lastname = %s
                 WHERE teacher_id = %s
             """, (firstname, middlename, lastname, user_id))
             connection.commit()
@@ -1296,9 +1306,9 @@ def profile():
 
         # 1. Fetch Detailed Teacher Info
         cursor.execute("""
-            SELECT t.*, u.created_at, u.email 
-            FROM teachers t 
-            JOIN users u ON t.teacher_id = u.user_id 
+            SELECT t.*, u.created_at, u.email
+            FROM teachers t
+            JOIN users u ON t.teacher_id = u.user_id
             WHERE t.teacher_id = %s
         """, (user_id,))
         user = cursor.fetchone()
@@ -1313,17 +1323,17 @@ def profile():
 
         # 4. Analytics: Student Reach (Unique students across all classes)
         cursor.execute("""
-            SELECT COUNT(DISTINCT e.student_id) as count 
-            FROM enrollments e 
-            JOIN classes cl ON e.class_code = cl.class_code 
+            SELECT COUNT(DISTINCT e.student_id) as count
+            FROM enrollments e
+            JOIN classes cl ON e.class_code = cl.class_code
             WHERE cl.teacher_id = %s
         """, (user_id,))
         student_reach = cursor.fetchone()['count']
 
-        return render_template('teacher_profile.html', 
-                               user=user, 
-                               class_count=class_count, 
-                               pool_size=pool_size, 
+        return render_template('teacher_profile.html',
+                               user=user,
+                               class_count=class_count,
+                               pool_size=pool_size,
                                student_reach=student_reach)
     finally:
         cursor.close()

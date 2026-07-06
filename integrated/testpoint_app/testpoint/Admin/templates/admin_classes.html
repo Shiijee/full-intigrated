@@ -19,13 +19,13 @@
         <p class="text-muted small mb-0">Monitor active academic sessions and instructor assignments.</p>
     </div>
     <div class="d-flex" style="gap: 12px;">
-        <button class="btn btn-dark shadow-sm tp-pill" data-toggle="modal" data-target="#addClassModal" 
+        <button class="btn btn-dark shadow-sm tp-pill" data-toggle="modal" data-target="#addClassModal"
                 {% if not subjects or not teachers or not blocks %}disabled title="Ensure Subjects, Teachers, and Blocks exist first"{% endif %}>
             <i class="fas fa-calendar-plus mr-2"></i> Schedule Class
         </button>
         <a href="{{ url_for('admin.trashed_classes') }}" class="btn btn-white border shadow-sm tp-pill text-danger">
             <i class="fas fa-trash-alt mr-2"></i> View Trash
-        </a>        
+        </a>
     </div>
 </div>
 
@@ -105,6 +105,9 @@
                                 <a href="{{ url_for('admin.manage_enrollments', class_code=c.class_code) }}" class="btn btn-circle-sm mr-1" title="Manage Enrollees">
                                     <i class="fas fa-list-ul text-primary"></i>
                                 </a>
+                                <button class="btn btn-circle-sm mr-1" data-toggle="modal" data-target="#editClassModal{{ loop.index }}" title="Edit Schedule">
+                                    <i class="fas fa-pencil-alt text-info"></i>
+                                </button>
                                 <button class="btn btn-circle-sm" data-toggle="modal" data-target="#archiveClassModal{{ loop.index }}" title="Archive Session">
                                     <i class="fas fa-trash text-danger"></i>
                                 </button>
@@ -138,14 +141,14 @@
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
             <div class="modal-header border-0 pb-0 pt-4 px-4">
                 <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-calendar-plus mr-2 text-primary"></i>Schedule New Class</h5>
-                <button class="close" data-dismiss="modal"><span>×</span></button>
+                <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
             </div>
             <form action="{{ url_for('admin.manage_classes') }}" method="POST">
                 <div class="modal-body p-4">
                     <div class="p-2 px-3 bg-light rounded text-muted mb-4" style="border: 1px solid var(--tp-admin-border); font-size: 12px;">
                         <i class="fas fa-info-circle mr-1 text-info"></i> A unique Class Code will be automatically assigned.
                     </div>
-                    
+
                     <div class="form-group mb-3">
                         <label class="small font-weight-bold">Subject from Catalog</label>
                         <select name="course_code" class="form-control" required>
@@ -178,6 +181,56 @@
 </div>
 
 {% for c in classes %}
+<!-- EDIT CLASS MODAL -->
+<div class="modal fade" id="editClassModal{{ loop.index }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 pb-0 pt-4 px-4">
+                <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-edit mr-2 text-info"></i>Modify Class: {{ c.class_code }}</h5>
+                <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
+            </div>
+            <form action="{{ url_for('admin.edit_class', class_code=c.class_code) }}" method="POST">
+                <div class="modal-body p-4">
+                    <div class="form-group mb-3">
+                        <label class="small font-weight-bold">Subject Title</label>
+                        <select name="course_code" class="form-control" required>
+                            {% for s in subjects %}
+                            <option value="{{ s.course_code }}" {% if s.course_code == c.course_code %}selected{% endif %}>
+                                {{ s.course_name }} ({{ s.course_code }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="small font-weight-bold">Assigned Block</label>
+                        <select name="block_id" class="form-control" required>
+                            {% for b in blocks %}
+                            <option value="{{ b.block_id }}" {% if b.block_id == c.block_id %}selected{% endif %}>
+                                {{ b.program_name }} - {{ b.block_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label class="small font-weight-bold">Instructor</label>
+                        <select name="teacher_id" class="form-control" required>
+                            {% for t in teachers %}
+                            <option value="{{ t.teacher_id }}" {% if t.teacher_id == c.teacher_id %}selected{% endif %}>
+                                {{ t.firstname }} {{ t.lastname }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button class="btn btn-light px-4" data-dismiss="modal">Cancel</button>
+                    <button class="btn btn-info px-4 font-weight-bold" type="submit">Update Schedule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- ARCHIVE MODAL -->
 <div class="modal fade" id="archiveClassModal{{ loop.index }}" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-dialog-centered" role="document">
@@ -205,6 +258,10 @@
 <script>
     $(document).ready(function() {
         "use strict";
+
+        // Modal hierarchy fix to prevent backdrop issues
+        $('.modal').appendTo('body');
+
         const classTableBody = document.querySelector('#classTable tbody');
         const allRows = Array.from(classTableBody.querySelectorAll('tr.class-row'));
         let filteredRows = [...allRows];
