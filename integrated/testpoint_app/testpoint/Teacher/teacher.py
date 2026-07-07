@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 teacher = Blueprint('teacher', __name__, template_folder='templates', static_folder='static',
                     static_url_path='/teacher/static')
 
-load_dotenv("testpoint/passwordDB.env")
+load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 ai_model = genai.GenerativeModel('gemini-3-flash-preview')
 

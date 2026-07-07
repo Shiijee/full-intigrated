@@ -128,7 +128,7 @@
     <div class="row mb-4 align-items-center">
         <div class="col-lg-6">
             <h1 style="font-family: var(--tp-serif); color: var(--tp-teacher-ink); font-size: 2.2rem;" class="mb-1">
-                Subject <span style="color: var(--tp-teacher-accent);">Repository</span></h1>
+                Question <span style="color: var(--tp-teacher-accent);">Bank</span></h1>
             <p class="text-muted small mb-0">{{ course.course_name }} <span class="mx-1">•</span> <span
                     class="font-weight-bold text-dark">{{ course.course_code }}</span></p>
         </div>
@@ -237,7 +237,7 @@
                             <span class="badge badge-light border id-tag px-2">{{ q.question_type.replace('_',' ')
                                 }}</span>
                             <span
-                                class="badge rounded-pill id-tag text-white px-2 
+                                class="badge rounded-pill id-tag text-white px-2
                                   {{ 'bg-easy' if q.difficulty == 'easy' else 'bg-medium' if q.difficulty == 'medium' else 'bg-hard' }}">
                                 {{ q.difficulty|upper }}
                             </span>

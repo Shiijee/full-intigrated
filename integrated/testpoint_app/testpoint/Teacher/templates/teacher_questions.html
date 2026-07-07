@@ -130,7 +130,7 @@
     <div class="row mb-4 align-items-center">
         <div class="col-lg-6">
             <h1 style="font-family: var(--tp-serif); color: var(--tp-teacher-ink); font-size: 2.2rem;" class="mb-1">
-                Assessment Pool</h1>
+                Question Management</h1>
             <p class="text-muted small mb-0">{{ exam.title }} <span class="mx-1">•</span> <span
                     class="font-weight-bold text-dark">{{ exam.course_code }}</span></p>
         </div>
@@ -143,7 +143,7 @@
                 </button>
                 <button class="btn btn-danger px-3 rounded-pill font-weight-bold btn-sm shadow-sm" data-toggle="modal"
                     data-target="#bankModal">
-                    <i class="fas fa-university mr-1"></i> Master Bank
+                    <i class="fas fa-university mr-1"></i> Question Bank
                 </button>
                 <button class="btn btn-light border px-3 rounded-pill font-weight-bold btn-sm shadow-sm"
                     data-toggle="modal" data-target="#excelModal">
@@ -220,7 +220,7 @@
                 <label class="id-tag text-muted text-uppercase d-block mb-1">Source</label>
                 <select class="form-control form-control-sm border-0 font-weight-bold p-0" id="sourceFilter">
                     <option value="">All Sources</option>
-                    <option value="bank">Master Bank</option>
+                    <option value="bank">Question Bank</option>
                     <option value="isolated">Isolated Only</option>
                 </select>
             </div>
@@ -257,11 +257,11 @@
     <form id="bulkActionForm" action="{{ url_for('teacher.bulk_question_action', exam_id=exam.exam_id) }}"
         method="POST">
 
-        <!-- ── SECTION 1: MASTER BANK ── -->
+        <!-- ── SECTION 1: Question Bank ── -->
         <div id="bankSection" class="source-group">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="m-0 font-weight-bold text-dark" style="font-size: 1.1rem;"><i
-                        class="fas fa-university text-danger mr-2"></i>Master Bank Items</h5>
+                        class="fas fa-university text-danger mr-2"></i>Question Bank Items</h5>
                 {% if not is_locked %}
                 <div class="custom-control custom-checkbox">
                     <input type="checkbox" class="custom-control-input section-select" id="selectBankAll"
@@ -455,14 +455,14 @@
         </div>
     </div>
 
-    <!-- Master Bank Modal -->
+    <!-- Question Bank Modal -->
     <div class="modal fade" id="bankModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <form action="{{ url_for('teacher.bulk_link_from_bank', exam_id=exam.exam_id) }}" method="POST"
                 class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
                 <div class="modal-header border-0">
                     <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);"><i
-                            class="fas fa-university text-danger mr-2"></i>Subject Bank Retrieval</h5>
+                            class="fas fa-university text-danger mr-2"></i>Question Bank Retrieval</h5>
                     <button class="close" type="button" data-dismiss="modal"><span>&times;</span></button>
                 </div>
                 <div class="modal-body bg-light px-4">
@@ -600,7 +600,7 @@
                     <div class="custom-control custom-switch mt-3">
                         <input type="checkbox" class="custom-control-input" id="saveBankCheck" name="save_to_bank">
                         <label class="custom-control-label id-tag text-muted text-uppercase" for="saveBankCheck">Store
-                            globally in Master Bank</label>
+                            globally in Question Bank</label>
                     </div>
                 </div>
                 <div class="modal-footer border-0 p-4 pt-0">
