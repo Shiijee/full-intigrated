@@ -60,6 +60,13 @@
       <i class="bi bi-layout-three-columns"></i>
       <span>Positions</span>
     </a>
+    <a href="{{ url_for('admin.view_announcements') }}"
+       class="nav-item {% if request.endpoint == 'admin.view_announcements' %}active{% endif %}"
+       data-label="Announcements">
+      <i class="bi bi-megaphone-fill"></i>
+      <span>Announcements</span>
+    </a>
+
     <a href="{{ url_for('admin.view_candidates') }}"
        class="nav-item {% if request.endpoint in ['admin.view_candidates', 'admin.create_candidate', 'admin.edit_candidate'] %}active{% endif %}"
        data-label="Candidates">
