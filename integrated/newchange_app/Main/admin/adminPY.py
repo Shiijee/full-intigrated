@@ -1950,3 +1950,59 @@ def manual_enroll():
     cursor.close()
     conn.close()
     return render_template('manual_enroll.html', students=students, all_assignments=all_assignments, search=search)
+
+
+@admin.route('/profile')
+def profile():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # Query admin account information
+    cursor.execute("""
+        SELECT admin_id, username, email, deletion_pin_hash, failed_attempts, lockout_time 
+        FROM admins 
+        WHERE username = %s
+    """, (session.get('user_id'),))
+    admin_info = cursor.fetchone()
+    
+    admin_activity = []
+    admin_logins = []
+    
+    if admin_info:
+        # Query recent audit logs for actions performed by this admin
+        cursor.execute("""
+            SELECT action, table_name, details, timestamp 
+            FROM system_audit_log 
+            WHERE performed_by_id = %s 
+            ORDER BY timestamp DESC 
+            LIMIT 5
+        """, (session.get('user_id'),))
+        admin_activity = cursor.fetchall()
+        
+        # Query login logs for this admin
+        cursor.execute("""
+            SELECT login_time, logout_time 
+            FROM login_logs 
+            WHERE user_id = %s 
+            ORDER BY login_time DESC 
+            LIMIT 5
+        """, (session.get('user_id'),))
+        admin_logins = cursor.fetchall()
+        
+    cursor.close()
+    conn.close()
+    
+    if not admin_info:
+        admin_info = {
+            'username': session.get('user_id', 'N/A'),
+            'email': session.get('email', 'N/A'),
+            'admin_id': 'N/A',
+            'deletion_pin_hash': None,
+            'failed_attempts': 0,
+            'lockout_time': None
+        }
+        
+    return render_template('admin_profile.html', 
+                           admin=admin_info, 
+                           activity=admin_activity, 
+                           logins=admin_logins)
