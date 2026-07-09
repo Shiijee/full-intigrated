@@ -157,15 +157,61 @@ def login_required(f):
     return decorated
 
 
+def _get_college_id(user_id) -> int | None:
+    """Look up this user's college_id directly (small, local helper —
+    avoids importing from Admin.routes to prevent a circular import)."""
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT college_id FROM users WHERE id=%s", (user_id,))
+        row = cursor.fetchone()
+        return row["college_id"] if row else None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _no_college_assigned(user):
+    """
+    Shown to a regular 'admin' (not superadmin) whose college_id is NULL —
+    typically a brand-new account mirrored in from TestPoint/Attendance,
+    which has no concept of "college" and therefore can't supply one at
+    provisioning time. Without this guard, such an admin would silently
+    fall into the same code path as a superadmin and see system-wide data
+    across every college, which is an access-control gap, not just a
+    display bug.
+    """
+    return (
+        f"<h2>No College Assigned Yet</h2>"
+        f"<p>Hi <b>{user.get('full_name', 'there')}</b> — your admin account "
+        f"isn't linked to a college yet, so there's no election data to show.</p>"
+        f"<p>Ask your superadmin to open <b>Manage Admins</b> and assign you "
+        f"to a college. Once that's done, refresh this page.</p>"
+        f"<p><a href=\"{PORTAL_URL}\">Back to Portal</a></p>",
+        403,
+    )
+
+
 def admin_required(f):
-    """Require role == 'admin' or 'superadmin'."""
+    """Require role == 'admin' or 'superadmin'.
+
+    A plain 'admin' (not superadmin) additionally must have a college_id
+    assigned. Superadmins are exempt — NULL college_id for them means
+    "all colleges", which is correct. For a regular admin, NULL college_id
+    almost always means they were auto-mirrored from another module (which
+    has no college data to send) and haven't been assigned one yet in
+    Voxify — letting them through would leak every college's data to them.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         user = _get_sso_user()
         if not user:
             return redirect(f"{PORTAL_URL}?next={request.url}")
-        if user.get("role") not in ("admin", "superadmin"):
+        role = user.get("role")
+        if role not in ("admin", "superadmin"):
             return _access_denied(user, "admin or superadmin")
+        if role == "admin" and _get_college_id(user.get("user_id")) is None:
+            return _no_college_assigned(user)
         return f(*args, **kwargs)
     return decorated
 
