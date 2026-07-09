@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Admin Profile | Attendeez</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('admin.static', filename='Astyle.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="theme-admin">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="sidebar-logo">
+                <a href="{{ url_for('admin.dashboard') }}" class="logo-link">
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </a>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()" aria-label="Open account options">
+                        <i class="fas fa-ellipsis-h"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Admin') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Administrator</p>
+                        </div>
+                        <a href="{{ url_for('admin.profile') }}" class="dropdown-item">
+                            <i class="fas fa-user"></i> Admin Profile
+                        </a>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-lock"></i> Change Password
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="openChangePinModal()">
+                            <i class="fas fa-shield-halved"></i> Security PIN
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-right-from-bracket"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);">
+                    <i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span>
+                </a>
+                <div class="sidebar-category">System Core</div>
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
+                <a href="{{ url_for('admin.profile') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.profile' else '' }}" data-tooltip="Admin Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> Admin Profile</span></a>
+                
+                <div class="sidebar-category">User Management</div>
+                <a href="{{ url_for('admin.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-user-graduate"></i><span class="nav-item-text"> Manage Students</span></a>
+                <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
+                
+                <div class="sidebar-category">Academic Setup</div>
+                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
+                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
+                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
+                <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
+                
+                <div class="sidebar-category">Analytics & Logs</div>
+                <a href="{{ url_for('admin.attendance_analytics') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.attendance_analytics' else '' }}" data-tooltip="Attendance Analytics"><i class="fas fa-chart-pie"></i><span class="nav-item-text"> Attendance Analytics</span></a>
+                <a href="{{ url_for('admin.drop_requests') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.drop_requests' else '' }}" data-tooltip="Drop Requests"><i class="fas fa-user-minus"></i><span class="nav-item-text"> Drop Requests</span></a>
+                <a href="{{ url_for('admin.audit_logs') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.audit_logs' else '' }}" data-tooltip="Audit Logs"><i class="fas fa-clipboard-list"></i><span class="nav-item-text"> Audit Logs</span></a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open navigation menu">
+                    <i class="fas fa-grip-lines"></i>
+                </button>
+                <div class="header-left">
+                    <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Admin Profile</h2>
+                </div>
+            </header>
+
+            <div class="main-content-inner" style="max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem;">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category if category != 'error' else 'danger' }} mb-4" style="padding: 1rem; border-radius: var(--radius-md); background: rgba(244, 63, 94, 0.15); border: 1px solid var(--danger); font-size: 0.9rem;">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <div class="glass-panel" style="padding: 2.5rem; border-radius: var(--radius-lg); position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 2rem;">
+                    <!-- Decorative background element -->
+                    <div style="position: absolute; top: -100px; right: -100px; width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0) 70%); pointer-events: none;"></div>
+
+                    <!-- Header/Avatar section -->
+                    <div style="display: flex; align-items: center; gap: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1.5rem;">
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--primary) 0%, #7f1d1d 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); border: 2px solid var(--border-color);">
+                            <i class="fas fa-user-shield" style="font-size: 2.5rem; color: #ffffff;"></i>
+                        </div>
+                        <div>
+                            <h2 style="font-size: 1.75rem; font-weight: 700; margin: 0; color: var(--text-main);">{{ admin.username }}</h2>
+                            <p style="font-size: 0.9rem; color: var(--accent); margin: 0.25rem 0 0 0; font-weight: 600;"><i class="fas fa-check-circle"></i> System Administrator</p>
+                        </div>
+                    </div>
+
+                    <!-- Details Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem;">
+                        <div style="background: var(--bg-surface-soft); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Admin User ID</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: var(--text-main);">{{ admin.admin_id }}</div>
+                        </div>
+                        <div style="background: var(--bg-surface-soft); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Username</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: var(--text-main);">{{ admin.username }}</div>
+                        </div>
+                        <div style="background: var(--bg-surface-soft); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Email Address</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: var(--text-main); word-break: break-all;">{{ admin.email }}</div>
+                        </div>
+                        <div style="background: var(--bg-surface-soft); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Security PIN</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: {% if admin.deletion_pin_hash %}var(--accent){% else %}var(--warning){% endif %};">
+                                {% if admin.deletion_pin_hash %}Configured{% else %}Not Configured{% endif %}
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-surface-soft); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Failed Login Attempts</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: {% if admin.failed_attempts > 0 %}var(--danger){% else %}var(--text-main){% endif %};">
+                                {{ admin.failed_attempts }}
+                            </div>
+                        </div>
+                        {% if admin.lockout_time %}
+                        <div style="background: rgba(244, 63, 94, 0.08); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid rgba(244, 63, 94, 0.2);">
+                            <div style="font-size: 0.75rem; color: var(--danger); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Lockout Until</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: var(--danger);">{{ admin.lockout_time }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Actions / Security settings -->
+                    <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem;">
+                        <a href="{{ url_for('auth.change_password') }}" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none;">
+                            <i class="fas fa-lock"></i> Change Password
+                        </a>
+                        <button type="button" class="btn btn-secondary" onclick="openChangePinModal()" style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <i class="fas fa-shield-halved"></i> Update Security PIN
+                        </button>
+                    </div>
+
+                    <!-- Recent Activity & Logins Section -->
+                    <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                        
+                        <!-- Recent Activity (Audit logs) -->
+                        <div>
+                            <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-clipboard-list" style="color: var(--primary);"></i> Recent Actions
+                            </h3>
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                {% for act in activity %}
+                                <div style="background: var(--bg-surface-soft); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                        <span class="badge" style="font-size: 0.7rem; font-weight: 700; background: var(--primary-soft); color: var(--primary); padding: 0.15rem 0.5rem; border-radius: 4px;">{{ act.action }}</span>
+                                        <span style="font-size: 0.75rem; color: var(--text-dim);">{{ act.timestamp.strftime('%b %d, %H:%M') if act.timestamp else '' }}</span>
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 500; margin-top: 0.25rem;">{{ act.table_name }}</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ act.details }}</div>
+                                </div>
+                                {% else %}
+                                <div style="text-align: center; padding: 2rem; color: var(--text-dim); background: var(--bg-surface-soft); border-radius: var(--radius-md);">
+                                    No recent actions recorded.
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Recent Logins -->
+                        <div>
+                            <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-key" style="color: var(--accent);"></i> Login Sessions
+                            </h3>
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                {% for log in logins %}
+                                <div style="background: var(--bg-surface-soft); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 600;">Login</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-dim);">{{ log.login_time.strftime('%Y-%m-%d %H:%M') if log.login_time else '' }}</div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 600;">Logout</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-dim);">
+                                            {% if log.logout_time %}
+                                                {{ log.logout_time.strftime('%H:%M') }}
+                                            {% else %}
+                                                <span style="color: var(--accent); font-weight: 600;">Active</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div style="text-align: center; padding: 2rem; color: var(--text-dim); background: var(--bg-surface-soft); border-radius: var(--radius-md);">
+                                    No login history found.
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=2"></script>
+    <script src="{{ url_for('admin.static', filename='Astyle.js') }}"></script>
+
+    <!-- Bottom Nav for mobile -->
+    <nav class="bottom-nav">
+        <a href="{{ url_for('admin.dashboard') }}" class="bottom-nav-item">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('admin.manage_students') }}" class="bottom-nav-item">
+            <i class="fas fa-user-graduate"></i>
+            <span>Students</span>
+        </a>
+        <a href="{{ url_for('admin.manage_teachers') }}" class="bottom-nav-item">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>Faculty</span>
+        </a>
+        <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item">
+            <i class="fas fa-clipboard-list"></i>
+            <span>Logs</span>
+        </a>
+    </nav>
+</body>
+</html>
