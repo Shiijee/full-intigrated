@@ -65,6 +65,9 @@
                 <div class="header-left">
                     <h2 class="auth-title" style="font-size: 1.25rem; margin: 0;">Manage Schedules</h2>
                 </div>
+                <a href="http://127.0.0.1:5000" class="btn btn-secondary" style="margin-left: auto; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; text-decoration: none;" title="Back to Portal">
+                    <i class="fas fa-th-large" style="margin: 0;"></i>
+                </a>
             </header>
 
             <div class="main-content-inner">
@@ -245,6 +248,10 @@
         <a href="{{ url_for('admin.audit_logs') }}" class="bottom-nav-item {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}">
             <i class="fas fa-clipboard-list"></i>
             <span>Logs</span>
+        </a>
+        <a href="http://127.0.0.1:5000" class="bottom-nav-item">
+            <i class="fas fa-th-large"></i>
+            <span>Portal</span>
         </a>
     </nav>
 

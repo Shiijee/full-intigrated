@@ -15,7 +15,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from db_config import get_db_connection
 
 app = Flask(__name__)
-app.secret_key = "super_secret_key"   # must match PORTAL_SECRET in every module's .env
+app.secret_key = "super_secret_key_edukado_portal_2024"   # must match PORTAL_SECRET in every module's .env
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,8 +56,11 @@ def index():
     return render_template("login.html", next=next_url)
 
 
-@app.route("/login", methods=["POST"])
+@app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "GET":
+        return render_template("login.html", next=request.args.get("next", ""))
+
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
     next_url  = request.args.get("next") or request.form.get("next") or "/"
