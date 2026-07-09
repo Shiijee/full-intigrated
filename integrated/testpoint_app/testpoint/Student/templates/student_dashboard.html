@@ -42,7 +42,7 @@
             <div class="card-body p-4 d-flex align-items-center justify-content-between">
                 <div>
                     <h1 style="font-family: var(--tp-serif); color: var(--tp-student-ink); font-size: 2.25rem; line-height: 1.1;" class="mb-2">
-                        Welcome, <span style="color: var(--tp-student-accent);">{{ student_firstname }}</span>!
+                        Welcome, <span style="color: var(--tp-student-accent);">{{ user_data.firstname }}</span>!
                     </h1>
                     <p class="text-muted mb-0" style="font-size: 15px; font-weight: 400;">
                         {% if available_count > 0 %}
@@ -139,7 +139,7 @@
 <div class="row">
     <!-- ── LEFT: ANALYTICS & RANKINGS ── -->
     <div class="col-xl-8 col-lg-7">
-        
+
         <!-- Performance Trend (Admin Style Header) -->
         <div class="card shadow-sm mb-4 border-0">
             <div class="card-header py-3 bg-white border-bottom d-flex align-items-center justify-content-between" style="border-bottom: 1.5px solid var(--tp-student-border) !important;">
@@ -205,7 +205,7 @@
 
     <!-- ── RIGHT: SIDEBAR WIDGETS ── -->
     <div class="col-xl-4 col-lg-5">
-        
+
         <!-- Upcoming Schedule Widget -->
         <div class="card shadow-sm mb-4 border-0">
             <div class="card-header py-3 bg-white border-0">
@@ -295,12 +295,12 @@
                     beginAtZero: true,
                     max: 100,
                     grid: { borderDash: [4, 4], color: '#f0f0f0' },
-                    ticks: { 
+                    ticks: {
                         font: { size: 11, weight: '500' },
-                        callback: function (value) { return value + "%"; } 
+                        callback: function (value) { return value + "%"; }
                     }
                 },
-                x: { 
+                x: {
                     grid: { display: false },
                     ticks: { font: { size: 11, weight: '500' } }
                 }

@@ -2,7 +2,7 @@ import mysql.connector
 from mysql.connector import Error
 import os
 from dotenv import load_dotenv
-import os
+import jwt
 
 load_dotenv()
 passwordDB = os.getenv("DBPASSWORD")

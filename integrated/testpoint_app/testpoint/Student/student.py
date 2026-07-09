@@ -16,11 +16,11 @@ def enforce_lockdown():
     active_exam_id = session.get('active_exam_id')
     if active_exam_id:
         allowed_endpoints = [
-            'student.take_exam', 
-            'student.save_progress', 
-            'student.log_violation', 
+            'student.take_exam',
+            'student.save_progress',
+            'student.log_violation',
             'student.submit_exam',
-            'auth.logout', 
+            'auth.logout',
             'static'
         ]
         if request.endpoint and request.endpoint not in allowed_endpoints:
@@ -31,35 +31,35 @@ def enforce_lockdown():
         # Exclude setup page and logout from redirect loop
         if request.endpoint in ['student.setup_account', 'auth.logout', 'static']:
             return
-            
+
         student_id = session.get('user_id')
         connection = mysql.connector.connect(**db_config)
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT block_id FROM students WHERE student_id = %s", (student_id,))
         res = cursor.fetchone()
         cursor.close(); connection.close()
-        
+
         if res and res['block_id'] is None:
             return redirect(url_for('student.setup_account'))
 
 @student.route('/setup-account', methods=['GET', 'POST'])
 def setup_account():
     if not user_logged_in(): return redirect(url_for('auth.login'))
-    
+
     student_id = session.get('user_id')
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
 
     if request.method == 'POST':
         block_id = request.form.get('block_id')
-        
+
         # Security: Final Capacity Check
         cursor.execute("""
             SELECT b.capacity, (SELECT COUNT(*) FROM students WHERE block_id = b.block_id) as current_count
             FROM blocks b WHERE b.block_id = %s
         """, (block_id,))
         stats = cursor.fetchone()
-        
+
         if stats and stats['current_count'] >= stats['capacity']:
             flash("Sorry, this block just reached its capacity. Please select another block.", "warning")
             return redirect(url_for('student.setup_account'))
@@ -68,14 +68,14 @@ def setup_account():
         cursor.execute("UPDATE students SET block_id = %s WHERE student_id = %s", (block_id, student_id))
         connection.commit()
         cursor.close(); connection.close()
-        
+
         flash("Your account setup is complete! You can now access your dashboard.", "success")
         return redirect(url_for('student.student_dashboard'))
 
     # GET: Fetch Data for UI
     cursor.execute("SELECT * FROM programs WHERE is_active = 1")
     programs = cursor.fetchall()
-    
+
     cursor.execute("""
         SELECT b.*, p.program_name,
         (b.capacity - (SELECT COUNT(*) FROM students WHERE block_id = b.block_id)) as slots_left
@@ -85,7 +85,7 @@ def setup_account():
         HAVING slots_left > 0
     """)
     blocks = cursor.fetchall()
-    
+
     cursor.close(); connection.close()
     return render_template('student_setup.html', programs=programs, blocks=blocks)
 
@@ -97,7 +97,7 @@ def inject_enrolled_courses():
             connection = mysql.connector.connect(**db_config)
             cursor = connection.cursor(dictionary=True)
             cursor.execute("""
-                SELECT cl.class_code as course_id, cl.class_code, c.course_name, c.course_code 
+                SELECT cl.class_code as course_id, cl.class_code, c.course_name, c.course_code
                 FROM classes cl
                 JOIN courses c ON cl.course_code = c.course_code
                 JOIN enrollments e ON cl.class_code = e.class_code
@@ -129,17 +129,17 @@ def student_dashboard():
         course_count = cursor.fetchone()['count']
 
         cursor.execute("""
-            SELECT COUNT(*) as count FROM exam_attempts ea 
-            JOIN exams e ON ea.exam_id = e.exam_id 
+            SELECT COUNT(*) as count FROM exam_attempts ea
+            JOIN exams e ON ea.exam_id = e.exam_id
             WHERE ea.student_id = %s AND ea.status = 'finished' AND e.archived = 0
         """, (student_id,))
         completed_count = cursor.fetchone()['count']
-        
+
         cursor.execute("""
             SELECT COUNT(*) as count FROM exams e
             JOIN enrollments en ON e.class_code = en.class_code
             LEFT JOIN exam_attempts ea ON e.exam_id = ea.exam_id AND ea.student_id = %s
-            WHERE en.student_id = %s AND en.status = 'active' AND e.is_active = 1 
+            WHERE en.student_id = %s AND en.status = 'active' AND e.is_active = 1
             AND (ea.status IS NULL OR ea.status = 'in-progress') AND e.archived = 0;
         """, (student_id, student_id))
         available_count = cursor.fetchone()['count']
@@ -163,7 +163,7 @@ def student_dashboard():
             JOIN classes cl ON e.class_code = cl.class_code
             JOIN courses c ON cl.course_code = c.course_code
             LEFT JOIN exam_attempts ea ON e.exam_id = ea.exam_id AND ea.student_id = %s
-            WHERE en.student_id = %s AND e.is_active = 1 
+            WHERE en.student_id = %s AND e.is_active = 1
             AND (ea.status IS NULL OR ea.status = 'in-progress') AND e.archived = 0
             ORDER BY e.date_time ASC LIMIT 3
         """, (student_id, student_id))
@@ -180,7 +180,7 @@ def student_dashboard():
         recent_results = cursor.fetchall()
 
         cursor.execute("""
-            SELECT e.title, 
+            SELECT e.title,
                    COALESCE((ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0) * 100), 0) as percentage
                 FROM exam_attempts ea
                 JOIN exams e ON ea.exam_id = e.exam_id
@@ -198,7 +198,7 @@ def student_dashboard():
                     RANK() OVER (PARTITION BY t.class_code ORDER BY t.student_avg DESC) as class_rank,
                     COUNT(*) OVER (PARTITION BY t.class_code) as total_students
                 FROM (
-                    SELECT en.class_code, en.student_id, 
+                    SELECT en.class_code, en.student_id,
                         AVG(COALESCE(ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0) * 100, 0)) as student_avg
                     FROM enrollments en
                     LEFT JOIN exams e ON en.class_code = e.class_code
@@ -213,6 +213,25 @@ def student_dashboard():
         """, (student_id,))
         rankings = cursor.fetchall()
 
+
+        # --- GET: FETCH DETAILED STUDENT DATA ---
+        cursor.execute("""
+            SELECT u.user_id, u.email, u.role, u.created_at,
+                   s.firstname, s.middlename, s.lastname,
+                   s.region, s.province, s.city, s.barangay,
+                   b.block_name, pr.program_name, pr.description as program_desc
+            FROM users u
+            JOIN students s ON u.user_id = s.student_id
+            LEFT JOIN blocks b ON s.block_id = b.block_id
+            LEFT JOIN programs pr ON b.program_id = pr.program_id
+            WHERE u.user_id = %s
+        """, (student_id,))
+        user_data = cursor.fetchone()
+
+        #Session Name
+        session['firstname'] = user_data['firstname']
+        session['lastname'] = user_data['lastname']
+
         # ── Integration: Fetch voting status from Voxify ──────────────────
         import requests as _req, os as _os
         VOXIFY_URL = _os.getenv('VOXIFY_URL', 'http://127.0.0.1:5001')
@@ -224,9 +243,10 @@ def student_dashboard():
         except Exception:
             voting_status = None  # Voxify offline — degrade gracefully
 
-        return render_template('student_dashboard.html', 
-                               course_count=course_count, 
-                               completed_count=completed_count, 
+        return render_template('student_dashboard.html',
+                               user_data=user_data,
+                               course_count=course_count,
+                               completed_count=completed_count,
                                available_count=available_count,
                                overall_avg=overall_avg,
                                student_firstname=student_firstname,
@@ -260,13 +280,13 @@ def profile():
             confirm_password = request.form.get('confirm_password')
 
             cursor.execute("""
-                UPDATE students SET firstname = %s, middlename = %s, lastname = %s 
+                UPDATE students SET firstname = %s, middlename = %s, lastname = %s
                 WHERE student_id = %s
             """, (firstname, middlename, lastname, user_id))
 
             if new_password:
                 if new_password == confirm_password:
-                    cursor.execute("UPDATE users SET password = %s WHERE user_id = %s", 
+                    cursor.execute("UPDATE users SET password = %s WHERE user_id = %s",
                                    (generate_password_hash(new_password), user_id))
                 else:
                     flash('Passwords do not match.', 'warning')
@@ -297,9 +317,9 @@ def profile():
         cursor.execute("SELECT COUNT(*) as count FROM exam_attempts WHERE student_id = %s AND status = 'finished'", (user_id,))
         exam_count = cursor.fetchone()['count']
 
-        return render_template('student_profile.html', 
-                               user=user_data, 
-                               course_count=course_count, 
+        return render_template('student_profile.html',
+                               user=user_data,
+                               course_count=course_count,
                                exam_count=exam_count)
 
     finally:
@@ -324,12 +344,12 @@ def student_exams():
             WHERE en.student_id = %s AND e.archived = 0;
         """, (student_id, student_id))
         exams = cursor.fetchall()
-        
+
         now = datetime.now()
         for exam in exams:
             start_time = exam['date_time']
             end_time = start_time + timedelta(minutes=exam['duration_minutes']) if start_time else None
-            
+
             exam['status_label'] = "Available"
             exam['status_class'] = "primary"
             exam['can_start'] = False
@@ -378,7 +398,7 @@ def save_progress():
         # REAL-TIME SECURITY CHECK: Verify student isn't blocked mid-exam
         cursor.execute("SELECT status FROM exam_attempts WHERE attempt_id = %s", (attempt_id,))
         attempt = cursor.fetchone()
-        
+
         if not attempt or attempt['status'] == 'blocked':
             return jsonify({"status": "blocked", "message": "Access restricted by instructor."}), 403
 
@@ -387,7 +407,7 @@ def save_progress():
             INSERT INTO student_answers (attempt_id, question_id, submitted_answer, is_flagged)
             VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE submitted_answer = %s, is_flagged = %s
         """, (attempt_id, q_id, ans, is_flagged, ans, is_flagged))
-        
+
         cursor.execute("UPDATE exam_attempts SET current_q_index = %s WHERE attempt_id = %s", (current_idx, attempt_id))
         connection.commit()
         return jsonify({"status": "saved"})
@@ -398,11 +418,11 @@ def save_progress():
 #! 2. TAKE EXAM (PERSISTENT & RANDOMIZED LOGIC)
 @student.route('/take_exam/<int:exam_id>')
 def take_exam(exam_id):
-    if not user_logged_in(): 
+    if not user_logged_in():
         return redirect(url_for('auth.login'))
-        
+
     student_id = session.get('user_id')
-    
+
     connection = mysql.connector.connect(**db_config)
     # Using buffered=True to handle multiple queries without "Unread Result" errors
     cursor = connection.cursor(dictionary=True, buffered=True)
@@ -410,28 +430,28 @@ def take_exam(exam_id):
     try:
         # 1. SECURITY: ENROLLMENT & BLOCKING CHECK
         cursor.execute("""
-            SELECT status FROM exam_attempts 
+            SELECT status FROM exam_attempts
             WHERE exam_id = %s AND student_id = %s
         """, (exam_id, student_id))
         existing_status = cursor.fetchone()
-        
+
         if existing_status and existing_status['status'] == 'blocked':
             flash("You are currently blocked from taking this exam.", "danger")
             return redirect(url_for('student.student_exams'))
 
         # 2. EXAM METADATA & TIMER LOGIC
         cursor.execute("""
-            SELECT *, TIMESTAMPDIFF(SECOND, NOW(), DATE_ADD(date_time, INTERVAL duration_minutes MINUTE)) as rem 
+            SELECT *, TIMESTAMPDIFF(SECOND, NOW(), DATE_ADD(date_time, INTERVAL duration_minutes MINUTE)) as rem
             FROM exams WHERE exam_id = %s
         """, (exam_id,))
         exam = cursor.fetchone()
-        
+
         if not exam or exam['is_active'] == 0:
             flash("This exam is currently unavailable.", "warning")
             return redirect(url_for('student.student_exams'))
 
         if exam['rem'] <= 0:
-            session.pop('active_exam_id', None) 
+            session.pop('active_exam_id', None)
             flash("This exam session has already expired.", "danger")
             return redirect(url_for('student.student_exams'))
 
@@ -442,23 +462,23 @@ def take_exam(exam_id):
         if not attempt:
             # --- START NEW ATTEMPT ---
             cursor.execute("""
-                INSERT INTO exam_attempts (student_id, exam_id, status, start_time) 
+                INSERT INTO exam_attempts (student_id, exam_id, status, start_time)
                 VALUES (%s, %s, 'in-progress', NOW())
             """, (student_id, exam_id))
             connection.commit()
             attempt_id = cursor.lastrowid
-            
+
             # THE SUBSET RANDOMIZATION: Pick random IDs from the pool
             limit = exam.get('question_limit') or 50
             cursor.execute("""
                 INSERT INTO attempt_questions (attempt_id, question_id)
-                SELECT %s, question_id FROM exam_questions 
-                WHERE exam_id = %s 
-                ORDER BY RAND() 
+                SELECT %s, question_id FROM exam_questions
+                WHERE exam_id = %s
+                ORDER BY RAND()
                 LIMIT %s
             """, (attempt_id, exam_id, limit))
             connection.commit()
-            
+
             current_q = 0
             tab_switches = 0
         else:
@@ -467,7 +487,7 @@ def take_exam(exam_id):
                 session.pop('active_exam_id', None)
                 flash("You have already completed this exam.", "info")
                 return redirect(url_for('student.student_results'))
-            
+
             attempt_id = attempt['attempt_id']
             current_q = attempt['current_q_index']
             tab_switches = attempt['tab_switches']
@@ -482,7 +502,7 @@ def take_exam(exam_id):
             WHERE aq.attempt_id = %s
         """, (attempt_id,))
         questions = cursor.fetchall()
-        
+
         rng = random.Random(attempt_id)
         rng.shuffle(questions)
 
@@ -490,22 +510,22 @@ def take_exam(exam_id):
         for q in questions:
             cursor.execute("SELECT * FROM options WHERE question_id = %s", (q['question_id'],))
             q['options'] = cursor.fetchall()
-            
+
             cursor.execute("""
-                SELECT submitted_answer, is_flagged FROM student_answers 
+                SELECT submitted_answer, is_flagged FROM student_answers
                 WHERE attempt_id = %s AND question_id = %s
             """, (attempt_id, q['question_id']))
             ans_row = cursor.fetchone()
-            
+
             q['saved_answer'] = ans_row['submitted_answer'] if ans_row else ""
             q['is_flagged'] = ans_row['is_flagged'] if ans_row else 0
 
-        return render_template('take_exam.html', 
-                               exam=exam, 
-                               questions=questions, 
-                               attempt_id=attempt_id, 
-                               remaining_seconds=exam['rem'], 
-                               current_q=current_q, 
+        return render_template('take_exam.html',
+                               exam=exam,
+                               questions=questions,
+                               attempt_id=attempt_id,
+                               remaining_seconds=exam['rem'],
+                               current_q=current_q,
                                tab_switches=tab_switches)
 
     except mysql.connector.Error as err:
@@ -513,19 +533,34 @@ def take_exam(exam_id):
             connection.rollback()
         flash(f"Database Error: {err}", "danger")
         return redirect(url_for('student.student_exams'))
-        
+
     finally:
         cursor.close()
         connection.close()
-        
+
 @student.route('/review_results/<int:attempt_id>')
 def review_results(attempt_id):
     if not user_logged_in(): return redirect(url_for('auth.login'))
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True, buffered=True)
 
-    # Fetch questions Served during this specific attempt
+    # 1. SECURITY: Check if the teacher has enabled reviews for this specific exam
+    cursor.execute("""
+        SELECT e.allow_review
+        FROM exams e
+        JOIN exam_attempts ea ON e.exam_id = ea.exam_id
+        WHERE ea.attempt_id = %s
+    """, (attempt_id,))
+    exam_config = cursor.fetchone()
+
+    if not exam_config or not exam_config.get('allow_review'):
+        cursor.close()
+        connection.close()
+        flash("The instructor has not enabled answer review for this assessment.", "warning")
+        return redirect(url_for('student.student_results'))
+
+    # 2. Proceed to fetch questions served during this specific attempt
     cursor.execute("""
         SELECT q.*, sa.submitted_answer, sa.is_correct
         FROM questions q
@@ -548,13 +583,13 @@ def review_results(attempt_id):
 def review_exam(attempt_id):
     if not user_logged_in(): return redirect(url_for('auth.login'))
     student_id = session.get('user_id')
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True, buffered=True)
 
-    # 1. Fetch Attempt & Exam details
+    # 1. Fetch Attempt & Exam details (Including the allow_review permission flag)
     cursor.execute("""
-        SELECT ea.*, e.title, e.pass_percentage, c.course_name 
+        SELECT ea.*, e.title, e.pass_percentage, e.allow_review, c.course_name
         FROM exam_attempts ea
         JOIN exams e ON ea.exam_id = e.exam_id
         JOIN classes cl ON e.class_code = cl.class_code
@@ -567,7 +602,14 @@ def review_exam(attempt_id):
         flash("Review not available.", "warning")
         return redirect(url_for('student.student_results'))
 
-    # 2. Fetch the specific subset of questions served for this attempt
+    # 2. SECURITY CHECK: Validate teacher permission
+    if not attempt.get('allow_review'):
+        cursor.close()
+        connection.close()
+        flash("The instructor has not enabled answer review for this assessment.", "warning")
+        return redirect(url_for('student.student_results'))
+
+    # 3. Fetch the specific subset of questions served for this attempt
     cursor.execute("""
         SELECT q.*, sa.submitted_answer, sa.is_correct
         FROM questions q
@@ -593,57 +635,57 @@ def log_violation():
     violation_type = data.get('violation_type', 'Tab Switch/Blur')
     lat = data.get('lat')
     lng = data.get('lng')
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     try:
         # REAL-TIME SECURITY CHECK
         cursor.execute("SELECT status FROM exam_attempts WHERE attempt_id = %s", (attempt_id,))
         attempt = cursor.fetchone()
-        
+
         if not attempt or attempt['status'] == 'blocked':
             return jsonify({"status": "blocked"}), 403
 
         # 1. Define which events actually count as "Violations" to increment the counter
         # Events like 'Exam Started' and 'Exam Ended' will NOT increment this count.
         violations_to_count = ['Window switch/blur', 'Fullscreen exited', 'Tab Switch']
-        
+
         if violation_type in violations_to_count:
             cursor.execute("UPDATE exam_attempts SET tab_switches = tab_switches + 1 WHERE attempt_id = %s", (attempt_id,))
-        
+
         # 2. ALWAYS log the entry to the detailed violation_logs table for the teacher's timeline
         cursor.execute("""
-            INSERT INTO violation_logs (attempt_id, violation_type, violation_time, latitude, longitude) 
+            INSERT INTO violation_logs (attempt_id, violation_type, violation_time, latitude, longitude)
             VALUES (%s, %s, NOW(), %s, %s)
         """, (attempt_id, violation_type, lat, lng))
-        
+
         connection.commit()
-        
+
         # Fetch new count to return to UI
         cursor.execute("SELECT tab_switches FROM exam_attempts WHERE attempt_id = %s", (attempt_id,))
         result = cursor.fetchone()
         new_count = result['tab_switches'] if result else 0
-        
+
         return jsonify({"status": "logged", "new_count": new_count})
     finally:
         cursor.close()
         connection.close()
-        
+
 #! 4. FINAL SUBMISSION
 @student.route('/submit_exam/<int:attempt_id>', methods=['POST'])
 def submit_exam(attempt_id):
-    if not user_logged_in(): 
+    if not user_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True, buffered=True)
-    
+
     try:
         # REAL-TIME SECURITY CHECK: Reject submission if blocked
         cursor.execute("SELECT status, exam_id FROM exam_attempts WHERE attempt_id = %s", (attempt_id,))
         attempt_info = cursor.fetchone()
-        
+
         if not attempt_info or attempt_info['status'] == 'blocked':
             session.pop('active_exam_id', None)
             flash("Submission failed: Your access to this exam was restricted by the instructor.", "danger")
@@ -651,12 +693,12 @@ def submit_exam(attempt_id):
 
         # Remove exam lockdown
         session.pop('active_exam_id', None)
-        
+
         # Grading Logic (Existing)
         cursor.execute("SELECT question_id FROM attempt_questions WHERE attempt_id = %s", (attempt_id,))
         questions = cursor.fetchall()
         total_score = 0
-        
+
         for q in questions:
             q_id = q['question_id']
             cursor.execute("SELECT submitted_answer FROM student_answers WHERE attempt_id = %s AND question_id = %s", (attempt_id, q_id))
@@ -674,91 +716,91 @@ def submit_exam(attempt_id):
                 cursor.execute("UPDATE student_answers SET is_correct = 0 WHERE attempt_id = %s AND question_id = %s", (attempt_id, q_id))
 
         cursor.execute("""
-            UPDATE exam_attempts 
-            SET status = 'finished', end_time = NOW(), score = %s 
+            UPDATE exam_attempts
+            SET status = 'finished', end_time = NOW(), score = %s
             WHERE attempt_id = %s
         """, (total_score, attempt_id))
-        
+
         connection.commit()
         flash(f"Exam submitted successfully! Final Score: {total_score}", "success")
-        
+
     except mysql.connector.Error as err:
         if connection: connection.rollback()
         flash(f"Grading Error: {err}", "danger")
     finally:
         cursor.close(); connection.close()
-    
+
     return redirect(url_for('student.student_results'))
 
 
 @student.route('/student_results')
 def student_results():
-    if not user_logged_in(): 
+    if not user_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     student_id = session.get('user_id')
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     try:
 
         cursor.execute("""
-            SELECT 
-                ea.*, 
-                e.title, 
-                e.pass_percentage, 
-                c.course_name, 
+            SELECT
+                ea.*,
+                e.title,
+                e.pass_percentage,
+                c.course_name,
                 c.course_code,
                 (SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id) as total_served
             FROM exam_attempts ea
             JOIN exams e ON ea.exam_id = e.exam_id
             JOIN classes cl ON e.class_code = cl.class_code
             JOIN courses c ON cl.course_code = c.course_code
-            WHERE ea.student_id = %s 
-              AND ea.status = 'finished' 
+            WHERE ea.student_id = %s
+              AND ea.status = 'finished'
               AND e.archived = 0
             ORDER BY ea.end_time DESC
         """, (student_id,))
         results = cursor.fetchall()
-        
+
     except mysql.connector.Error as err:
         flash(f"Error fetching results: {err}", "danger")
         results = []
     finally:
         cursor.close()
         connection.close()
-        
+
     return render_template('student_results.html', results=results)
 
 @student.route('/course/<string:course_id>')
 def view_course(course_id):
     if not user_logged_in():
         return redirect(url_for('auth.login'))
-    
+
     student_id = session.get('user_id')
-    
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
-    
+
     try:
         # Fetch Course & Teacher Details
         cursor.execute("""
-            SELECT c.*, cl.class_code, t.firstname as t_fname, t.lastname as t_lname, t.email as t_email 
+            SELECT c.*, cl.class_code, t.firstname as t_fname, t.lastname as t_lname, t.email as t_email
             FROM classes cl
             JOIN courses c ON cl.course_code = c.course_code
             LEFT JOIN teachers t ON cl.teacher_id = t.teacher_id
             WHERE cl.class_code = %s
         """, (course_id,))
         course = cursor.fetchone()
-    
+
         # Fetch Exam List with per-exam attempt status
         cursor.execute("""
-            SELECT 
-                e.*, 
+            SELECT
+                e.*,
                 ea.attempt_id,
-                ea.status as attempt_status, 
-                ea.score, 
+                ea.status as attempt_status,
+                ea.score,
                 (SELECT COUNT(*) FROM exam_questions WHERE exam_id = e.exam_id) as total_q
             FROM exams e
             LEFT JOIN exam_attempts ea ON e.exam_id = ea.exam_id AND ea.student_id = %s
@@ -770,7 +812,7 @@ def view_course(course_id):
         total_exams = len(course_exams)
         completed_exams = sum(1 for ex in course_exams if ex['attempt_status'] == 'finished')
         progress_pct = int((completed_exams / total_exams) * 100) if total_exams > 0 else 0
-        
+
         now = datetime.now()
         for exam in course_exams:
             if exam['date_time']:
@@ -782,11 +824,11 @@ def view_course(course_id):
                 exam['is_upcoming'] = True
 
             # can_take is true if active, not upcoming, not expired, and NOT finished or blocked
-            exam['can_take'] = (exam['is_active'] == 1 and not exam['is_upcoming'] and 
+            exam['can_take'] = (exam['is_active'] == 1 and not exam['is_upcoming'] and
                                not exam['is_expired'] and exam['attempt_status'] not in ['finished', 'blocked'])
 
-        return render_template('student_courses.html', 
-                               course=course, 
+        return render_template('student_courses.html',
+                               course=course,
                                course_exams=course_exams,
                                progress_pct=progress_pct,
                                total_exams=total_exams,
@@ -809,7 +851,7 @@ def student_analytics():
     try:
         # 1. COMPREHENSIVE STANDINGS (Leaderboard Logic)
         cursor.execute("""
-            SELECT 
+            SELECT
                 r.class_code,
                 c.course_name,
                 r.student_id,
@@ -818,45 +860,45 @@ def student_analytics():
                 RANK() OVER (PARTITION BY r.class_code ORDER BY r.avg_score DESC) as rank_pos,
                 COUNT(*) OVER (PARTITION BY r.class_code) as total_peers
             FROM (
-                SELECT 
-                    en.class_code, 
-                    en.student_id, 
+                SELECT
+                    en.class_code,
+                    en.student_id,
                     AVG(
                         COALESCE(
                             (ea.score / NULLIF(
-                                (SELECT COUNT(*) 
-                                FROM attempt_questions aq 
+                                (SELECT COUNT(*)
+                                FROM attempt_questions aq
                                 WHERE aq.attempt_id = ea.attempt_id
                                 ), 0)
-                            ) * 100, 
+                            ) * 100,
                         0)
                     ) as avg_score
                 FROM enrollments en
-                LEFT JOIN exam_attempts ea 
+                LEFT JOIN exam_attempts ea
                     ON en.student_id = ea.student_id
-                LEFT JOIN exams e 
+                LEFT JOIN exams e
                     ON ea.exam_id = e.exam_id
-                WHERE 
+                WHERE
                     (ea.status = 'finished' OR ea.status IS NULL)
                     AND (e.archived = 0 OR e.archived IS NULL)
                 GROUP BY en.class_code, en.student_id
             ) r
-            JOIN students s 
+            JOIN students s
                 ON r.student_id = s.student_id
-            JOIN classes cl 
+            JOIN classes cl
                 ON r.class_code = cl.class_code
-            JOIN courses c 
+            JOIN courses c
                 ON cl.course_code = c.course_code
             WHERE r.class_code IN (
-                SELECT class_code 
-                FROM enrollments 
+                SELECT class_code
+                FROM enrollments
                 WHERE student_id = %s
             )
             ORDER BY r.class_code, rank_pos ASC
         """, (student_id,))
 
         raw_standings = cursor.fetchall()
-        
+
         # Group standings by course for the UI
         standings_by_course = {}
         for row in raw_standings:
@@ -868,8 +910,8 @@ def student_analytics():
         # 2. ITEM ANALYSIS (The "Class Killers")
         # Identify questions in the student's courses that have the highest failure rate globally
         cursor.execute("""
-            SELECT 
-                q.question_text, 
+            SELECT
+                q.question_text,
                 c.course_name,
                 COUNT(sa.answer_id) as total_attempts,
                 SUM(CASE WHEN sa.is_correct = 0 THEN 1 ELSE 0 END) as fail_count,
@@ -888,7 +930,7 @@ def student_analytics():
 
         # 3. EXAM STATISTICS (Pass/Fail Distribution)
         cursor.execute("""
-            SELECT 
+            SELECT
                 SUM(CASE WHEN (ea.score / (SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id) * 100) >= e.pass_percentage THEN 1 ELSE 0 END) as pass_count,
                 SUM(CASE WHEN (ea.score / (SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id) * 100) < e.pass_percentage THEN 1 ELSE 0 END) as fail_count
             FROM exam_attempts ea
@@ -897,7 +939,7 @@ def student_analytics():
         """, (student_id,))
         stats = cursor.fetchone()
 
-        return render_template('student_analytics.html', 
+        return render_template('student_analytics.html',
                                standings=standings_by_course,
                                item_analysis=item_analysis,
                                stats=stats,
@@ -921,7 +963,7 @@ def student_certificates():
         # EXAM ACHIEVEMENTS (Top 1-3) - Protected against 0 questions
         cursor.execute("""
             SELECT * FROM (
-                SELECT 
+                SELECT
                     ea.attempt_id, e.title as assessment_name, c.course_name, c.course_code,
                     ea.score, (SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id) as total_q,
                     ea.end_time as issued_date,
@@ -940,17 +982,17 @@ def student_certificates():
         # COURSE HONORS (Top 20) - Protected against 0 questions + excludes archived exams
         cursor.execute("""
             SELECT * FROM (
-                SELECT 
-                    en.student_id, 
-                    c.course_name, 
-                    c.course_code, 
+                SELECT
+                    en.student_id,
+                    c.course_name,
+                    c.course_code,
                     cl.class_code,
 
                     AVG(
                         COALESCE(
                             (ea.score / NULLIF(
-                                (SELECT COUNT(*) 
-                                FROM attempt_questions aq 
+                                (SELECT COUNT(*)
+                                FROM attempt_questions aq
                                 WHERE aq.attempt_id = ea.attempt_id
                                 ), 0)
                             ) * 100,
@@ -958,42 +1000,42 @@ def student_certificates():
                     ) as avg_pct,
 
                     RANK() OVER (
-                        PARTITION BY cl.class_code 
+                        PARTITION BY cl.class_code
                         ORDER BY AVG(
                             COALESCE(
                                 (ea.score / NULLIF(
-                                    (SELECT COUNT(*) 
-                                    FROM attempt_questions aq 
+                                    (SELECT COUNT(*)
+                                    FROM attempt_questions aq
                                     WHERE aq.attempt_id = ea.attempt_id
                                     ), 0)
-                                ), 
+                                ),
                             0)
                         ) DESC
                     ) as course_rank
 
                 FROM enrollments en
-                JOIN classes cl 
+                JOIN classes cl
                     ON en.class_code = cl.class_code
-                JOIN courses c 
+                JOIN courses c
                     ON cl.course_code = c.course_code
 
-                LEFT JOIN exams e 
+                LEFT JOIN exams e
                     ON cl.class_code = e.class_code
 
-                LEFT JOIN exam_attempts ea 
-                    ON e.exam_id = ea.exam_id 
+                LEFT JOIN exam_attempts ea
+                    ON e.exam_id = ea.exam_id
                     AND en.student_id = ea.student_id
 
-                WHERE 
+                WHERE
                     (ea.status = 'finished' OR ea.status IS NULL)
                     AND (e.archived = 0 OR e.archived IS NULL)
 
                 GROUP BY en.student_id, cl.class_code
             ) AS ranked_courses
 
-            WHERE 
-                ranked_courses.student_id = %s 
-                AND course_rank <= 20 
+            WHERE
+                ranked_courses.student_id = %s
+                AND course_rank <= 20
                 AND avg_pct IS NOT NULL
 
             ORDER BY avg_pct DESC
@@ -1014,8 +1056,8 @@ def student_certificates():
         """, (student_id,))
         transcripts = cursor.fetchall()
 
-        return render_template('student_certificates.html', 
-                               exam_certs=exam_certs, 
+        return render_template('student_certificates.html',
+                               exam_certs=exam_certs,
                                course_certs=course_certs,
                                transcripts=transcripts,
                                student_id = student_id)

@@ -130,6 +130,9 @@ def teacher_dashboard():
             """, (teacher_id,))
             user = cursor.fetchone()
 
+            session['firstname'] = user['firstname']
+            session['lastname'] = user['lastname']
+
 
             return render_template('teacher_dashboard.html',
                                    user = user,
@@ -1220,6 +1223,45 @@ def reset_exam(attempt_id, exam_id):
     cursor.close()
     connection.close()
     # Redirect to the route that provides the 'exam' object
+    return redirect(url_for('teacher.exam_results', exam_id=exam_id))
+
+@teacher.route('/toggle_exam_review/<int:exam_id>', methods=['POST'])
+def toggle_exam_review(exam_id):
+    if not teacher_logged_in():
+        return redirect(url_for('auth.login'))
+
+    teacher_id = session.get('user_id')
+    connection = mysql.connector.connect(**db_config)
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        # Verify ownership and get current state of the new allow_review column
+        cursor.execute("""
+            SELECT e.allow_review, e.title
+            FROM exams e
+            JOIN classes cl ON e.class_code = cl.class_code
+            WHERE e.exam_id = %s AND cl.teacher_id = %s
+        """, (exam_id, teacher_id))
+        exam = cursor.fetchone()
+
+        if not exam:
+            flash("Unauthorized action or exam not found.", "danger")
+            return redirect(url_for('teacher.manage_exams'))
+
+        # Toggle the boolean (0 to 1 or 1 to 0)
+        new_state = 0 if exam['allow_review'] else 1
+        cursor.execute("UPDATE exams SET allow_review = %s WHERE exam_id = %s", (new_state, exam_id))
+        connection.commit()
+
+        status_msg = "enabled" if new_state else "disabled"
+        flash(f"Student answer review has been {status_msg} for '{exam['title']}'.", "success")
+
+    except mysql.connector.Error as err:
+        flash(f"Error updating permissions: {err}", "danger")
+    finally:
+        cursor.close()
+        connection.close()
+
     return redirect(url_for('teacher.exam_results', exam_id=exam_id))
 
 @teacher.route('/teacher_review/<int:attempt_id>')

@@ -30,7 +30,7 @@
         padding: 4px 10px;
         border-radius: 6px;
     }
-    
+
     .status-pill {
         font-size: 10px;
         font-weight: 800;
@@ -40,7 +40,6 @@
         text-transform: uppercase;
     }
 
-    /* Summary Mini Cards */
     .summary-box {
         background: #fff;
         border: 1px solid var(--tp-teacher-border);
@@ -62,6 +61,13 @@
         font-size: 14px;
         font-weight: 700;
         color: var(--tp-teacher-ink);
+    }
+
+    /* Toggle Card Styling */
+    .permission-card {
+        background: #fff;
+        border: 1.5px dashed var(--tp-teacher-border);
+        border-radius: 12px;
     }
 </style>
 {% endblock %}
@@ -85,26 +91,63 @@
     </div>
 </div>
 
-<!-- ── SUMMARY INFO ── -->
+<!-- ── SUMMARY & PERMISSIONS ── -->
 <div class="row mb-4">
-    <div class="col-md-6 mb-3 mb-md-0">
-        <div class="summary-box shadow-sm border-left-danger" style="border-left: 4px solid var(--tp-teacher-accent) !important;">
-            <div class="summary-label">Class Schedule & Duration</div>
-            <div class="summary-val">
-                <i class="far fa-clock text-danger mr-2"></i>
-                {{ exam.date_time.strftime('%b %d, %Y • %I:%M %p') if exam.date_time else 'Not set' }}
-                <span class="text-muted font-weight-normal mx-2">|</span>
-                {{ exam.duration_minutes }} Minutes
+    <div class="col-xl-8 col-lg-7 mb-3 mb-lg-0">
+        <div class="row h-100">
+            <div class="col-md-6 mb-3 mb-md-0">
+                <div class="summary-box shadow-sm border-left-danger" style="border-left: 4px solid var(--tp-teacher-accent) !important;">
+                    <div class="summary-label">Class Schedule & Duration</div>
+                    <div class="summary-val text-truncate">
+                        <i class="far fa-clock text-danger mr-2"></i>
+                        {{ exam.date_time.strftime('%b %d, %Y • %I:%M %p') if exam.date_time else 'Not set' }}
+                        <span class="text-muted font-weight-normal mx-2">|</span>
+                        {{ exam.duration_minutes }} Mins
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="summary-box shadow-sm">
+                    <div class="summary-label">Course Mapping</div>
+                    <div class="summary-val text-truncate">
+                        <i class="fas fa-university text-muted mr-2"></i>
+                        {{ exam.course_name }}
+                        <span class="badge badge-light border ml-2 px-2" style="font-size: 11px;">ID: {{ exam.class_code }}</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="summary-box shadow-sm">
-            <div class="summary-label">Course Mapping</div>
-            <div class="summary-val">
-                <i class="fas fa-university text-muted mr-2"></i>
-                {{ exam.course_name }} 
-                <span class="badge badge-light border ml-2 px-2" style="font-size: 11px;">ID: {{ exam.class_code }}</span>
+
+    <!-- Review Permission Toggle Tile -->
+    <div class="col-xl-4 col-lg-5">
+        <div class="permission-card shadow-sm h-100 p-3 d-flex flex-column justify-content-center">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h6 class="font-weight-bold mb-1" style="font-size: 13px;">Review Permissions</h6>
+                    <p class="small text-muted mb-0" style="line-height: 1.2;">Control if students see keys after finishing.</p>
+                </div>
+                <form action="{{ url_for('teacher.toggle_exam_review', exam_id=exam.exam_id) }}" method="POST">
+                    {% if exam.allow_review %}
+                        <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill font-weight-bold px-3">
+                            <i class="fas fa-eye-slash mr-1"></i> Disable
+                        </button>
+                    {% else %}
+                        <button type="submit" class="btn btn-success btn-sm rounded-pill font-weight-bold px-3 shadow-sm">
+                            <i class="fas fa-eye mr-1"></i> Enable
+                        </button>
+                    {% endif %}
+                </form>
+            </div>
+            <div class="mt-2 pt-2 border-top">
+                <span class="small font-weight-bold text-uppercase" style="font-size: 9px; letter-spacing: 1px;">
+                    Status:
+                    {% if exam.allow_review %}
+                        <span class="text-success"><i class="fas fa-check-circle mr-1"></i> Results Unlocked</span>
+                    {% else %}
+                        <span class="text-muted"><i class="fas fa-lock mr-1"></i> Results Locked</span>
+                    {% endif %}
+                </span>
             </div>
         </div>
     </div>
@@ -135,7 +178,7 @@
                     <tr class="student-row {% if r.attempt_status == 'blocked' %}bg-light opacity-75{% endif %}">
                         <td class="pl-4 py-3 align-middle">
                             <div class="d-flex align-items-center">
-                                <img src="https://ui-avatars.com/api/?name={{ r.firstname }}+{{ r.lastname }}&background=f1f5f9&color=64748b&bold=true" 
+                                <img src="https://ui-avatars.com/api/?name={{ r.firstname }}+{{ r.lastname }}&background=f1f5f9&color=64748b&bold=true"
                                      class="rounded-circle mr-3 shadow-sm border" style="width: 32px; height: 32px;">
                                 <div>
                                     <div class="font-weight-bold" style="font-size: 14px;">{{ r.lastname }}, {{ r.firstname }}</div>
@@ -196,7 +239,7 @@
 
                                 {% if r.attempt_status != 'finished' %}
                                     <form action="{{ url_for('teacher.toggle_block_student', student_id=r.student_id, exam_id=exam.exam_id) }}" method="POST">
-                                        <button type="submit" class="btn btn-circle-sm border shadow-sm {% if r.attempt_status == 'blocked' %}btn-success{% else %}btn-dark{% endif %}" 
+                                        <button type="submit" class="btn btn-circle-sm border shadow-sm {% if r.attempt_status == 'blocked' %}btn-success{% else %}btn-dark{% endif %}"
                                                 title="{% if r.attempt_status == 'blocked' %}Unblock Student{% else %}Block Student{% endif %}">
                                             <i class="fas {% if r.attempt_status == 'blocked' %}fa-user-check{% else %}fa-user-slash{% endif %}" style="font-size: 10px;"></i>
                                         </button>
