@@ -3,366 +3,348 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edukado | Sign In</title>
+    <title>Edukado | System Access</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
         :root {
-            --bg:        #080D1A;
-            --surface:   #0F1829;
-            --surface-2: #162035;
-            --border:    rgba(255,255,255,0.07);
-            --border-focus: rgba(79,142,247,0.5);
-            --accent:    #4F8EF7;
-            --accent-2:  #7C5CFC;
-            --danger:    #F75F7A;
-            --text:      #E2E8F0;
-            --muted:     #64748B;
+            --bg: #02040a;
+            --surface: rgba(15, 23, 42, 0.7);
+            --accent: #6366F1;
+            --text: #F8FAFC;
+            --muted: #475569;
+            --error: #F75F7A;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Inter', sans-serif;
             background: var(--bg);
             color: var(--text);
-            min-height: 100vh;
+            height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
         }
 
-        /* ── Ambient orbs ── */
+        /* ── Background Layer 1: Neural Nodes ── */
+        #bg-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            opacity: 0.4; /* Subtle visibility */
+        }
+
+        /* ── Background Layer 2: Grid ── */
+        .grid-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: 1;
+            mask-image: radial-gradient(circle at center, black, transparent 90%);
+            -webkit-mask-image: radial-gradient(circle at center, black, transparent 90%);
+        }
+
         .orb {
             position: fixed;
-            width: 560px;
-            height: 560px;
+            width: 60vw; height: 60vw;
             border-radius: 50%;
-            filter: blur(110px);
-            opacity: 0.13;
-            pointer-events: none;
-            animation: drift 14s ease-in-out infinite alternate;
-            z-index: 0;
+            filter: blur(140px);
+            opacity: 0.12;
+            z-index: 2;
+            background: radial-gradient(circle, var(--accent), transparent 70%);
+            animation: drift 25s infinite alternate ease-in-out;
         }
-        .orb-1 { background: var(--accent);   top: -200px; left: -150px; }
-        .orb-2 { background: var(--accent-2); bottom: -200px; right: -150px; animation-delay: -7s; }
 
         @keyframes drift {
-            from { transform: translate(0,0) scale(1); }
-            to   { transform: translate(40px,30px) scale(1.08); }
+            from { transform: translate(-10%, -10%) scale(1); }
+            to { transform: translate(10%, 10%) scale(1.1); }
         }
 
-        /* ── Split layout ── */
-        .login-wrapper {
+        /* ── Login Shard ── */
+        .login-card {
             position: relative;
-            z-index: 1;
-            display: flex;
-            width: 880px;
-            min-height: 520px;
+            z-index: 10;
+            width: 420px;
             background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            overflow: hidden;
-            box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            padding: 50px 45px;
+            box-shadow: 0 25px 70px -10px rgba(0, 0, 0, 0.7);
+            transition: var(--transition);
         }
 
-        /* Left branding panel */
-        .brand-panel {
-            width: 340px;
-            flex-shrink: 0;
-            background: linear-gradient(145deg, #0d1a36 0%, #111827 100%);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 44px 40px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .brand-panel::before {
-            content: '';
-            position: absolute;
-            width: 320px;
-            height: 320px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            opacity: 0.06;
-            top: -80px;
-            right: -80px;
-            pointer-events: none;
-        }
-
-        .brand-logo {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-        }
+        .header { text-align: center; margin-bottom: 45px; }
 
         .logo-mark {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            display: grid;
-            place-items: center;
-            font-size: 17px;
+            font-family: 'Inter', sans-serif;
             font-weight: 800;
-            color: #fff;
-        }
-
-        .logo-name {
-            font-size: 19px;
-            font-weight: 700;
-            letter-spacing: -0.4px;
-        }
-
-        .brand-body { margin-top: auto; margin-bottom: auto; }
-
-        .brand-tagline {
             font-size: 26px;
-            font-weight: 800;
-            letter-spacing: -0.7px;
-            line-height: 1.25;
-            margin-bottom: 14px;
-        }
-
-        .brand-tagline span {
-            background: linear-gradient(90deg, var(--accent), var(--accent-2));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .brand-sub {
-            font-size: 13px;
-            color: var(--muted);
-            line-height: 1.65;
-        }
-
-        .brand-footer {
-            font-size: 11px;
-            color: var(--muted);
-            opacity: 0.6;
-        }
-
-        /* Right form panel */
-        .form-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 48px 44px;
-        }
-
-        .form-heading {
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            margin-bottom: 6px;
-        }
-
-        .form-sub {
-            font-size: 13px;
-            color: var(--muted);
-            margin-bottom: 32px;
-        }
-
-        .field-group {
-            margin-bottom: 20px;
-        }
-
-        .field-label {
-            display: block;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.9px;
-            text-transform: uppercase;
-            color: var(--muted);
+            letter-spacing: 4px;
+            color: var(--text);
             margin-bottom: 8px;
+            display: block;
         }
+
+        .sys-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 4px;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        .input-group { margin-bottom: 30px; position: relative; }
+
+        .label-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            display: block;
+            letter-spacing: 1.5px;
+            transition: var(--transition);
+        }
+
+        .input-group:focus-within .label-meta { color: var(--accent); }
 
         .input-wrap {
             position: relative;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            transition: var(--transition);
         }
 
-        .input-icon {
+        .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 4px 12px -4px rgba(99, 102, 241, 0.2); }
+
+        .input-wrap i:not(.toggle-pass) {
             position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--muted);
-            font-size: 13px;
-            pointer-events: none;
-        }
-
-        .field-input {
-            width: 100%;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 11px;
-            padding: 13px 14px 13px 40px;
-            font-family: 'Inter', sans-serif;
+            left: 0; top: 12px;
             font-size: 14px;
-            color: var(--text);
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            color: var(--muted);
+            transition: var(--transition);
         }
 
-        .field-input::placeholder { color: var(--muted); }
+        .input-group:focus-within i:not(.toggle-pass) { color: var(--accent); }
 
-        .field-input:focus {
-            border-color: var(--border-focus);
-            box-shadow: 0 0 0 3px rgba(79,142,247,0.1);
-        }
-
-        .btn-signin {
+        input {
             width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            background: transparent;
             border: none;
-            border-radius: 11px;
+            padding: 12px 35px 12px 30px;
+            color: var(--text);
             font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 0; top: 12px;
             font-size: 14px;
-            font-weight: 700;
-            color: #fff;
-            cursor: pointer;
-            margin-top: 8px;
-            transition: opacity 0.2s, transform 0.15s;
-            letter-spacing: 0.2px;
-        }
-
-        .btn-signin:hover { opacity: 0.88; transform: translateY(-1px); }
-        .btn-signin:active { transform: translateY(0); }
-
-        .form-note {
-            text-align: center;
-            margin-top: 24px;
-            font-size: 12px;
             color: var(--muted);
-            line-height: 1.7;
+            cursor: pointer;
+            transition: var(--transition);
         }
+        .toggle-pass:hover { color: var(--text); }
 
-        /* ── Error toast ── */
-        .error-toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: #1e0f14;
-            border: 1px solid rgba(247,95,122,0.3);
-            border-left: 3px solid var(--danger);
-            border-radius: 12px;
-            padding: 14px 18px;
+        .btn-auth {
+            width: 100%;
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+            padding: 18px;
+            font-weight: 800;
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-top: 10px;
             display: flex;
             align-items: center;
-            gap: 12px;
-            font-size: 13px;
-            color: var(--text);
-            z-index: 100;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-            animation: slideIn 0.3s ease;
+            justify-content: center;
+            gap: 10px;
         }
 
-        .error-toast i { color: var(--danger); font-size: 15px; }
+        .btn-auth:hover { background: var(--accent); color: white; box-shadow: 0 0 30px rgba(99, 102, 241, 0.3); }
 
-        .toast-close {
-            margin-left: 12px;
-            background: none;
-            border: none;
+        .spinner {
+            display: none;
+            width: 14px; height: 14px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .btn-auth.loading .spinner { display: block; }
+        .btn-auth.loading span { opacity: 0.7; }
+
+        .footer-note {
+            margin-top: 40px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
             color: var(--muted);
-            cursor: pointer;
-            font-size: 13px;
-            padding: 2px;
-            transition: color 0.2s;
-        }
-        .toast-close:hover { color: var(--text); }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to   { opacity: 1; transform: translateY(0); }
+            letter-spacing: 1px;
+            opacity: 0.6;
         }
 
-        /* ── Responsive ── */
-        @media (max-width: 780px) {
-            .login-wrapper { flex-direction: column; width: 94vw; min-height: unset; border-radius: 18px; }
-            .brand-panel { width: 100%; padding: 32px 28px 28px; border-right: none; border-bottom: 1px solid var(--border); }
-            .brand-body { margin: 18px 0; }
-            .brand-tagline { font-size: 20px; }
-            .brand-footer { display: none; }
-            .form-panel { padding: 32px 28px; }
+        .error-message {
+            background: rgba(247, 95, 122, 0.1);
+            border-left: 3px solid var(--error);
+            color: var(--error);
+            padding: 12px;
+            font-size: 11px;
+            margin-bottom: 25px;
+            text-align: left;
+            animation: slideIn 0.4s ease;
         }
 
-        @media (prefers-reduced-motion: reduce) {
-            .orb { animation: none; }
-            .btn-signin { transition: none; }
-        }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+
     </style>
 </head>
 <body>
 
-<div class="orb orb-1"></div>
-<div class="orb orb-2"></div>
+<!-- Neural Background Canvas -->
+<canvas id="bg-canvas"></canvas>
 
-<div class="login-wrapper">
+<div class="grid-bg"></div>
+<div class="orb"></div>
 
-    <!-- Left: Branding -->
-    <div class="brand-panel">
-        <div class="brand-logo">
-            <div class="logo-mark">E</div>
-            <span class="logo-name">Edukado</span>
-        </div>
-
-        <div class="brand-body">
-            <h2 class="brand-tagline">Your campus,<br><span>one portal.</span></h2>
-            <p class="brand-sub">Attendance, exams, and elections — all in one unified system built for students and faculty.</p>
-        </div>
-
-        <div class="brand-footer">IT 3012 System Integration Project &copy; 2024</div>
+<div class="login-card">
+    <div class="header">
+        <span class="logo-mark">EDUKADO</span>
+        <span class="sys-label">Gateway Protocol</span>
     </div>
 
-    <!-- Right: Form -->
-    <div class="form-panel">
-        <h1 class="form-heading">Welcome back</h1>
-        <p class="form-sub">Sign in to access your campus portal.</p>
-
-        <form action="/login" method="POST">
-            <input type="hidden" name="next" value="{{ next }}">
-            <div class="field-group">
-                <label class="field-label" for="username">Username</label>
-                <div class="input-wrap">
-                    <i class="fa-solid fa-user input-icon"></i>
-                    <input id="username" type="text" name="username" class="field-input" placeholder="e.g. admin" required autocomplete="username">
-                </div>
-            </div>
-
-            <div class="field-group">
-                <label class="field-label" for="password">Password</label>
-                <div class="input-wrap">
-                    <i class="fa-solid fa-lock input-icon"></i>
-                    <input id="password" type="password" name="password" class="field-input" placeholder="••••••••" required autocomplete="current-password">
-                </div>
-            </div>
-
-            <button type="submit" class="btn-signin">Sign In</button>
-        </form>
-
-        <p class="form-note">Authorized personnel only.<br>Contact your administrator if you need access.</p>
+    {% if error %}
+    <div class="error-message">
+        <i class="fa-solid fa-shield-halved"></i> ACCESS DENIED: {{ error }}
     </div>
+    {% endif %}
 
+    <form id="handshakeForm" action="/login" method="POST" onsubmit="handleHandshake(event)">
+        <input type="hidden" name="next" value="{{ next }}">
+        
+        <div class="input-group">
+            <span class="label-meta">01 // USER ID</span>
+            <div class="input-wrap">
+                <i class="fa-solid fa-fingerprint"></i>
+                <input type="text" name="username" placeholder="S26-XXXX" required autocomplete="username">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <span class="label-meta">02 // PASSWORD</span>
+            <div class="input-wrap">
+                <i class="fa-solid fa-shield-keyhole"></i>
+                <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+                <i class="fa-solid fa-eye toggle-pass" id="togglePass" onclick="toggleVisibility()"></i>
+            </div>
+        </div>
+
+        <button type="submit" class="btn-auth" id="submitBtn">
+            <div class="spinner"></div>
+            <span>Login Portal</span>
+        </button>
+    </form>
+
+    <div class="footer-note">
+        SYSTEM INTEGRATION PROJECT
+    </div>
 </div>
 
-<!-- Error toast -->
-{% if error %}
-<div class="error-toast" id="errorToast">
-    <i class="fa-solid fa-circle-exclamation"></i>
-    Invalid username or password. Please try again.
-    <button class="toast-close" onclick="document.getElementById('errorToast').remove()" aria-label="Dismiss">
-        <i class="fa-solid fa-xmark"></i>
-    </button>
-</div>
-{% endif %}
+<script>
+    // ── Neural Network Background Logic ──
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+
+    function init() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        particles = [];
+        for (let i = 0; i < 80; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                size: Math.random() * 2
+            });
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#6366F1';
+        ctx.strokeStyle = '#6366F1';
+
+        for (let i = 0; i < particles.length; i++) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+
+            if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+            if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+
+            for (let j = i + 1; j < particles.length; j++) {
+                let p2 = particles[j];
+                let dist = Math.sqrt((p.x - p2.x)**2 + (p.y - p2.y)**2);
+                if (dist < 150) {
+                    ctx.globalAlpha = 1 - (dist / 150);
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+            }
+        }
+        requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('resize', init);
+    init();
+    draw();
+
+    // ── Form Logic ──
+    function toggleVisibility() {
+        const passInput = document.getElementById('password');
+        const icon = document.getElementById('togglePass');
+        if (passInput.type === 'password') {
+            passInput.type = 'text';
+            icon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            passInput.type = 'password';
+            icon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    }
+
+    function handleHandshake(e) {
+        const btn = document.getElementById('submitBtn');
+        btn.classList.add('loading');
+        btn.querySelector('span').innerText = "Verifying Identity...";
+    }
+</script>
 
 </body>
 </html>

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-passwordDB    = os.getenv("DBPASSWORD")
+passwordDB = os.getenv("DBPASSWORD")
 
 def get_db_connection():
     try:

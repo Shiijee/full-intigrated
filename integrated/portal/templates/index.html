@@ -3,488 +3,382 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edukado | Campus Portal</title>
+    <title>Edukado | Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;600;800&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
         :root {
-            --bg:        #080D1A;
-            --surface:   #0F1829;
-            --surface-2: #162035;
-            --border:    rgba(255,255,255,0.07);
-            --accent:    #4F8EF7;
-            --accent-2:  #7C5CFC;
-            --success:   #22C97A;
-            --danger:    #F75F7A;
-            --text:      #E2E8F0;
-            --muted:     #64748B;
-            --card-radius: 18px;
+            --bg: #040812;
+            --text: #F8FAFC;
+            --muted: #475569;
+            --active-color: #6366F1;
+            --active-opacity: 0.12;
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Inter', sans-serif;
-            background: var(--bg);
+            background-color: var(--bg);
             color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            overflow-x: hidden;
-        }
-
-        /* ── Ambient orb (signature element) ── */
-        .orb {
-            position: fixed;
-            width: 600px;
-            height: 600px;
-            border-radius: 50%;
-            filter: blur(120px);
-            opacity: 0.12;
-            pointer-events: none;
-            animation: drift 14s ease-in-out infinite alternate;
-            z-index: 0;
-        }
-        .orb-1 { background: var(--accent); top: -200px; left: -100px; }
-        .orb-2 { background: var(--accent-2); bottom: -200px; right: -100px; animation-delay: -7s; }
-
-        @keyframes drift {
-            from { transform: translate(0, 0) scale(1); }
-            to   { transform: translate(40px, 30px) scale(1.08); }
-        }
-
-        /* ── Sidebar ── */
-        .sidebar {
-            width: 240px;
-            min-height: 100vh;
-            background: var(--surface);
-            border-right: 1px solid var(--border);
+            height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            padding: 28px 20px;
-            flex-shrink: 0;
+            transition: background 1.5s ease-in-out;
+        }
+
+        .aura {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90vw; height: 90vw;
+            border-radius: 50%;
+            filter: blur(160px);
+            background: radial-gradient(circle, var(--active-color) 0%, transparent 65%);
+            opacity: var(--active-opacity);
+            z-index: 0;
+            pointer-events: none;
+            transition: background 1.5s ease-in-out, opacity 1s ease;
+            animation: auraWake 2s ease-out both;
+        }
+
+        @keyframes auraWake {
+            0% { opacity: 0; }
+            100% { opacity: var(--active-opacity); }
+        }
+
+        header, .footer-meta {
+            animation: chromeIn 1s ease-out both;
+        }
+        .footer-meta { animation-delay: 0.15s; }
+
+        @keyframes chromeIn {
+            0% { opacity: 0; transform: translateY(-6px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 50px 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Standardized Brand Font */
+        .brand-text { 
+            font-family: 'Inter', sans-serif;
+            font-weight: 800; 
+            font-size: 18px; 
+            letter-spacing: 3px; 
+        }
+
+        .status-pill { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+        .status-pill span { color: var(--active-color); transition: color 0.5s ease; }
+
+        .hub-main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 5;
+        }
+
+        .prism-nexus {
+            position: relative;
+            width: 440px;
+            height: 440px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: float 8s ease-in-out infinite;
+            animation-delay: 1.6s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        /* Faint ghost outline of the assembled prism, fades out once the
+           pieces have locked into place — gives the eye a target to converge on. */
+        .prism-nexus::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            opacity: 0;
+            transform: scale(0.6);
+            animation: ghostPulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+            pointer-events: none;
+        }
+
+        @keyframes ghostPulse {
+            0%   { opacity: 0; transform: scale(0.4); }
+            45%  { opacity: 0.9; transform: scale(1.08); }
+            70%  { opacity: 0.4; transform: scale(0.98); }
+            100% { opacity: 0; transform: scale(1); }
+        }
+
+        .wedge {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: var(--text);
+            animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+            animation-duration: 1.5s;
+            animation-fill-mode: backwards;
+        }
+
+        .wedge-top {
+            animation-name: assembleTop;
+            animation-delay: 0.1s;
+        }
+        .wedge-left {
+            animation-name: assembleLeft;
+            animation-delay: 0.28s;
+        }
+        .wedge-right {
+            animation-name: assembleRight;
+            animation-delay: 0.46s;
+        }
+
+        @keyframes assembleTop {
+            0% {
+                opacity: 0;
+                transform: translateY(-260px) translateX(-40px) rotate(-25deg) scale(0.75);
+                filter: blur(6px);
+            }
+            65% {
+                opacity: 1;
+                filter: blur(0);
+            }
+            80% {
+                transform: translateY(6px) translateX(0) rotate(1deg) scale(1.015);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) translateX(0) rotate(0) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        @keyframes assembleLeft {
+            0% {
+                opacity: 0;
+                transform: translateX(-300px) translateY(180px) rotate(-30deg) scale(0.75);
+                filter: blur(6px);
+            }
+            65% {
+                opacity: 1;
+                filter: blur(0);
+            }
+            80% {
+                transform: translateX(5px) translateY(-4px) rotate(-1deg) scale(1.015);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) translateY(0) rotate(0) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        @keyframes assembleRight {
+            0% {
+                opacity: 0;
+                transform: translateX(300px) translateY(180px) rotate(30deg) scale(0.75);
+                filter: blur(6px);
+            }
+            65% {
+                opacity: 1;
+                filter: blur(0);
+            }
+            80% {
+                transform: translateX(-5px) translateY(-4px) rotate(1deg) scale(1.015);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) translateY(0) rotate(0) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        /* Brief unify flash right as the three wedges lock together */
+        .prism-nexus::after {
+            animation: coreIgnite 1.8s ease-out both;
+        }
+
+        @keyframes coreIgnite {
+            0%, 55% { opacity: 0; box-shadow: 0 0 0 0 transparent; }
+            70% { opacity: 1; box-shadow: 0 0 25px 6px white; }
+            100% { opacity: 0.5; box-shadow: 0 0 15px 2px white; }
+        }
+
+        .wedge.locked {
+            filter: grayscale(1);
+            opacity: 0.15;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .wedge-top {
+            clip-path: polygon(50% 50%, 0% 20%, 50% 0%, 100% 20%);
+            padding-bottom: 140px;
+        }
+        .wedge-left {
+            clip-path: polygon(50% 50%, 0% 20%, 0% 80%, 50% 100%);
+            padding-right: 140px;
+        }
+        .wedge-right {
+            clip-path: polygon(50% 50%, 100% 20%, 100% 80%, 50% 100%);
+            padding-left: 140px;
+        }
+
+        .wedge i {
+            font-size: 34px;
+            margin-bottom: 12px;
+            color: var(--muted);
+            transition: all 0.5s ease;
+        }
+
+        .wedge span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            opacity: 0.3;
+            transition: opacity 0.5s ease;
+        }
+
+        .wedge:not(.locked):hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+            z-index: 10;
+        }
+
+        .wedge-top:not(.locked):hover   { transform: translateY(-15px); color: #10B981; }
+        .wedge-left:not(.locked):hover  { transform: translate(-15px, 10px); color: #EF4444; }
+        .wedge-right:not(.locked):hover { transform: translate(15px, 10px); color: #F59E0B; }
+
+        .wedge:not(.locked):hover i { transform: scale(1.1); color: inherit; }
+        .wedge:not(.locked):hover span { opacity: 1; }
+
+        .prism-nexus::after {
+            content: '';
+            position: absolute;
+            width: 2px; height: 2px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 0 15px 2px white;
+            opacity: 0.5;
+        }
+
+        .footer-meta {
+            padding: 50px 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             position: relative;
             z-index: 10;
         }
 
-        .sidebar-logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 36px;
-            padding-left: 4px;
-        }
+        .meta-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
 
-        .logo-mark {
-            width: 34px;
-            height: 34px;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            border-radius: 9px;
-            display: grid;
-            place-items: center;
-            font-size: 16px;
+        .btn-terminate {
+            color: #F75F7A;
+            text-decoration: none;
+            font-size: 11px;
             font-weight: 800;
-            color: #fff;
-            letter-spacing: -0.5px;
+            letter-spacing: 1px;
+            padding: 10px 24px;
+            border: 1px solid rgba(247, 95, 122, 0.2);
+            border-radius: 2px;
+            transition: all 0.3s ease;
         }
+        .btn-terminate:hover { background: #F75F7A; color: white; border-color: #F75F7A; }
 
-        .logo-name {
-            font-size: 17px;
-            font-weight: 700;
-            letter-spacing: -0.3px;
-            color: var(--text);
-        }
-
-        .sidebar-label {
-            font-size: 10px;
-            font-weight: 600;
-            letter-spacing: 1.2px;
-            text-transform: uppercase;
-            color: var(--muted);
-            padding: 0 8px;
-            margin-bottom: 10px;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            color: var(--muted);
-            font-size: 14px;
-            font-weight: 500;
-            text-decoration: none;
-            transition: background 0.2s, color 0.2s;
-            margin-bottom: 3px;
-            cursor: pointer;
-        }
-        .nav-item:hover { background: var(--surface-2); color: var(--text); }
-        .nav-item.active { background: rgba(79,142,247,0.12); color: var(--accent); }
-        .nav-item i { width: 17px; text-align: center; font-size: 13px; }
-
-        .sidebar-spacer { flex: 1; }
-
-        .sidebar-user {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            padding: 12px;
-            border-radius: 12px;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-        }
-
-        .avatar {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            display: grid;
-            place-items: center;
-            font-size: 13px;
-            font-weight: 700;
-            color: #fff;
-            flex-shrink: 0;
-        }
-
-        .user-info { flex: 1; min-width: 0; }
-        .user-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .user-role { font-size: 11px; color: var(--muted); margin-top: 1px; }
-
-        .logout-btn {
-            background: none;
-            border: none;
-            color: var(--muted);
-            cursor: pointer;
-            font-size: 13px;
-            transition: color 0.2s;
-            padding: 4px;
-        }
-        .logout-btn:hover { color: var(--danger); }
-
-        /* ── Main content ── */
-        main {
-            flex: 1;
-            padding: 36px 40px;
-            position: relative;
-            z-index: 1;
-            overflow-y: auto;
-        }
-
-        .page-header {
-            margin-bottom: 32px;
-        }
-
-        .greeting {
-            font-size: 26px;
-            font-weight: 800;
-            letter-spacing: -0.6px;
-            line-height: 1.2;
-            margin-bottom: 6px;
-        }
-
-        .greeting span {
-            background: linear-gradient(90deg, var(--accent), var(--accent-2));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .subtitle {
-            font-size: 14px;
-            color: var(--muted);
-            font-weight: 400;
-        }
-
-        /* ── Stats strip ── */
-        .stats-strip {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 32px;
-        }
-
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            padding: 20px 22px;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .stat-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 12px;
-            display: grid;
-            place-items: center;
-            font-size: 17px;
-            flex-shrink: 0;
-        }
-
-        .stat-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
-        .stat-value { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-top: 2px; }
-
-        /* ── Section title ── */
-        .section-title {
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.8px;
-            text-transform: uppercase;
-            color: var(--muted);
-            margin-bottom: 16px;
-        }
-
-        /* ── Module cards ── */
-        .modules-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-        }
-
-        .module-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            padding: 28px 26px;
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-            transition: border-color 0.25s, transform 0.25s;
-            position: relative;
-            overflow: hidden;
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .module-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            opacity: 0;
-            transition: opacity 0.25s;
-        }
-
-        .module-card:hover {
-            border-color: rgba(255,255,255,0.15);
-            transform: translateY(-4px);
-        }
-
-        .module-card:hover::before { opacity: 1; }
-
-        .module-card.green::before  { background: linear-gradient(90deg, var(--success), #0ea579); }
-        .module-card.blue::before   { background: linear-gradient(90deg, var(--accent), #3b6fd4); }
-        .module-card.red::before    { background: linear-gradient(90deg, var(--danger), #c4415a); }
-
-        .module-icon-wrap {
-            width: 52px;
-            height: 52px;
-            border-radius: 14px;
-            display: grid;
-            place-items: center;
-            font-size: 22px;
-            margin-bottom: 20px;
-        }
-
-        .module-card.green .module-icon-wrap { background: rgba(34,201,122,0.12); color: var(--success); }
-        .module-card.blue  .module-icon-wrap { background: rgba(79,142,247,0.12); color: var(--accent); }
-        .module-card.red   .module-icon-wrap { background: rgba(247,95,122,0.12); color: var(--danger); }
-
-        .module-name {
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: -0.2px;
-            margin-bottom: 8px;
-        }
-
-        .module-desc {
-            font-size: 13px;
-            color: var(--muted);
-            line-height: 1.6;
-            flex: 1;
-            margin-bottom: 24px;
-        }
-
-        .module-cta {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            font-size: 13px;
-            font-weight: 600;
-            padding: 9px 18px;
-            border-radius: 9px;
-            border: none;
-            cursor: pointer;
-            text-decoration: none;
-            transition: opacity 0.2s, transform 0.15s;
-            width: fit-content;
-        }
-
-        .module-cta:hover { opacity: 0.85; transform: translateX(2px); }
-
-        .module-card.green .module-cta { background: rgba(34,201,122,0.15); color: var(--success); }
-        .module-card.blue  .module-cta { background: rgba(79,142,247,0.15); color: var(--accent); }
-        .module-card.red   .module-cta { background: rgba(247,95,122,0.15); color: var(--danger); }
-
-        /* ── Footer ── */
-        .page-footer {
-            margin-top: 48px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border);
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        /* ── Responsive ── */
-        @media (max-width: 960px) {
-            .modules-grid { grid-template-columns: 1fr 1fr; }
-            .stats-strip  { grid-template-columns: 1fr 1fr; }
-        }
-
-        @media (max-width: 720px) {
-            .sidebar { display: none; }
-            main { padding: 24px 20px; }
-            .modules-grid { grid-template-columns: 1fr; }
-            .stats-strip  { grid-template-columns: 1fr; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .orb { animation: none; }
-            .module-card, .module-cta { transition: none; }
-        }
     </style>
 </head>
 <body>
 
-<!-- Ambient orbs -->
-<div class="orb orb-1"></div>
-<div class="orb orb-2"></div>
+<div class="aura" id="aura"></div>
 
-<!-- ── Sidebar ── -->
-<aside class="sidebar">
-    <div class="sidebar-logo">
-        <div class="logo-mark">E</div>
-        <span class="logo-name">Edukado</span>
-    </div>
+<header>
+    <div class="brand-text">EDUKADO</div>
+    <div style="font-size: 12px; font-weight: 500; opacity: 0.6; font-family: 'Inter', sans-serif;">Active Session: {{ user.full_name }} as {{ user.role }}</div>
+</header>
 
-    <div class="sidebar-label">Modules</div>
+<main class="hub-main">
+    <div class="prism-nexus">
+        {% set can_access_attendance = user.role != 'superadmin' %}
+        <a class="wedge wedge-top {{ 'locked' if not can_access_attendance }}"
+           {% if can_access_attendance %}
+           href="https://127.0.0.1:5002" 
+           onmouseover="update('#10B981', 'Attendeez')" 
+           onmouseout="reset()"
+           {% endif %}>
+            <i class="fa-solid fa-clipboard-user"></i>
+            <span>Monitoring</span>
+        </a>
 
-    <a href="#" class="nav-item active">
-        <i class="fa-solid fa-grid-2"></i> Dashboard
-    </a>
-    <a href="https://127.0.0.1:5002" class="nav-item">
-        <i class="fa-solid fa-clipboard-user"></i> Attendance
-    </a>
-    <a href="http://127.0.0.1:5003" class="nav-item">
-        <i class="fa-solid fa-file-signature"></i> Online Exam
-    </a>
-    <a href="http://127.0.0.1:5001" class="nav-item">
-        <i class="fa-solid fa-check-to-slot"></i> E-Voting
-    </a>
+        <a href="http://127.0.0.1:5003" class="wedge wedge-left"
+           onmouseover="update('#EF4444', 'TestPoint')" 
+           onmouseout="reset()">
+            <i class="fa-solid fa-file-signature"></i>
+            <span>Examination</span>
+        </a>
 
-    <div class="sidebar-spacer"></div>
-
-    <div class="sidebar-user">
-        <div class="avatar">{{ user.initials }}</div>
-        <div class="user-info">
-            <div class="user-name">{{ user.full_name }}</div>
-            <div class="user-role">Student</div>
-        </div>
-        <a href="/logout" class="logout-btn" title="Log out">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        {% set can_access_voting = user.role != 'teacher' %}
+        <a class="wedge wedge-right {{ 'locked' if not can_access_voting }}"
+           {% if can_access_voting %}
+           href="http://127.0.0.1:5001" 
+           onmouseover="update('#F59E0B', 'Voxify')" 
+           onmouseout="reset()"
+           {% endif %}>
+            <i class="fa-solid fa-check-to-slot"></i>
+            <span>E-Voting</span>
         </a>
     </div>
-</aside>
-
-<!-- ── Main ── -->
-<main>
-    <div class="page-header">
-        <h1 class="greeting">Good day, <span>{{ user.full_name }}</span></h1>
-        <p class="subtitle">Here's what's available in your campus portal today.</p>
-    </div>
-
-    <!-- Stats strip -->
-    <div class="stats-strip">
-        <div class="stat-card">
-            <div class="stat-icon" style="background:rgba(34,201,122,0.12); color:var(--success);">
-                <i class="fa-solid fa-clipboard-check"></i>
-            </div>
-            <div>
-                <div class="stat-label">Attendance</div>
-                <div class="stat-value" style="color:var(--success)">Active</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background:rgba(79,142,247,0.12); color:var(--accent);">
-                <i class="fa-solid fa-pen-to-square"></i>
-            </div>
-            <div>
-                <div class="stat-label">Exams</div>
-                <div class="stat-value" style="color:var(--accent)">Active</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background:rgba(247,95,122,0.12); color:var(--danger);">
-                <i class="fa-solid fa-ballot-check"></i>
-            </div>
-            <div>
-                <div class="stat-label">E-Voting</div>
-                <div class="stat-value" style="color:var(--danger)">Active</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modules -->
-    <div class="section-title">System Modules</div>
-
-    <div class="modules-grid">
-
-        <!-- Attendance -->
-        <div class="module-card green">
-            <div class="module-icon-wrap">
-                <i class="fa-solid fa-clipboard-user"></i>
-            </div>
-            <div class="module-name">Attendance Monitoring</div>
-            <p class="module-desc">Track and review daily student presence, tardiness records, and real-time attendance logs across all classes.</p>
-            <a href="https://127.0.0.1:5002" class="module-cta">
-                Open Module <i class="fa-solid fa-arrow-right fa-xs"></i>
-            </a>
-        </div>
-
-        <!-- Online Exam -->
-        <div class="module-card blue">
-            <div class="module-icon-wrap">
-                <i class="fa-solid fa-file-signature"></i>
-            </div>
-            <div class="module-name">Online Examination</div>
-            <p class="module-desc">Take scheduled exams, review results, and access automated grading — all within a secure environment.</p>
-            <a href="http://127.0.0.1:5003" class="module-cta">
-                Open Module <i class="fa-solid fa-arrow-right fa-xs"></i>
-            </a>
-        </div>
-
-        <!-- E-Voting -->
-        <div class="module-card red">
-            <div class="module-icon-wrap">
-                <i class="fa-solid fa-check-to-slot"></i>
-            </div>
-            <div class="module-name">E-Voting System</div>
-            <p class="module-desc">Cast your vote securely for student council elections and view live results once the polls close.</p>
-            <a href="http://127.0.0.1:5001" class="module-cta">
-                Open Module <i class="fa-solid fa-arrow-right fa-xs"></i>
-            </a>
-        </div>
-
-    </div>
-
-    <footer class="page-footer">
-        &copy; 2024 IT 3012 System Integration Project &mdash; Edukado Campus Portal
-    </footer>
 </main>
+
+<footer class="footer-meta">
+    <div class="meta-tag">Integrated Ecosystem Core</div>
+    <div class="status-pill"><span id="status"></span></div>
+    <a href="/logout" class="btn-terminate">LOGOUT</a>
+</footer>
+
+<script>
+    const aura = document.getElementById('aura');
+    const status = document.getElementById('status');
+
+    function update(color, text) {
+        document.documentElement.style.setProperty('--active-color', color);
+        document.documentElement.style.setProperty('--active-opacity', '0.22');
+        status.innerText = text;
+    }
+
+    function reset() {
+        document.documentElement.style.setProperty('--active-color', '#6366F1');
+        document.documentElement.style.setProperty('--active-opacity', '0.12');
+        status.innerText = "";
+    }
+</script>
 
 </body>
 </html>
