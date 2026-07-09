@@ -205,15 +205,15 @@
                     <div class="modal-header border-0 pb-0 pt-4 px-4">
                         <h5 class="modal-title font-weight-bold"
                             style="font-family: var(--tp-serif); font-size: 1.5rem;"><i
-                                class="fas fa-sign-out-alt mr-2 text-danger"></i> End Session?</h5>
+                                class="fas fa-sign-out-alt mr-2 text-danger"></i> Go Back to the Portal?</h5>
                         <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
                     </div>
-                    <div class="modal-body text-gray-600 px-4">Are you sure you want to log out of the command center?
+                    <div class="modal-body text-gray-600 px-4">Are you sure you want to go back?
                     </div>
                     <div class="modal-footer border-0 pt-3 pb-4 px-4">
                         <button class="btn btn-light px-4" type="button" data-dismiss="modal">Cancel</button>
                         <form action="{{ url_for('auth.logout') }}" method="POST" class="d-inline">
-                            <button type="submit" class="btn btn-danger px-4">Log me out</button>
+                            <button type="submit" class="btn btn-danger px-4">Go Back</button>
                         </form>
                     </div>
                 </div>
