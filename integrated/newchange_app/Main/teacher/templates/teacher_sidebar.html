@@ -16,15 +16,15 @@
                         <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
                             <i class="fas fa-key"></i> Change Password
                         </a>
-                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                        <a href="http://127.0.0.1:5000" class="dropdown-item go-back-link" style="color: var(--danger);">
+                            <i class="fas fa-arrow-left"></i> Go Back
                         </a>
                     </div>
                 </div>
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
-                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span></a>
+                <a href="http://127.0.0.1:5000" class="nav-item sidebar-mobile-logout go-back-link" onclick="event.preventDefault(); showLogoutModal(event);"><i class="fas fa-arrow-left"></i><span class="nav-item-text"> Go Back</span></a>
                 <a href="{{ url_for('teacher.profile') }}" class="nav-item profile-nav-item {{ 'active' if request.endpoint == 'teacher.profile' else '' }}" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
                 <a href="{{ url_for('teacher.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'teacher.dashboard' else '' }}" data-tooltip="Teacher Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Teacher Dashboard</span></a>
                 <a href="{{ url_for('teacher.manage_students') }}" class="nav-item {{ 'active' if request.endpoint == 'teacher.manage_students' else '' }}" data-tooltip="Manage Students"><i class="fas fa-users"></i><span class="nav-item-text"> Manage Students</span></a>
