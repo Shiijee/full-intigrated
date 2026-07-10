@@ -148,7 +148,62 @@ def dashboard():
                            pending_drops=pending_drops,
                            total_classes=total_classes,
                            recent_logs=recent_logs)
-    
+
+
+@admin.route('/profile')
+def profile():
+    """
+    Admin's own profile page — mirrors teacher.profile()/user.profile()'s
+    pattern. admin_profile.html already existed and links here via
+    url_for('admin.profile'), but this route was never added, causing a
+    BuildError on every page that has the sidebar "Admin Profile" link
+    (which is all of them).
+    """
+    admin_id = session['user_id']  # this is the username string (e.g. 'A26-0002'),
+                                    # not the numeric admins.admin_id primary key
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM admins WHERE username = %s", (admin_id,))
+    admin_data = cursor.fetchone()
+
+    if admin_data is None:
+        # Same class of gap as the teacher/student sync issue — this admin's
+        # Portal/TestPoint account hasn't landed in Attendance's `admins`
+        # table yet (or the sync failed and hasn't been retried).
+        cursor.close()
+        conn.close()
+        flash("Your profile hasn't synced to Attendance yet. Please check back "
+              "shortly, or ask a superadmin to click 'Retry Failed Syncs'.", "warning")
+        return redirect(url_for('admin.dashboard'))
+
+    # Recent actions this admin performed (shown in the "Recent Activity" panel)
+    cursor.execute("""
+        SELECT action, table_name, details, timestamp
+        FROM System_Audit_Log
+        WHERE performed_by_id = %s
+        ORDER BY timestamp DESC
+        LIMIT 10
+    """, (admin_id,))
+    activity = cursor.fetchall()
+
+    # Recent login/logout history (shown in the "Login History" panel)
+    cursor.execute("""
+        SELECT login_time, logout_time
+        FROM login_logs
+        WHERE user_id = %s
+        ORDER BY login_time DESC
+        LIMIT 10
+    """, (admin_id,))
+    logins = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return render_template('admin_profile.html',
+                           admin=admin_data,
+                           activity=activity,
+                           logins=logins)
+
 
 @admin.route('/view_report/<int:report_id>')
 def view_report(report_id):
