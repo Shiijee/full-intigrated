@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, render_template, request, session, redirect, url_for, flash, current_app
+﻿from flask import Blueprint, render_template, request, session, redirect, url_for, flash, current_app, jsonify
 from datetime import datetime
 from Voxify.Authentication.routes import admin_required
 from Voxify.utils.election_status import sync_election_statuses
@@ -14,6 +14,7 @@ admin_bp = Blueprint('admin', __name__,
                      static_url_path='/admin/static')
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'candidates')
+ANNOUNCEMENT_UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'announcements')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 def allowed_file(filename):
@@ -897,6 +898,317 @@ def view_candidates():
     conn.close()
     return render_template('candidates.html', candidates=candidates, elections=elections, selected_election_id=election_id)
 
+@admin_bp.route("/announcements")
+@admin_required
+def view_announcements():
+    college_id = get_admin_college_id()
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor(dictionary=True)
+    if college_id is not None:
+        cursor.execute(
+            "SELECT * FROM announcements WHERE college_id=%s ORDER BY created_at DESC",
+            (college_id,)
+        )
+    else:
+        cursor.execute("SELECT * FROM announcements ORDER BY created_at DESC")
+    announcements = cursor.fetchall()
+
+    if college_id is not None:
+        cursor.execute(
+            "SELECT id, title FROM elections WHERE status='completed' AND college_id=%s ORDER BY created_at DESC",
+            (college_id,)
+        )
+    else:
+        cursor.execute(
+            "SELECT id, title FROM elections WHERE status='completed' ORDER BY created_at DESC"
+        )
+    completed_elections = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return render_template('announcements.html', announcements=announcements, completed_elections=completed_elections)
+
+@admin_bp.route("/announcements/create", methods=["POST"])
+@admin_required
+def create_announcement():
+    college_id = get_admin_college_id()
+    title = request.form.get('title', '').strip()
+    body = request.form.get('body', '').strip()
+    ann_type = request.form.get('type', 'general')
+    status = request.form.get('status', 'draft')
+    image_url = None
+
+    if not title or not body:
+        flash('Title and message are required for announcements.', 'error')
+        return redirect(url_for('admin.view_announcements'))
+
+    if 'image' in request.files and request.files['image'].filename:
+        image_url = save_announcement_image(request.files['image'])
+
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO announcements (title, body, type, status, image_url, college_id, created_by)
+           VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+        (title, body, ann_type, status, image_url, college_id, session['user_id'])
+    )
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO audit_logs (user_id, action, details, target_type, target_id) VALUES (%s, %s, %s, %s, %s)",
+        (session['user_id'], 'CREATE_ANNOUNCEMENT', f"Created announcement: {title}", 'Announcement', cursor.lastrowid)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Announcement saved successfully!', 'success')
+    return redirect(url_for('admin.view_announcements'))
+
+@admin_bp.route("/announcements/<int:ann_id>/edit", methods=["POST"])
+@admin_required
+def edit_announcement(ann_id):
+    college_id = get_admin_college_id()
+    title = request.form.get('title', '').strip()
+    body = request.form.get('body', '').strip()
+    ann_type = request.form.get('type', 'general')
+    status = request.form.get('status', 'draft')
+
+    if not title or not body:
+        flash('Title and message are required for announcements.', 'error')
+        return redirect(url_for('admin.view_announcements'))
+
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor(dictionary=True)
+    if college_id is not None:
+        cursor.execute("SELECT image_url FROM announcements WHERE id=%s AND college_id=%s", (ann_id, college_id))
+    else:
+        cursor.execute("SELECT image_url FROM announcements WHERE id=%s", (ann_id,))
+    ann = cursor.fetchone()
+    if not ann:
+        cursor.close()
+        conn.close()
+        flash('Announcement not found.', 'error')
+        return redirect(url_for('admin.view_announcements'))
+
+    image_url = ann.get('image_url')
+    if 'image' in request.files and request.files['image'].filename:
+        new_image_url = save_announcement_image(request.files['image'])
+        if new_image_url:
+            delete_announcement_image(image_url)
+            image_url = new_image_url
+
+    if college_id is not None:
+        cursor.execute(
+            """UPDATE announcements SET title=%s, body=%s, type=%s, status=%s, image_url=%s, updated_at=CURRENT_TIMESTAMP
+               WHERE id=%s AND college_id=%s""",
+            (title, body, ann_type, status, image_url, ann_id, college_id)
+        )
+    else:
+        cursor.execute(
+            """UPDATE announcements SET title=%s, body=%s, type=%s, status=%s, image_url=%s, updated_at=CURRENT_TIMESTAMP
+               WHERE id=%s""",
+            (title, body, ann_type, status, image_url, ann_id)
+        )
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO audit_logs (user_id, action, details, target_type, target_id) VALUES (%s, %s, %s, %s, %s)",
+        (session['user_id'], 'EDIT_ANNOUNCEMENT', f"Updated announcement: {title}", 'Announcement', ann_id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Announcement updated successfully!', 'success')
+    return redirect(url_for('admin.view_announcements'))
+
+@admin_bp.route("/announcements/<int:ann_id>/publish")
+@admin_required
+def publish_announcement(ann_id):
+    college_id = get_admin_college_id()
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor()
+    if college_id is not None:
+        cursor.execute("UPDATE announcements SET status='published' WHERE id=%s AND college_id=%s", (ann_id, college_id))
+    else:
+        cursor.execute("UPDATE announcements SET status='published' WHERE id=%s", (ann_id,))
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO audit_logs (user_id, action, details, target_type, target_id) VALUES (%s, %s, %s, %s, %s)",
+        (session['user_id'], 'PUBLISH_ANNOUNCEMENT', f"Published announcement ID: {ann_id}", 'Announcement', ann_id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Announcement published.', 'success')
+    return redirect(url_for('admin.view_announcements'))
+
+@admin_bp.route("/announcements/<int:ann_id>/unpublish")
+@admin_required
+def unpublish_announcement(ann_id):
+    college_id = get_admin_college_id()
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor()
+    if college_id is not None:
+        cursor.execute("UPDATE announcements SET status='draft' WHERE id=%s AND college_id=%s", (ann_id, college_id))
+    else:
+        cursor.execute("UPDATE announcements SET status='draft' WHERE id=%s", (ann_id,))
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO audit_logs (user_id, action, details, target_type, target_id) VALUES (%s, %s, %s, %s, %s)",
+        (session['user_id'], 'UNPUBLISH_ANNOUNCEMENT', f"Unpublished announcement ID: {ann_id}", 'Announcement', ann_id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Announcement moved back to draft.', 'success')
+    return redirect(url_for('admin.view_announcements'))
+
+@admin_bp.route("/announcements/<int:ann_id>/delete")
+@admin_required
+def delete_announcement(ann_id):
+    college_id = get_admin_college_id()
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor(dictionary=True)
+    if college_id is not None:
+        cursor.execute("SELECT image_url FROM announcements WHERE id=%s AND college_id=%s", (ann_id, college_id))
+    else:
+        cursor.execute("SELECT image_url FROM announcements WHERE id=%s", (ann_id,))
+    ann = cursor.fetchone()
+    if ann and ann.get('image_url'):
+        delete_announcement_image(ann['image_url'])
+
+    if college_id is not None:
+        cursor.execute("DELETE FROM announcements WHERE id=%s AND college_id=%s", (ann_id, college_id))
+    else:
+        cursor.execute("DELETE FROM announcements WHERE id=%s", (ann_id,))
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO audit_logs (user_id, action, details, target_type, target_id) VALUES (%s, %s, %s, %s, %s)",
+        (session['user_id'], 'DELETE_ANNOUNCEMENT', f"Deleted announcement ID: {ann_id}", 'Announcement', ann_id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Announcement deleted.', 'success')
+    return redirect(url_for('admin.view_announcements'))
+
+@admin_bp.route("/announcements/winner-preview")
+@admin_required
+def announcements_winner_preview():
+    election_id = request.args.get('election_id', type=int)
+    if not election_id:
+        return jsonify({'error': 'Election ID is required.'}), 400
+
+    college_id = get_admin_college_id()
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor(dictionary=True)
+    if college_id is not None:
+        cursor.execute("SELECT id, title FROM elections WHERE id=%s AND college_id=%s AND status='completed'", (election_id, college_id))
+    else:
+        cursor.execute("SELECT id, title FROM elections WHERE id=%s AND status='completed'", (election_id,))
+    election = cursor.fetchone()
+    if not election:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': 'Completed election not found.'}), 404
+
+    cursor.execute("""
+        SELECT p.title AS position_title,
+               c.firstname, c.middlename, c.surname,
+               COUNT(v.id) AS vote_count
+        FROM positions p
+        LEFT JOIN candidates c ON c.position_id = p.id
+        LEFT JOIN votes v ON v.candidate_id = c.id AND v.election_id=%s
+        WHERE p.election_id=%s
+        GROUP BY p.id, c.id
+        ORDER BY p.display_order, vote_count DESC
+    """, (election_id, election_id))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    winners = {}
+    for row in rows:
+        position = row['position_title']
+        if position not in winners:
+            winners[position] = {
+                'fullname': ' '.join(filter(None, [row['firstname'], row['middlename'], row['surname']])).strip() or 'No winner yet',
+                'votes': row['vote_count'] or 0
+            }
+
+    if not winners:
+        return jsonify({'error': 'No winners could be determined for that election.'}), 404
+
+    lines = [f"{position}: {data['fullname']} ({data['votes']} votes)" for position, data in winners.items()]
+    title = f"{election['title']} Winners"
+    body = "\n".join(lines)
+    return jsonify({'title': title, 'body': body})
+
+@admin_bp.route("/announcements/winner-create", methods=["POST"])
+@admin_required
+def announcements_winner_create():
+    payload = request.get_json(silent=True) or {}
+    election_id = payload.get('election_id')
+    if not election_id:
+        return jsonify({'error': 'Election ID is required.'}), 400
+
+    college_id = get_admin_college_id()
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor(dictionary=True)
+    if college_id is not None:
+        cursor.execute("SELECT id, title FROM elections WHERE id=%s AND college_id=%s AND status='completed'", (election_id, college_id))
+    else:
+        cursor.execute("SELECT id, title FROM elections WHERE id=%s AND status='completed'", (election_id,))
+    election = cursor.fetchone()
+    if not election:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': 'Completed election not found.'}), 404
+
+    cursor.execute("""
+        SELECT p.title AS position_title,
+               c.firstname, c.middlename, c.surname,
+               COUNT(v.id) AS vote_count
+        FROM positions p
+        LEFT JOIN candidates c ON c.position_id = p.id
+        LEFT JOIN votes v ON v.candidate_id = c.id AND v.election_id=%s
+        WHERE p.election_id=%s
+        GROUP BY p.id, c.id
+        ORDER BY p.display_order, vote_count DESC
+    """, (election_id, election_id))
+    rows = cursor.fetchall()
+
+    winners = {}
+    for row in rows:
+        position = row['position_title']
+        if position not in winners:
+            winners[position] = {
+                'fullname': ' '.join(filter(None, [row['firstname'], row['middlename'], row['surname']])).strip() or 'No votes cast',
+                'votes': row['vote_count'] or 0
+            }
+
+    if not winners:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': 'No winners could be determined for that election.'}), 404
+
+    lines = [f"{position}: {data['fullname']} ({data['votes']} votes)" for position, data in winners.items()]
+    title = f"{election['title']} Winner Announcement"
+    body = "\n".join(lines)
+
+    cursor.execute(
+        "INSERT INTO announcements (title, body, type, status, college_id, created_by) VALUES (%s, %s, 'winner', 'published', %s, %s)",
+        (title, body, college_id, session['user_id'])
+    )
+    conn.commit()
+    ann_id = cursor.lastrowid
+    cursor.execute(
+        "INSERT INTO audit_logs (user_id, action, details, target_type, target_id) VALUES (%s, %s, %s, %s, %s)",
+        (session['user_id'], 'CREATE_WINNER_ANNOUNCEMENT', f"Created winner announcement for election ID: {election_id}", 'Announcement', ann_id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'success': True})
+
 @admin_bp.route("/candidates/new", methods=["GET", "POST"])
 @admin_required
 def create_candidate():
@@ -1135,9 +1447,10 @@ def view_voters():
     voters = cursor.fetchall()
     cursor.close()
     conn.close()
-    student_id_prefix = f"241-{college_id}-"
+    from datetime import datetime
     create_voter_restore = session.pop("create_voter_restore", None)
-    return render_template('voters.html', voters=voters, student_id_prefix=student_id_prefix,
+    return render_template('voters.html', voters=voters,
+                           current_year_suffix=datetime.now().strftime("%y"),
                            create_voter_restore=create_voter_restore,
                            college_id=college_id)
 
@@ -1150,9 +1463,9 @@ def create_voter():
     surname     = normalize_name(request.form["surname"])
     email       = request.form["email"]
     password    = request.form["password"]
-    seq         = request.form.get("student_id_seq", "").strip()
 
     from werkzeug.security import generate_password_hash
+    from datetime import datetime
 
     def save_form_and_redirect(msg):
         """Flash error, stash form values in session, redirect back."""
@@ -1162,7 +1475,6 @@ def create_voter():
             "middlename": middlename,
             "surname": surname,
             "email": email,
-            "student_id_seq": seq,
         }
         return redirect(url_for('admin.view_voters'))
 
@@ -1173,19 +1485,32 @@ def create_voter():
     middlename = format_name(middlename)
     surname = format_name(surname)
 
-    if not seq.isdigit():
-        return save_form_and_redirect("Student ID sequence must be a number (e.g. 1, 2, 3.)")
-
-    student_id = f"241-{college_id}-{seq.zfill(4)}"
-
     conn = current_app.config["get_db_connection"]()
     cursor = conn.cursor(dictionary=True)
     try:
-                                        
+        # Auto-generate the ID here instead of taking it from the form —
+        # matches the same 'S26-xxxx' convention Portal/TestPoint use, so
+        # SSO's _resolve_local_user_id() can actually match this account
+        # later instead of getting Voxify's old, incompatible '241-x-xxxx'
+        # scheme (which has no Portal counterpart and can never SSO-match).
+        year_suffix = datetime.now().strftime("%y")
+        like_pattern = f"S{year_suffix}-%"
+        cursor.execute(
+            "SELECT student_id FROM users WHERE student_id LIKE %s ORDER BY student_id DESC LIMIT 1",
+            (like_pattern,)
+        )
+        last_row = cursor.fetchone()
+        if last_row:
+            last_id = last_row['student_id'] if isinstance(last_row, dict) else last_row[0]
+            new_num = int(last_id.split('-')[1]) + 1
+        else:
+            new_num = 1
+        student_id = f"S{year_suffix}-{str(new_num).zfill(4)}"
+
         cursor.execute("SELECT id FROM users WHERE student_id=%s LIMIT 1", (student_id,))
         if cursor.fetchone():
             cursor.close(); conn.close()
-            return save_form_and_redirect(f"Student ID {student_id} already exists. Please use a different number.")
+            return save_form_and_redirect(f"Generated ID {student_id} collided unexpectedly — please try again.")
 
         if email != email.lower():
             cursor.close(); conn.close()

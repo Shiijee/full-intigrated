@@ -277,14 +277,13 @@
         </div>
         <div class="vform-row">
           <div class="vform-col-half">
-            <label class="vform-label required">Student ID</label>
+            <label class="vform-label">Student ID</label>
             <div class="vform-input-group">
-              <span class="vform-input-prefix">{{ student_id_prefix }}</span>
-              <input type="number" name="student_id_seq" id="av-studentid" class="vform-input vform-input-suffix" placeholder="1" min="1"
-                     value="{{ create_voter_restore.student_id_seq if create_voter_restore else '' }}"/>
+              <span class="vform-input" style="background: var(--bg-surface-soft); color: var(--text-muted); display:flex; align-items:center;">
+                Auto-assigned (S{{ current_year_suffix }}-XXXX) on save
+              </span>
             </div>
-            <small class="vform-hint">Type a number, e.g. 3 → {{ student_id_prefix }}0003</small>
-            <small class="vform-error" id="av-studentid-err"></small>
+            <small class="vform-hint">Matches the same ID format used by Portal/TestPoint/Attendance.</small>
           </div>
           <div class="vform-col-half">
             <label class="vform-label required">Email</label>

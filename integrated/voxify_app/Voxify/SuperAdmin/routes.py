@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from werkzeug.security import generate_password_hash
 from Voxify.Authentication.routes import superadmin_required
 from Voxify.utils.otp import send_account_email
+from datetime import datetime
 import re
 
 superadmin_bp = Blueprint('super_admin', __name__,
@@ -312,10 +313,25 @@ def create_admin():
             flash(f"The email address '{email}' is already registered. Please use a different email.", "error")
             return redirect(url_for('super_admin.manage_admins'))
 
-        cursor.execute("SELECT COUNT(*) as cnt FROM users WHERE role IN ('admin','superadmin')")
-        row = cursor.fetchone()
-        count = row['cnt'] if isinstance(row, dict) else row[0]
-        new_student_id = f"admin-{str(count + 1).zfill(4)}"
+        # Match the same ID convention as Portal/TestPoint/Attendance
+        # (e.g. 'A26-0003') instead of Voxify's old, incompatible
+        # 'admin-0004' scheme — this is what lets SSO's
+        # _resolve_local_user_id() actually find this account later, since
+        # it matches by comparing this exact string against Portal's
+        # username.
+        year_suffix = datetime.now().strftime("%y")
+        like_pattern = f"A{year_suffix}-%"
+        cursor.execute(
+            "SELECT student_id FROM users WHERE student_id LIKE %s ORDER BY student_id DESC LIMIT 1",
+            (like_pattern,)
+        )
+        last_row = cursor.fetchone()
+        if last_row:
+            last_id = last_row['student_id'] if isinstance(last_row, dict) else last_row[0]
+            new_num = int(last_id.split('-')[1]) + 1
+        else:
+            new_num = 1
+        new_student_id = f"A{year_suffix}-{str(new_num).zfill(4)}"
 
         cursor.execute(
             "INSERT INTO users (firstname, middlename, surname, student_id, password, role, email, college_id, is_approved, is_active) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, TRUE)",

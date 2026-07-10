@@ -66,6 +66,38 @@ def add_candidate_photo_column():
             cursor.close()
             conn.close()
 
+
+def create_announcements_table():
+    """Create announcements table if it doesn't exist"""
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS announcements (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    body TEXT NOT NULL,
+                    type ENUM('general', 'election', 'winner', 'reminder') NOT NULL DEFAULT 'general',
+                    status ENUM('draft', 'published') NOT NULL DEFAULT 'draft',
+                    image_url VARCHAR(255) NULL DEFAULT NULL,
+                    college_id INT NULL,
+                    created_by INT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NULL,
+                    INDEX idx_ann_college (college_id),
+                    INDEX idx_ann_status (status)
+                )
+            """)
+            conn.commit()
+            print("Announcements table ready")
+        except Error as e:
+            print(f"Error creating announcements table: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+
+
 def create_app():
     app = Flask(__name__, static_folder=None)
 
@@ -105,5 +137,6 @@ def create_app():
     with app.app_context():
         create_trusted_devices_table()
         add_candidate_photo_column()
+        create_announcements_table()
 
     return app
