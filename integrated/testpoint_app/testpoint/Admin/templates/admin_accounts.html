@@ -117,6 +117,12 @@
             data-target="#addUserModal">
             <i class="fas fa-user-plus mr-2"></i> Add New User
         </button>
+        <form method="POST" action="{{ url_for('admin.retry_syncs') }}" style="display:inline;">
+            <button type="submit" class="btn btn-white border shadow-sm px-4 rounded-pill font-weight-bold small"
+                title="Re-push any account that failed to sync to Voxify or Attendance earlier">
+                <i class="fas fa-rotate mr-2"></i> Retry Failed Syncs
+            </button>
+        </form>
         <a href="{{ url_for('admin.trashed_accounts') }}"
             class="btn btn-white border shadow-sm px-4 rounded-pill font-weight-bold small text-danger">
             <i class="fas fa-trash-alt mr-2"></i> View Trash

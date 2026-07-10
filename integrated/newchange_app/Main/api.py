@@ -4,6 +4,7 @@ Exposes enrollment, attendance, and student data.
 Also consumes APIs from TestPoint and Voxify.
 """
 from flask import Blueprint, jsonify, request
+import os
 import requests
 from Main.db import get_db_connection
 from werkzeug.security import generate_password_hash
@@ -11,8 +12,8 @@ from werkzeug.security import generate_password_hash
 nc_api = Blueprint('nc_api', __name__, url_prefix='/api')
 
 # URLs for partner systems — update with actual IPs on demo day
-TESTPOINT_URL = "http://127.0.0.1:5000"
-VOXIFY_URL    = "http://127.0.0.1:5001"
+TESTPOINT_URL = os.getenv("TESTPOINT_URL", "http://127.0.0.1:5003")
+VOXIFY_URL    = os.getenv("VOXIFY_URL",    "http://127.0.0.1:5001")
 
 
 @nc_api.route('/ping')

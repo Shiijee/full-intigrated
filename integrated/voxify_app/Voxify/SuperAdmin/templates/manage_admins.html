@@ -62,6 +62,11 @@
     <p class="page-subheading">Create, activate, suspend, and remove administrator accounts.</p>
   </div>
   <div class="page-header-actions">
+    <form method="POST" action="{{ url_for('super_admin.retry_syncs') }}" style="display:inline;">
+      <button type="submit" class="btn-primary-custom" style="background:#6c757d;border-color:#6c757d;" title="Re-push any account that failed to sync to TestPoint or Attendance earlier">
+        <i class="bi bi-arrow-clockwise"></i> Retry Failed Syncs
+      </button>
+    </form>
     <button type="button" class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addAdminModal">
       <i class="bi bi-person-plus-fill"></i>Add Admin
     </button>

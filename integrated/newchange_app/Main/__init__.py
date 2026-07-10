@@ -51,17 +51,21 @@ def reg_app():
     # IMPORT BLUEPRINTS
     from Main.admin.crudPY import crud
     from Main.admin.adminPY import admin
-    from Main.api import nc_api
     from Main.auth.loginPY import auth, PORTAL_URL
     from Main.student.studentPY import user
     from Main.teacher.teacherPY import teacher
-    
+    from Main.api import nc_api
 
     app.register_blueprint(admin, url_prefix='/admin')
     app.register_blueprint(crud)
-    app.register_blueprint(nc_api)
     app.register_blueprint(auth, url_prefix='/')
     app.register_blueprint(user, url_prefix='/user')
     app.register_blueprint(teacher, url_prefix='/teacher')
+    app.register_blueprint(nc_api)  # already has url_prefix='/api' set on the Blueprint itself
+
+    # This is a server-to-server API called by Voxify/TestPoint with a JSON
+    # body, not a browser form — it can't carry a CSRF token, so it must be
+    # exempted or every call gets rejected before reaching provision_user().
+    csrf.exempt(nc_api)
 
     return app

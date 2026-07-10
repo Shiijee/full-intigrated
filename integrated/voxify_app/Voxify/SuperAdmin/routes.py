@@ -338,22 +338,30 @@ def create_admin():
             email=email,
             external_id=new_student_id,
         )
-        if not sync_result["success"]:
-            print(f"[Portal sync] Failed to sync admin '{new_student_id}': {sync_result['reason']}")
-
         tp_result = sync_user_to_testpoint(
             username=new_student_id, password=password,
             full_name=fullname_for_portal, role=mirrored_role, email=email,
         )
-        if not tp_result["success"]:
-            print(f"[TestPoint sync] Failed to sync admin '{new_student_id}': {tp_result['reason']}")
-
         att_result = sync_user_to_attendance(
             username=new_student_id, password=password,
             full_name=fullname_for_portal, role=mirrored_role, email=email,
         )
+
+        failed_modules = []
+        if not sync_result["success"]:
+            failed_modules.append(f"Portal ({sync_result['reason']})")
+        if not tp_result["success"]:
+            failed_modules.append(f"TestPoint ({tp_result['reason']})")
         if not att_result["success"]:
-            print(f"[Attendance sync] Failed to sync admin '{new_student_id}': {att_result['reason']}")
+            failed_modules.append(f"Attendance ({att_result['reason']})")
+
+        if failed_modules:
+            flash(
+                f"Admin {new_student_id} created, but failed to sync to: "
+                f"{'; '.join(failed_modules)}. Logged — use 'Retry Failed Syncs' "
+                f"once that module is running.",
+                'warning'
+            )
         # ─────────────────────────────────────────────────────────────────────
 
         cursor.execute("SELECT name FROM colleges WHERE id=%s", (college_id,))
@@ -822,3 +830,27 @@ def update_profile():
     cursor.close()
     conn.close()
     return redirect(url_for("super_admin.profile"))
+
+@superadmin_bp.route("/retry-syncs", methods=["POST"])
+@superadmin_required
+def retry_syncs():
+    """
+    One-click fix for any voter/admin whose mirror to TestPoint or
+    Attendance failed earlier (e.g. that module wasn't running yet at
+    creation time). Safe to click any time — already-synced accounts are
+    simply skipped.
+    """
+    from Voxify.portal_sync import retry_failed_syncs
+    result = retry_failed_syncs()
+    if result["retried"] == 0:
+        flash("No pending sync failures — everything is already in sync.", "info")
+    elif result["still_failing"] == 0:
+        flash(f"Fixed all {result['fixed']} pending sync(s).", "success")
+    else:
+        reasons_text = " | ".join(result["reasons"][:3])
+        flash(
+            f"Fixed {result['fixed']} of {result['retried']} pending sync(s). "
+            f"{result['still_failing']} still failing: {reasons_text}",
+            "warning"
+        )
+    return redirect(request.referrer or url_for("super_admin.manage_admins"))

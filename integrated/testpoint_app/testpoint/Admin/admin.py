@@ -320,9 +320,10 @@ def add_user():
                 """, (custom_user_id, email, fname, mname, lname, region, province, city, barangay))
 
             connection.commit()
-            flash(f'Account created successfully! User ID is {custom_user_id}', 'success')
 
             # ── Sync to Portal + mirror into Voxify and Attendance ──────────
+            # (mirror_user_to_modules already retries a few times internally
+            # before giving up, so this only reports genuine failures.)
             from testpoint.portal_sync import sync_user_to_portal, portal_role, mirror_user_to_modules
             fullname_for_portal = ' '.join([fname, mname, lname] if mname else [fname, lname])
             sync_result = sync_user_to_portal(
@@ -333,8 +334,6 @@ def add_user():
                 email=email,
                 external_id=custom_user_id,
             )
-            if not sync_result["success"]:
-                print(f"[Portal sync] Failed to sync user '{custom_user_id}': {sync_result['reason']}")
             mirror_results = mirror_user_to_modules(
                 username=custom_user_id,
                 password=password,
@@ -342,9 +341,24 @@ def add_user():
                 role=portal_role(role),
                 email=email,
             )
+
+            failed_modules = []
+            if not sync_result["success"]:
+                failed_modules.append(f"Portal ({sync_result['reason']})")
             for module, result in mirror_results.items():
                 if not result.get('success'):
-                    print(f"[Portal sync] Failed to mirror '{custom_user_id}' to {module}: {result.get('reason')}")
+                    failed_modules.append(f"{module.capitalize()} ({result.get('reason')})")
+
+            if failed_modules:
+                flash(
+                    f"Account {custom_user_id} created, but failed to sync to: "
+                    f"{'; '.join(failed_modules)}. It's been logged — once that "
+                    f"module is running, use 'Retry Failed Syncs' to fix it "
+                    f"without re-entering anything.",
+                    'warning'
+                )
+            else:
+                flash(f'Account created successfully! User ID is {custom_user_id}', 'success')
             # ─────────────────────────────────────────────────────────────────
 
         except mysql.connector.Error as err:
@@ -357,6 +371,29 @@ def add_user():
         return redirect(url_for('admin.manage_accounts'))
 
     return render_template('admin_accounts.html')
+
+@admin.route('/retry_syncs', methods=['POST'])
+def retry_syncs():
+    """
+    One-click fix for any account whose mirror to Voxify/Attendance failed
+    earlier (e.g. that module wasn't running yet at creation time). Safe to
+    click any time — accounts that already synced are simply skipped.
+    """
+    from testpoint.portal_sync import retry_failed_syncs
+    result = retry_failed_syncs()
+    if result["retried"] == 0:
+        flash("No pending sync failures — everything is already in sync.", 'info')
+    elif result["still_failing"] == 0:
+        flash(f"Fixed all {result['fixed']} pending sync(s).", 'success')
+    else:
+        reasons_text = " | ".join(result["reasons"][:3])
+        flash(
+            f"Fixed {result['fixed']} of {result['retried']} pending sync(s). "
+            f"{result['still_failing']} still failing: {reasons_text}",
+            'warning'
+        )
+    return redirect(url_for('admin.manage_accounts'))
+
 
 def generate_id(role_prefix):
     connection = mysql.connector.connect(**db_config); cursor = connection.cursor()

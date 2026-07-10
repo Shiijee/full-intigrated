@@ -352,12 +352,20 @@ def manage_students():
             username=new_usid, password=default_password,
             full_name=full_name, role='student', email=email,
         )
-        for module, result in mirror_results.items():
-            if not result.get('success'):
-                print(f"[Portal sync] Failed to mirror student '{new_usid}' to {module}: {result.get('reason')}")
+        failed_modules = [
+            f"{module.capitalize()} ({result.get('reason')})"
+            for module, result in mirror_results.items() if not result.get('success')
+        ]
         # ─────────────────────────────────────────────────────────────────────
 
-        if testpoint_linked:
+        if failed_modules:
+            flash(
+                f"Student {new_usid} created, but failed to sync to: "
+                f"{'; '.join(failed_modules)}. Logged — use 'Retry Failed Syncs' "
+                f"once that module is running.",
+                'warning'
+            )
+        elif testpoint_linked:
             flash(f'Student added with ID: {new_usid} ✅ Also found in TestPoint (linked across systems).', 'success')
         else:
             flash(f'Student added successfully with ID: {new_usid}', 'success')
@@ -882,12 +890,21 @@ def manage_teachers():
             username=new_utid, password=default_password,
             full_name=full_name, role='teacher', email=email,
         )
-        for module, result in mirror_results.items():
-            if not result.get('success'):
-                print(f"[Portal sync] Failed to mirror teacher '{new_utid}' to {module}: {result.get('reason')}")
+        failed_modules = [
+            f"{module.capitalize()} ({result.get('reason')})"
+            for module, result in mirror_results.items() if not result.get('success')
+        ]
         # ─────────────────────────────────────────────────────────────────────
 
-        flash(f'Teacher added successfully with ID: {new_utid}', 'success')
+        if failed_modules:
+            flash(
+                f"Teacher {new_utid} created, but failed to sync to: "
+                f"{'; '.join(failed_modules)}. Logged — use 'Retry Failed Syncs' "
+                f"once that module is running.",
+                'warning'
+            )
+        else:
+            flash(f'Teacher added successfully with ID: {new_utid}', 'success')
         return redirect(url_for('admin.manage_teachers'))
 
     # Pagination, Search and Filter parameters
@@ -1951,58 +1968,24 @@ def manual_enroll():
     conn.close()
     return render_template('manual_enroll.html', students=students, all_assignments=all_assignments, search=search)
 
-
-@admin.route('/profile')
-def profile():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    # Query admin account information
-    cursor.execute("""
-        SELECT admin_id, username, email, deletion_pin_hash, failed_attempts, lockout_time 
-        FROM admins 
-        WHERE username = %s
-    """, (session.get('user_id'),))
-    admin_info = cursor.fetchone()
-    
-    admin_activity = []
-    admin_logins = []
-    
-    if admin_info:
-        # Query recent audit logs for actions performed by this admin
-        cursor.execute("""
-            SELECT action, table_name, details, timestamp 
-            FROM system_audit_log 
-            WHERE performed_by_id = %s 
-            ORDER BY timestamp DESC 
-            LIMIT 5
-        """, (session.get('user_id'),))
-        admin_activity = cursor.fetchall()
-        
-        # Query login logs for this admin
-        cursor.execute("""
-            SELECT login_time, logout_time 
-            FROM login_logs 
-            WHERE user_id = %s 
-            ORDER BY login_time DESC 
-            LIMIT 5
-        """, (session.get('user_id'),))
-        admin_logins = cursor.fetchall()
-        
-    cursor.close()
-    conn.close()
-    
-    if not admin_info:
-        admin_info = {
-            'username': session.get('user_id', 'N/A'),
-            'email': session.get('email', 'N/A'),
-            'admin_id': 'N/A',
-            'deletion_pin_hash': None,
-            'failed_attempts': 0,
-            'lockout_time': None
-        }
-        
-    return render_template('admin_profile.html', 
-                           admin=admin_info, 
-                           activity=admin_activity, 
-                           logins=admin_logins)
+@admin.route('/retry_syncs', methods=['POST'])
+def retry_syncs():
+    """
+    One-click fix for any student/teacher whose mirror to Voxify or
+    TestPoint failed earlier (e.g. that module wasn't running yet at
+    creation time). Safe to click any time.
+    """
+    from Main.portal_sync import retry_failed_syncs
+    result = retry_failed_syncs()
+    if result["retried"] == 0:
+        flash("No pending sync failures — everything is already in sync.", 'info')
+    elif result["still_failing"] == 0:
+        flash(f"Fixed all {result['fixed']} pending sync(s).", 'success')
+    else:
+        reasons_text = " | ".join(result["reasons"][:3])
+        flash(
+            f"Fixed {result['fixed']} of {result['retried']} pending sync(s). "
+            f"{result['still_failing']} still failing: {reasons_text}",
+            'warning'
+        )
+    return redirect(request.referrer or url_for('admin.manage_students'))

@@ -90,6 +90,16 @@ def profile():
     cursor.execute("SELECT *, user_id AS utid FROM Teachers WHERE user_id = %s", (utid,))
     teacher_data = cursor.fetchone()
 
+    if teacher_data is None:
+        # Account exists in Portal/TestPoint/Voxify but hasn't landed here yet
+        # (a sync to Attendance failed or hasn't been retried). Don't crash —
+        # tell them plainly instead of a raw 500 error page.
+        cursor.close()
+        conn.close()
+        flash("Your profile hasn't synced to Attendance yet. Please check back "
+              "shortly, or ask your admin to click 'Retry Failed Syncs'.", "warning")
+        return redirect(url_for('teacher.dashboard'))
+
     # Assigned classes with subject info
     cursor.execute("""
         SELECT s.subject_code, s.subject_name, ta.section
