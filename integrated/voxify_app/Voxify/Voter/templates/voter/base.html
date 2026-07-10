@@ -67,6 +67,12 @@
     </a>
 
     <div class="nav-section-label">Account</div>
+    <a href="http://127.0.0.1:5000"
+       class="nav-item"
+       data-label="Back to Portal">
+      <i class="bi bi-arrow-left-circle-fill"></i>
+      <span>Back to Portal</span>
+    </a>
     <a href="{{ url_for('voter.profile') }}"
        class="nav-item {% if request.endpoint == 'voter.profile' %}active{% endif %}"
        data-label="My Profile">
