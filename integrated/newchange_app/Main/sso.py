@@ -67,11 +67,21 @@ def require_sso():
             # profile queries to return None (no matching row found).
             local_user_id = user.get('username') or user['user_id']
             session['user_id']   = local_user_id
+            session['name']      = user['full_name']
             session['full_name'] = user['full_name']
             session['role']      = user['role']
             return user
 
-    # No valid token → send them to the portal to log in
+    # Fall back to an existing authenticated local session when possible.
+    if session.get('user_id') and session.get('role'):
+        return {
+            'user_id': session['user_id'],
+            'username': session['user_id'],
+            'full_name': session.get('name') or session.get('full_name', ''),
+            'role': session['role'],
+        }
+
+    # No valid token or session → send them to the portal to log in
     return redirect(f"{PORTAL_URL}?next={request.url}")
 
 

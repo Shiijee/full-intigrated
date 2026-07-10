@@ -51,6 +51,7 @@ def reg_app():
     # IMPORT BLUEPRINTS
     from Main.admin.crudPY import crud
     from Main.admin.adminPY import admin
+    from Main.api import nc_api
     from Main.auth.loginPY import auth, PORTAL_URL
     from Main.student.studentPY import user
     from Main.teacher.teacherPY import teacher
@@ -58,6 +59,7 @@ def reg_app():
 
     app.register_blueprint(admin, url_prefix='/admin')
     app.register_blueprint(crud)
+    app.register_blueprint(nc_api)
     app.register_blueprint(auth, url_prefix='/')
     app.register_blueprint(user, url_prefix='/user')
     app.register_blueprint(teacher, url_prefix='/teacher')

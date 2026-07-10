@@ -3,6 +3,7 @@ from Main.db import get_db_connection, log_system_action
 from datetime import datetime, timedelta
 import json
 import os
+from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
 user = Blueprint('user', __name__, template_folder='templates')
@@ -471,8 +472,39 @@ def profile():
     # Get Student Profile
     # NOTE: `user_id AS usid` alias kept so profile.html (which reads
     # `student.usid`) keeps working without needing template changes.
-    cursor.execute("SELECT *, user_id AS usid FROM Students WHERE user_id = %s", (usid,))
+    cursor.execute("SELECT *, user_id AS usid FROM students WHERE user_id = %s", (usid,))
     student = cursor.fetchone()
+    if not student:
+        # If the user exists in the Portal but has no local Attendance profile,
+        # create a minimal local student record so the profile page can render.
+        full_name = session.get('name') or session.get('full_name') or usid
+        email = session.get('email') or f"{usid}@portal.local"
+        name_parts = full_name.split()
+        if len(name_parts) >= 3:
+            first_name, middle_name, last_name = name_parts[0], " ".join(name_parts[1:-1]), name_parts[-1]
+        elif len(name_parts) == 2:
+            first_name, middle_name, last_name = name_parts[0], "", name_parts[1]
+        else:
+            first_name, middle_name, last_name = full_name, "", ""
+
+        password_hash = generate_password_hash(os.urandom(16).hex())
+        try:
+            cursor.execute(
+                "INSERT INTO students (user_id, user_role, first_name, middle_name, last_name, email, password_hash, status) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, 'Active')",
+                (usid, 'student', first_name, middle_name, last_name, email, password_hash),
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            flash('Unable to create your student profile. Please contact support.', 'error')
+            return redirect(url_for('user.dashboard'))
+
+        cursor.execute("SELECT *, user_id AS usid FROM students WHERE user_id = %s", (usid,))
+        student = cursor.fetchone()
+        flash('Your student profile was created automatically from your Portal account.', 'info')
     
     # Get Enrolled Subjects with Teacher Info
     query = """
