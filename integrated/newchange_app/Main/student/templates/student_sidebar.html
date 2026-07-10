@@ -1,0 +1,49 @@
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <a href="{{ url_for('user.dashboard') }}" class="logo-link">
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Attendeez</span>
+                </a>
+                <div class="user-menu-container">
+                    <button class="burger-btn" onclick="toggleUserMenu()">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin: 0;">{{ session.get('name', 'Student') }}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Student</p>
+                        </div>
+                        <a href="{{ url_for('auth.change_password') }}" class="dropdown-item">
+                            <i class="fas fa-key"></i> Change Password
+                        </a>
+                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+                <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('user.profile') }}" class="nav-item profile-nav-item {{ 'active' if request.endpoint == 'user.profile' else '' }}" data-tooltip="My Profile"><i class="fas fa-user-circle"></i><span class="nav-item-text"> My Profile</span></a>
+                <a href="{{ url_for('user.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'user.dashboard' else '' }}" data-tooltip="Student Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Student Dashboard</span></a>
+                
+                <div class="nav-accordion">
+                    <button class="nav-item-btn accordion-trigger" onclick="toggleAccordion(this)">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span class="nav-item-text">My Classes</span>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </button>
+                    <div class="accordion-content">
+                        {% for s in subjects %}
+                        <a href="{{ url_for('user.subject_performance', subject_id=s.subject_id) }}" class="nav-item {{ 'active' if request.endpoint == 'user.subject_performance' and request.view_args.get('subject_id')|string == s.subject_id|string else '' }}" title="{{ s.subject_name }}" style="position: relative;">
+                            <i class="fas fa-book"></i> <span class="nav-item-text">{{ s.subject_code }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <a href="{{ url_for('user.timetable') }}" class="nav-item {{ 'active' if request.endpoint == 'user.timetable' else '' }}" data-tooltip="Class Timetable"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Class Timetable</span></a>
+                <a href="{{ url_for('user.notifications_page') }}" class="nav-item {{ 'active' if request.endpoint == 'user.notifications_page' else '' }}" data-tooltip="Notifications"><i class="fas fa-bell"></i><span class="nav-item-text"> Notifications</span> {% if unread_count > 0 %}<span id="notif-badge-sidebar" class="badge badge-danger" style="margin-left: auto;">{{ unread_count }}</span>{% endif %}</a>
+                <a href="{{ url_for('user.submit_excuse') }}" class="nav-item {{ 'active' if request.endpoint == 'user.submit_excuse' else '' }}" data-tooltip="Excuse Letters"><i class="fas fa-envelope-open-text"></i><span class="nav-item-text"> Excuse Letters</span></a>
+            </nav>
+        </aside>

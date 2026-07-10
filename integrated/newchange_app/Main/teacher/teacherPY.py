@@ -118,7 +118,7 @@ def profile():
 
 @teacher.route('/request_email_otp', methods=['POST'])
 def request_email_otp():
-    from Main.auth.loginPY import generate_otp, send_otp_email
+    from Main.utils import generate_otp, send_otp_email
     new_email = request.form.get('new_email')
     
     if not new_email:

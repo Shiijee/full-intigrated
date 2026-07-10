@@ -759,120 +759,7 @@ def edit_student(usid):
         
     return redirect(url_for('admin.manage_students'))
     
-@admin.route('/delete_student/<user_id>')
-def delete_student(user_id):
-    """
-    Deletes a student record only if they have no attendance history.
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        # Manually cascade deletes to prevent foreign key constraint errors
-        cursor.execute("DELETE FROM Attendance WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM Excuse_Letters WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM Drop_Requests WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM Notifications WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM Enrollments WHERE user_id = %s", (user_id,))
-        
-        # Finally delete the student
-        cursor.execute("DELETE FROM Students WHERE user_id = %s", (user_id,))
-        
-        # Audit Logging
-        log_system_action(cursor, 'Students', user_id, 'Delete', session['user_id'], session['role'], f"Student deleted (ID: {user_id})")
-        
-        conn.commit()
-        flash('Student deleted successfully.', 'success')
-    except Exception as e:
-        flash(f'Error deleting student: {str(e)}', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-    return redirect(url_for('admin.manage_students'))
 
-@admin.route('/verify_pin', methods=['POST'])
-def verify_pin():
-    """Verifies the 4-digit security PIN for sensitive operations."""
-    entered_pin = request.form.get('pin')
-    admin_id = session.get('user_id')
-    
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT deletion_pin_hash FROM Admins WHERE admin_id = %s", (admin_id,))
-    admin = cursor.fetchone()
-    
-    success = False
-    if admin and admin['deletion_pin_hash']:
-        if check_password_hash(admin['deletion_pin_hash'], entered_pin):
-            success = True
-    
-    cursor.close()
-    conn.close()
-    return jsonify({'success': success})
-
-@admin.route('/request_pin_otp', methods=['POST'])
-def request_pin_otp():
-    """Generates and sends an OTP to the admin's email to authorize PIN change."""
-    from Main.auth.loginPY import generate_otp, send_otp_email
-    
-    admin_id = session.get('user_id')
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT email, username FROM Admins WHERE admin_id = %s", (admin_id,))
-    admin = cursor.fetchone()
-    
-    if not admin:
-        cursor.close()
-        conn.close()
-        return jsonify({'success': False, 'message': 'Admin not found.'})
-        
-    otp = generate_otp()
-    session['pin_change_otp'] = otp
-    session['pin_otp_expiry'] = (datetime.now() + timedelta(minutes=10)).timestamp()
-    
-    if send_otp_email(admin['email'], otp, admin['username']):
-        cursor.close()
-        conn.close()
-        return jsonify({'success': True, 'message': f'A verification code has been sent to {admin["email"]}.'})
-    else:
-        # Fallback for development if email fails
-        cursor.close()
-        conn.close()
-        return jsonify({'success': False, 'message': 'Failed to send email. Check SMTP settings.'})
-
-@admin.route('/change_deletion_pin', methods=['POST'])
-def change_deletion_pin():
-    """Verifies OTP and updates the security PIN for deletion operations."""
-    entered_otp = request.form.get('otp')
-    new_pin = request.form.get('new_pin')
-    admin_id = session.get('user_id')
-    
-    # Validation
-    if not new_pin.isdigit() or len(new_pin) != 6:
-        return jsonify({'success': False, 'message': 'PIN must be exactly 6 numeric digits.'})
-        
-    if datetime.now().timestamp() > session.get('pin_otp_expiry', 0):
-        return jsonify({'success': False, 'message': 'OTP has expired. Please request a new one.'})
-        
-    if entered_otp != session.get('pin_change_otp'):
-        return jsonify({'success': False, 'message': 'Invalid verification code.'})
-        
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    pin_hash = generate_password_hash(new_pin)
-    cursor.execute("UPDATE Admins SET deletion_pin_hash = %s WHERE admin_id = %s", (pin_hash, admin_id))
-    
-    log_system_action(cursor, 'Admins', admin_id, 'Update', admin_id, 'admin', "Security PIN updated")
-    
-    conn.commit()
-    cursor.close()
-    conn.close()
-    
-    # Cleanup session
-    session.pop('pin_change_otp', None)
-    session.pop('pin_otp_expiry', None)
-    
-    return jsonify({'success': True, 'message': 'Security PIN updated successfully!'})
 
 @admin.route('/manage_teachers', methods=['GET', 'POST'])
 def manage_teachers():
@@ -1092,33 +979,7 @@ def edit_teacher(utid):
         
     return redirect(url_for('admin.manage_teachers'))
 
-@admin.route('/delete_teacher/<utid>')
-def delete_teacher(utid):
-    """
-    Deletes a teacher record only if they have no active assignments.
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        # Check for assignments or sessions
-        cursor.execute("SELECT COUNT(*) as count FROM Teacher_Assignments WHERE teacher_id = %s", (utid,))
-        if cursor.fetchone()['count'] > 0:
-            flash('Cannot delete: teacher has assigned classes.', 'error')
-            return redirect(url_for('admin.manage_teachers'))
-            
-        cursor.execute("DELETE FROM Teachers WHERE user_id = %s", (utid,))
-        
-        # Audit Logging
-        log_system_action(cursor, 'Teachers', utid, 'Delete', session['user_id'], session['role'], f"Teacher deleted (ID: {utid})")
-        
-        conn.commit()
-        flash('Teacher deleted successfully.', 'success')
-    except Exception as e:
-        flash(f'Error deleting teacher: {str(e)}', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-    return redirect(url_for('admin.manage_teachers'))
+
 
 @admin.route('/manage_subjects', methods=['GET', 'POST'])
 def manage_subjects():
@@ -1186,24 +1047,7 @@ def edit_subject(subject_id):
     flash('Subject updated successfully.', 'success')
     return redirect(url_for('admin.manage_subjects'))
 
-@admin.route('/delete_subject/<int:subject_id>')
-def delete_subject(subject_id):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        cursor.execute("DELETE FROM Subjects WHERE subject_id = %s", (subject_id,))
-        
-        # Audit Logging
-        log_system_action(cursor, 'Subjects', subject_id, 'Delete', session['user_id'], session['role'], f"Subject deleted (ID: {subject_id})")
-        
-        conn.commit()
-        flash('Subject deleted successfully.', 'success')
-    except Exception as e:
-        flash('Cannot delete: subject has attendance records or assignments.', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-    return redirect(url_for('admin.manage_subjects'))
+
 
 @admin.route('/archive_subject/<int:subject_id>', methods=['POST', 'GET'])
 def archive_subject(subject_id):
