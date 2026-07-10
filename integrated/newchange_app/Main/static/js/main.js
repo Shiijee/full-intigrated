@@ -307,18 +307,18 @@ window.addEventListener('DOMContentLoaded', bindSidebarControls);
 
 document.addEventListener('DOMContentLoaded', function() {
 
-    // --- LOGOUT CONFIRMATION MODAL ---
+    // --- GO BACK CONFIRMATION MODAL ---
     const logoutModalHTML = `
         <div id="logout-modal-overlay" class="modal-overlay">
             <div class="confirm-modal">
                 <div class="modal-icon">
-                    <i class="fas fa-sign-out-alt"></i>
+                    <i class="fas fa-arrow-left"></i>
                 </div>
-                <h3 class="modal-title">Confirm Logout</h3>
-                <p class="modal-text">Are you sure you want to log out? Your current session will be ended.</p>
+                <h3 class="modal-title">Confirm Go Back</h3>
+                <p class="modal-text">Are you sure you want to go back to the portal?</p>
                 <div class="modal-actions">
                     <button type="button" class="btn-cancel" onclick="closeLogoutModal()">Cancel</button>
-                    <a href="/logout" class="btn-confirm-logout">Log Out</a>
+                    <a href="http://127.0.0.1:5000" class="btn-confirm-logout">Go Back</a>
                 </div>
             </div>
         </div>
@@ -337,8 +337,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('logout-modal-overlay').classList.add('active');
     };
 
-    // Intercept all logout links EXCEPT the one in the modal
-    const logoutLinks = document.querySelectorAll('a[href="/logout"]:not(.btn-confirm-logout)');
+    // Intercept all go-back links EXCEPT the one in the modal
+    const logoutLinks = document.querySelectorAll('a.go-back-link');
     logoutLinks.forEach(link => {
         link.addEventListener('click', showLogoutModal);
     });

@@ -21,16 +21,16 @@
                             <i class="fas fa-lock"></i> Change Password
                         </a>
 
-                        <a href="{{ url_for('auth.logout') }}" class="dropdown-item" style="color: var(--danger);">
-                            <i class="fas fa-right-from-bracket"></i> Logout
+                        <a href="http://127.0.0.1:5000" class="dropdown-item go-back-link" style="color: var(--danger);">
+                            <i class="fas fa-arrow-left"></i> Go Back
                         </a>
                     </div>
                 </div>
                 <button class="sidebar-minimize-btn" onclick="toggleSidebarMinimize()" title="Minimize sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             <nav class="sidebar-nav">
-                <a href="{{ url_for('auth.logout') }}" class="nav-item sidebar-mobile-logout" onclick="event.preventDefault(); showLogoutModal(event);">
-                    <i class="fas fa-right-from-bracket"></i><span class="nav-item-text"> Logout</span>
+                <a href="http://127.0.0.1:5000" class="nav-item sidebar-mobile-logout go-back-link" onclick="event.preventDefault(); showLogoutModal(event);">
+                    <i class="fas fa-arrow-left"></i><span class="nav-item-text"> Go Back</span>
                 </a>
                 <div class="sidebar-category">System Core</div>
                 <a href="{{ url_for('admin.dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.dashboard' else '' }}" data-tooltip="Admin Dashboard"><i class="fas fa-house"></i><span class="nav-item-text"> Admin Dashboard</span></a>
