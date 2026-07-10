@@ -58,12 +58,19 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    next_url = request.args.get("next") or request.form.get("next") or "/"
+    token = request.cookies.get("auth_token")
+    if token:
+        user_data = decode_token(token)
+        if user_data:
+            # Already authenticated: don't allow a second login until logout.
+            return redirect(next_url)
+
     if request.method == "GET":
-        return render_template("login.html", next=request.args.get("next", ""))
+        return render_template("login.html", next=next_url)
 
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
-    next_url  = request.args.get("next") or request.form.get("next") or "/"
 
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
