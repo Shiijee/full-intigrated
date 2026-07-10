@@ -236,12 +236,20 @@ def student_dashboard():
         import requests as _req, os as _os
         VOXIFY_URL = _os.getenv('VOXIFY_URL', 'http://127.0.0.1:5001')
         voting_status = None
+        voxify_announcements = []
         try:
             vx_resp = _req.get(f"{VOXIFY_URL}/api/voters/status/{student_id}", timeout=3)
             if vx_resp.status_code == 200:
                 voting_status = vx_resp.json()
         except Exception:
             voting_status = None  # Voxify offline — degrade gracefully
+
+        try:
+            ann_resp = _req.get(f"{VOXIFY_URL}/api/announcements", timeout=3)
+            if ann_resp.status_code == 200:
+                voxify_announcements = ann_resp.json().get('announcements', [])
+        except Exception:
+            voxify_announcements = []
 
         return render_template('student_dashboard.html',
                                user_data=user_data,
@@ -255,7 +263,9 @@ def student_dashboard():
                                trend_labels=trend_labels,
                                trend_scores=trend_scores,
                                rankings=rankings,
-                               voting_status=voting_status)
+                               voting_status=voting_status,
+                               voxify_announcements=voxify_announcements,
+                               voxify_url=VOXIFY_URL)
     finally:
         cursor.close(); connection.close()
 

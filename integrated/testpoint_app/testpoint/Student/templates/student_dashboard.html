@@ -35,6 +35,40 @@
 </div>
 {% endif %}
 
+{% if voxify_announcements %}
+<div class="row mb-3">
+    <div class="col-lg-12">
+        <div class="card border-0 shadow-sm overflow-hidden" style="border-radius: var(--tp-student-radius); background: #eff6ff; border-left: 4px solid #2563eb;">
+            <div class="card-body py-3 px-4">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                        <span style="color:#1d4ed8;font-weight:700;"><i class="fas fa-bullhorn mr-2"></i>Voxify Announcements</span>
+                    </div>
+                    <div class="text-muted" style="font-size:11px;">Published by Voxify</div>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:1rem;">
+                    {% for ann in voxify_announcements[:3] %}
+                    <div style="flex:1 1 calc(33.333% - 1rem); min-width:220px; max-width:320px;">
+                        <a href="#" class="text-decoration-none" onclick='openVoxifyAnnouncement(event, {{ ann.id }}, {{ ann.title | tojson }}, {{ ann.body | replace('\n', ' ') | tojson }}, {{ ann.type | capitalize | tojson }}, {{ ann.status | capitalize | tojson }}, {{ ann.image_url | tojson if ann.image_url else 'null' }})' style="display:block;">
+                            <div class="p-3 rounded h-100" style="background:#ffffff; border:1px solid #dbeafe; display:flex; flex-direction:column; justify-content:space-between;">
+                                <div>
+                                    <div class="font-weight-bold text-dark mb-1" style="font-size:0.95rem;">{{ ann.title }}</div>
+                                    <div class="text-xs text-muted" style="margin-bottom:0.75rem;">{{ ann.type|capitalize }}{% if ann.college_id %} · College {{ ann.college_id }}{% endif %}</div>
+                                </div>
+                                <div>
+                                    <span class="badge badge-primary" style="padding:0.5rem 0.8rem; font-size:0.75rem;">Show announcement</span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- ── TOP STATUS BANNER ── -->
 <div class="row mb-4">
     <div class="col-lg-12">
@@ -317,5 +351,45 @@
             }
         }
     });
+</script>
+
+<!-- Voxify Announcement Viewer -->
+<div id="voxifyAnnModal" class="modal" tabindex="-1" role="dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; z-index:2000;">
+    <div style="background:#fff; border-radius:16px; max-width:700px; width:90%; max-height:90%; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+        <div style="padding:1.25rem 1.5rem; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+            <div>
+                <h2 id="voxifyAnnTitle" style="margin:0; font-size:1.35rem; color:#111827;"></h2>
+                <div id="voxifyAnnMeta" style="font-size:0.9rem; color:#6b7280; margin-top:0.35rem;"></div>
+            </div>
+            <button onclick="closeVoxifyAnnouncement()" style="border:none; background:none; font-size:1.25rem; color:#6b7280; cursor:pointer;">&times;</button>
+        </div>
+        <div style="padding:1.5rem;">
+            <div id="voxifyAnnImageWrap" style="display:none; margin-bottom:1rem; text-align:center;"></div>
+            <p id="voxifyAnnBody" style="color:#374151; line-height:1.75; white-space:pre-wrap;"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+function openVoxifyAnnouncement(event, id, title, body, type, status, imageUrl) {
+    event.preventDefault();
+    document.getElementById('voxifyAnnTitle').textContent = title;
+    document.getElementById('voxifyAnnBody').textContent = body;
+    document.getElementById('voxifyAnnMeta').textContent = type + ' · ' + status;
+    const imgWrap = document.getElementById('voxifyAnnImageWrap');
+    if (imageUrl) {
+        imgWrap.innerHTML = '<img src="' + imageUrl + '" alt="' + title.replace(/"/g, '') + '" style="max-width:100%; max-height:320px; border-radius:12px; object-fit:contain;" />';
+        imgWrap.style.display = 'block';
+    } else {
+        imgWrap.style.display = 'none';
+        imgWrap.innerHTML = '';
+    }
+    const modal = document.getElementById('voxifyAnnModal');
+    modal.style.display = 'flex';
+}
+
+function closeVoxifyAnnouncement() {
+    document.getElementById('voxifyAnnModal').style.display = 'none';
+}
 </script>
 {% endblock %}
