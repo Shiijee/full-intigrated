@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "$schema": "https://cdn.statically.io/gh/nguyenngoclongdev/cdn/main/schema/v11/terminal-keeper.json",
   "theme": "tribe",
   "active": "saved-session",
@@ -83,89 +82,4 @@
       }
     ]
   }
-=======
-    "$schema": "https://cdn.statically.io/gh/nguyenngoclongdev/cdn/main/schema/v11/terminal-keeper.json",
-    "theme": "tribe",
-    "active": "saved-session",
-    "activateOnStartup": false,
-    "keepExistingTerminals": false,
-    "sessions": {
-        "default": [
-            {
-                "name": "hello",
-                "autoExecuteCommands": true,
-                "icon": "person",
-                "color": "terminal.ansiGreen",
-                "commands": [
-                    "echo hello"
-                ]
-            },
-            [
-                {
-                    "name": "docker:ros",
-                    "commands": [
-                        ""
-                    ]
-                },
-                {
-                    "name": "docker:k8s",
-                    "commands": [
-                        ""
-                    ]
-                }
-            ],
-            [
-                {
-                    "name": "docker:nats",
-                    "commands": [
-                        ""
-                    ]
-                },
-                {
-                    "name": "docker:fleet",
-                    "commands": [
-                        ""
-                    ]
-                }
-            ]
-        ],
-        "saved-session": [
-            {
-                "name": "Installer",
-                "autoExecuteCommands": true,
-                "commands": [
-                    "venv/scripts/activate"
-                ]
-            },
-            {
-                "name": "Portal",
-                "autoExecuteCommands": true,
-                "commands": [
-                    "venv\\Scripts\\python.exe integrated\\portal\\app.py --debug"
-                ]
-            },
-            {
-                "name": "Testpoint",
-                "autoExecuteCommands": true,
-                "commands": [
-                    "venv\\Scripts\\python.exe integrated\\testpoint_app\\app.py --debug"
-                ]
-            },
-            {
-                "name": "Newchange",
-                "autoExecuteCommands": true,
-                "commands": [
-                    "venv\\Scripts\\python.exe integrated\\newchange_app\\app.py --debug"
-                ]
-            },
-            {
-                "name": "Voxify",
-                "autoExecuteCommands": true,
-                "commands": [
-                    "venv\\Scripts\\python.exe integrated\\voxify_app\\app.py --debug"
-                ]
-            }
-        ]
-    }
->>>>>>> 45e20a4753c08b5013a061b31d1114ef013c5f6c
 }
