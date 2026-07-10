@@ -58,19 +58,12 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    next_url = request.args.get("next") or request.form.get("next") or "/"
-    token = request.cookies.get("auth_token")
-    if token:
-        user_data = decode_token(token)
-        if user_data:
-            # Already authenticated: don't allow a second login until logout.
-            return redirect(next_url)
-
     if request.method == "GET":
-        return render_template("login.html", next=next_url)
+        return render_template("login.html", next=request.args.get("next", ""))
 
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
+    next_url  = request.args.get("next") or request.form.get("next") or "/"
 
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -219,6 +212,44 @@ def create_user():
     finally:
         cursor.close()
         conn.close()
+
+
+@app.route("/api/update-password", methods=["POST"])
+def update_password():
+    """
+    Called by a module when a user changes their password locally,
+    so the portal's central DB stays in sync.
+    """
+    body = request.get_json(silent=True) or {}
+    username = body.get("username")
+    current_password = body.get("current_password")
+    new_password = body.get("new_password")
+
+    if not username or not current_password or not new_password:
+        return jsonify({"success": False, "reason": "username, current_password, and new_password are required"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({"success": False, "reason": "User not found"}), 404
+            
+        if not check_password_hash(user["password"], current_password):
+            return jsonify({"success": False, "reason": "Incorrect current password"}), 401
+            
+        cursor.execute("UPDATE users SET password = %s WHERE username = %s", (generate_password_hash(new_password), username))
+        conn.commit()
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

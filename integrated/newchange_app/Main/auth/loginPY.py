@@ -13,7 +13,10 @@ credentials through the Portal.
 """
 
 import os
-from flask import Blueprint, redirect, url_for, session, request, make_response
+from flask import Blueprint, redirect, url_for, session, request, make_response, render_template, flash
+from werkzeug.security import generate_password_hash, check_password_hash
+from Main.db import get_db_connection, get_cursor
+import requests
 
 PORTAL_URL = os.getenv('PORTAL_URL', 'http://127.0.0.1:5000')
 
@@ -59,7 +62,70 @@ def logout():
 @auth.route('/reset-password')
 @auth.route('/verify-otp')
 @auth.route('/resend-otp')
-@auth.route('/change-password', endpoint='change_password')
 def removed_auth_page():
     """These flows now live in the Portal. Redirect there."""
     return redirect(PORTAL_URL)
+
+
+@auth.route('/change-password', methods=['GET', 'POST'], endpoint='change_password')
+def change_password():
+    if 'user_id' not in session:
+        return redirect(url_for('auth.login'))
+
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password     = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+
+        if new_password != confirm_password:
+            flash('Passwords do not match.', 'error')
+            return render_template('change_password.html')
+
+        role = session.get('role')
+        uID  = session.get('user_id')  # This holds the username
+
+        conn   = get_db_connection()
+        cursor = get_cursor(conn)
+
+        if role == 'student':
+            table  = 'Students'
+            id_col = 'user_id'
+        elif role == 'teacher':
+            table  = 'Teachers'
+            id_col = 'user_id'
+        else:
+            table  = 'Admins'
+            id_col = 'username'
+
+        # Verify and Update via Portal
+        try:
+            resp = requests.post(f"{PORTAL_URL}/api/update-password", json={
+                "username": str(uID),
+                "current_password": current_password,
+                "new_password": new_password
+            }, timeout=5)
+            
+            data = resp.json()
+            if data.get("success"):
+                # Also update local DB to keep it in sync
+                new_hash = generate_password_hash(new_password)
+                cursor.execute(f"UPDATE {table} SET password_hash = %s WHERE {id_col} = %s", (new_hash, uID))
+                conn.commit()
+                flash('Password updated successfully.', 'success')
+                dest = 'user.dashboard' if role == 'student' else 'teacher.dashboard' if role == 'teacher' else 'admin.dashboard'
+                cursor.close()
+                conn.close()
+                return redirect(url_for(dest))
+            else:
+                if data.get("reason") == "Incorrect current password":
+                    flash('Incorrect current password.', 'error')
+                else:
+                    flash(f'Error updating password: {data.get("reason", "Unknown error")}', 'error')
+        except Exception as e:
+            print("Error syncing with portal:", e)
+            flash('Error communicating with authentication server.', 'error')
+
+        cursor.close()
+        conn.close()
+
+    return render_template('change_password.html')
