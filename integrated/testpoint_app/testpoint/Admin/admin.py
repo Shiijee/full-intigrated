@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 import mysql.connector
+from testpoint.portal_sync import sync_subject_to_attendance, sync_class_to_attendance, sync_enrollment_to_attendance, sync_unenroll_to_attendance
 from testpoint import db_config
 from testpoint.Auth.login import admin_logged_in
 from werkzeug.security import generate_password_hash
@@ -110,12 +111,14 @@ def manage_accounts():
                             COALESCE(s.middlename, t.middlename, a.middlename) AS middlename,
                             COALESCE(s.lastname, t.lastname, a.lastname) AS lastname,
                             u.email, u.role, u.is_verified, u.created_at,
-                            b.block_name, p.program_name
+                            b.block_name, p.program_name,
+                            t.college_id, c.college_name
                             FROM users u
                             LEFT JOIN students s ON u.user_id = s.student_id
                             LEFT JOIN blocks b ON s.block_id = b.block_id
                             LEFT JOIN programs p ON b.program_id = p.program_id
                             LEFT JOIN teachers t ON u.user_id = t.teacher_id
+                            LEFT JOIN colleges c ON t.college_id = c.college_id
                             LEFT JOIN admins a ON u.user_id = a.admin_id
                             WHERE u.is_active IN (1);
         """)
@@ -123,9 +126,12 @@ def manage_accounts():
 
         cursor.execute("SELECT b.block_id, b.block_name, p.program_name FROM blocks b JOIN programs p ON b.program_id = p.program_id")
         blocks = cursor.fetchall()
+        
+        cursor.execute("SELECT college_id, college_name FROM colleges WHERE is_active = 1")
+        colleges = cursor.fetchall()
 
         cursor.close(); connection.close()
-        return render_template('admin_accounts.html', users=users, blocks=blocks, firstname=firstname)
+        return render_template('admin_accounts.html', users=users, blocks=blocks, colleges=colleges, firstname=firstname)
     else:
         flash('Please log in as admin.', 'danger')
         return redirect(url_for('auth.login'))
@@ -218,11 +224,23 @@ def update_account(user_id):
 
             # Update specific profile info based on role
             if role == 'teacher':
+                college_id = request.form.get('college_id')
+                c_id = college_id if college_id and college_id.strip() != "" else None
                 cursor.execute("""
                     UPDATE teachers
-                    SET firstname = %s, middlename = %s, lastname = %s
+                    SET firstname = %s, middlename = %s, lastname = %s, college_id = %s
                     WHERE teacher_id = %s
-                """, (firstname, middlename, lastname, user_id))
+                """, (firstname, middlename, lastname, c_id, user_id))
+                
+                # Directly update Attendance DB since this route doesn't use the full sync logic
+                if c_id:
+                    cursor.execute("SELECT college_name FROM colleges WHERE college_id = %s", (c_id,))
+                    coll = cursor.fetchone()
+                    if coll:
+                        c_name = coll[0] if isinstance(coll, tuple) else coll.get('college_name')
+                        cursor.execute("UPDATE db_attendance.Teachers SET department = %s WHERE user_id = %s", (c_name, user_id))
+                else:
+                    cursor.execute("UPDATE db_attendance.Teachers SET department = NULL WHERE user_id = %s", (user_id,))
 
             elif role == 'student':
                 b_id = block_id if block_id and block_id.strip() != "" else None
@@ -277,6 +295,7 @@ def add_user():
         province = request.form.get('province_text')
         city = request.form.get('city_text')
         barangay = request.form.get('barangay_text')
+        college_id = request.form.get('college_id')
 
         if password != confirm_password:
             flash('Passwords do not match.', 'danger')
@@ -301,10 +320,11 @@ def add_user():
             """, (custom_user_id, email, hashed_password, role))
 
             if role == 'teacher':
+                c_id = college_id if college_id and college_id.strip() != "" else None
                 cursor.execute("""
-                    INSERT INTO teachers (teacher_id, email, firstname, middlename, lastname, region, province, city, barangay)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (custom_user_id, email, fname, mname, lname, region, province, city, barangay))
+                    INSERT INTO teachers (teacher_id, email, firstname, middlename, lastname, region, province, city, barangay, college_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (custom_user_id, email, fname, mname, lname, region, province, city, barangay, c_id))
 
             elif role == 'student':
                 b_id = block_id if block_id and block_id.strip() != "" else None
@@ -334,12 +354,49 @@ def add_user():
                 email=email,
                 external_id=custom_user_id,
             )
+            
+            extra_data = {}
+            if role == 'teacher' and 'college_id' in locals() and college_id:
+                try:
+                    cursor.execute("SELECT college_name FROM colleges WHERE college_id = %s", (college_id,))
+                    coll_info = cursor.fetchone()
+                    if coll_info:
+                        coll_name = coll_info[0] if isinstance(coll_info, tuple) else coll_info.get('college_name')
+                        extra_data["department"] = coll_name
+                except Exception as e:
+                    print(f"Error fetching college for teacher: {e}")
+
+            if role == 'student' and 'b_id' in locals() and b_id:
+                try:
+                    # we already have a cursor from earlier
+                    cursor.execute("SELECT b.block_name, p.program_name, c.college_name FROM blocks b JOIN programs p ON b.program_id = p.program_id LEFT JOIN colleges c ON p.college_id = c.college_id WHERE b.block_id = %s", (b_id,))
+                    block_info = cursor.fetchone()
+                    if block_info:
+                        block_name = block_info[0] if isinstance(block_info, tuple) else block_info.get('block_name')
+                        program_name = block_info[1] if isinstance(block_info, tuple) else block_info.get('program_name')
+                        college_name = block_info[2] if isinstance(block_info, tuple) else block_info.get('college_name')
+                        
+                        extra_data["program"] = program_name
+                        extra_data["college"] = college_name
+                        if block_name and "-" in block_name:
+                            parts = block_name.split("-")
+                            if len(parts) == 2 and len(parts[1]) >= 2:
+                                extra_data["year"] = parts[1][0]
+                                extra_data["block"] = parts[1][1:]
+                            else:
+                                extra_data["block"] = block_name
+                        else:
+                            extra_data["block"] = block_name
+                except Exception as e:
+                    print("Error getting extra data", e)
+
             mirror_results = mirror_user_to_modules(
                 username=custom_user_id,
                 password=password,
                 full_name=fullname_for_portal,
                 role=portal_role(role),
                 email=email,
+                extra_data=extra_data
             )
 
             failed_modules = []
@@ -857,6 +914,8 @@ def manage_courses():
             desc = request.form.get('description')
             c_id = request.form.get('college_id')
             cursor.execute("INSERT INTO courses (course_code, course_name, description, college_id) VALUES (%s, %s, %s, %s)", (code, name, desc, c_id))
+            try: sync_subject_to_attendance(old_code, name, 1)
+            except Exception as e: print(e)
             connection.commit()
             flash(f"Course {code} added.", "success")
             return redirect(url_for('admin.manage_courses'))
@@ -883,6 +942,8 @@ def add_course():
         connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
         try:
             cursor.execute("INSERT INTO courses (course_code, course_name, description) VALUES (%s, %s, %s)", (code, name, desc))
+            try: sync_subject_to_attendance(code, name, 1)
+            except Exception as e: print(e)
             connection.commit(); flash(f'Subject {code} added to catalog.', 'success')
         except mysql.connector.Error as err: flash(f'Error: {err}', 'danger')
         finally: cursor.close(); connection.close()
@@ -897,6 +958,8 @@ def update_course(old_code):
         c_id = request.form.get('college_id')
         connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
         cursor.execute("UPDATE courses SET course_name = %s, description = %s, college_id = %s WHERE course_code = %s", (name, desc, c_id, old_code))
+        try: sync_subject_to_attendance(old_code, name, 1)
+        except Exception as e: print(e)
         connection.commit(); cursor.close(); connection.close()
         flash(f'Course {old_code} updated.', 'success')
         return redirect(url_for('admin.manage_courses'))
@@ -905,8 +968,15 @@ def update_course(old_code):
 @admin.route('/deactivate_course/<string:course_code>', methods=['POST'])
 def deactivate_course(course_code):
     if admin_logged_in():
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT course_name FROM courses WHERE course_code = %s", (course_code,))
+        course = cursor.fetchone()
+        course_name = course['course_name'] if course else course_code
+        
         cursor.execute("UPDATE courses SET is_active = 0 WHERE course_code = %s", (course_code,))
+        try: sync_subject_to_attendance(course_code, course_name, 0)
+        except Exception as e: print(e)
+        
         connection.commit(); cursor.close(); connection.close()
         flash('Subject moved to trash.', 'success'); return redirect(url_for('admin.manage_courses'))
     return redirect(url_for('auth.login'))
@@ -922,8 +992,15 @@ def trashed_courses():
 @admin.route('/restore_course/<string:course_code>', methods=['POST'])
 def restore_course(course_code):
     if admin_logged_in():
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
+        connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT course_name FROM courses WHERE course_code = %s", (course_code,))
+        course = cursor.fetchone()
+        course_name = course['course_name'] if course else course_code
+        
         cursor.execute("UPDATE courses SET is_active = 1 WHERE course_code = %s", (course_code,))
+        try: sync_subject_to_attendance(course_code, course_name, 1)
+        except Exception as e: print(e)
+        
         connection.commit(); cursor.close(); connection.close()
         flash('Subject restored.', 'success'); return redirect(url_for('admin.manage_courses'))
     return redirect(url_for('auth.login'))
@@ -1036,6 +1113,11 @@ def manage_classes():
                 INSERT INTO classes (class_code, course_code, block_id, teacher_id, is_active)
                 VALUES (%s, %s, %s, %s, 1)
             """, (new_class_code, co_code, b_id, t_id))
+            cursor.execute("SELECT block_name FROM blocks WHERE block_id = %s", (b_id,))
+            blk = cursor.fetchone()
+            block_name = blk['block_name'] if blk else ""
+            try: sync_class_to_attendance(new_class_code, t_id, co_code, block_name, 1)
+            except Exception as e: print("Sync error:", e)
 
             connection.commit()
             flash(f"Successfully scheduled {new_class_code} for this block.", "success")
@@ -1148,6 +1230,14 @@ def archive_class(class_code):
         cursor.execute(
             "UPDATE classes SET is_active = 0 WHERE class_code = %s", (class_code,)
         )
+        cursor.execute("""SELECT c.course_code, c.teacher_id, b.block_name 
+                          FROM classes c 
+                          JOIN blocks b ON c.block_id = b.block_id 
+                          WHERE c.class_code = %s""", (class_code,))
+        cls_data = cursor.fetchone()
+        if cls_data:
+            try: sync_class_to_attendance(class_code, cls_data['teacher_id'], cls_data['course_code'], cls_data['block_name'], 0)
+            except Exception as e: print("Sync error:", e)
         connection.commit()
         cursor.close()
         connection.close()
@@ -1187,6 +1277,14 @@ def restore_class(class_code):
         cursor.execute(
             "UPDATE classes SET is_active = 1 WHERE class_code = %s", (class_code,)
         )
+        cursor.execute("""SELECT c.course_code, c.teacher_id, b.block_name 
+                          FROM classes c 
+                          JOIN blocks b ON c.block_id = b.block_id 
+                          WHERE c.class_code = %s""", (class_code,))
+        cls_data = cursor.fetchone()
+        if cls_data:
+            try: sync_class_to_attendance(class_code, cls_data['teacher_id'], cls_data['course_code'], cls_data['block_name'], 1)
+            except Exception as e: print("Sync error:", e)
         connection.commit()
         cursor.close()
         connection.close()
@@ -1448,6 +1546,10 @@ def enroll_student():
         else:
             # 3. PROCEED WITH ENROLLMENT
             cursor.execute("INSERT INTO enrollments (student_id, class_code) VALUES (%s, %s)", (student_id, class_code))
+            try: sync_enrollment_to_attendance(student_id, class_code)
+            except Exception as e: print("Sync enrollment error:", e)
+            try: sync_enrollment_to_attendance, sync_unenroll_to_attendance(f"{student_id}_{class_code}", student_id, class_code)
+            except Exception as e: print(e)
             connection.commit()
             flash('Student successfully enrolled in their college course.', 'success')
 
@@ -1528,7 +1630,13 @@ def unenroll_student(enrollment_id, class_code):
         try:
             # The <path:> converter is used instead of <string:> to better handle
             # characters that might be part of the encoded string.
+            cursor.execute("SELECT student_id FROM enrollments WHERE enrollment_id = %s", (enrollment_id,))
+            enr_record = cursor.fetchone()
+            student_id = enr_record[0] if enr_record else None
             cursor.execute("DELETE FROM enrollments WHERE enrollment_id = %s", (enrollment_id,))
+            if student_id:
+                try: sync_unenroll_to_attendance(student_id, class_code)
+                except Exception as e: print("Sync unenroll error:", e)
             connection.commit()
             flash('Student successfully unenrolled.', 'success')
         except mysql.connector.Error as err:

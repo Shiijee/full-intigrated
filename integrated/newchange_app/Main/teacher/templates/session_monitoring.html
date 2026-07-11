@@ -157,6 +157,8 @@
 
         /* ── Header session info ── */
         .top-header { flex-wrap: wrap; gap: 0.75rem; }
+        
+        .btn-paused { background: #f59e0b !important; color: white !important; border-color: #f59e0b !important; }
 
         /* ── Responsive ── */
         @media (max-width: 768px) {
@@ -193,11 +195,18 @@
                     {{ session.subject_code }} — {{ session.subject_name }} · Section {{ session.section }}
                 </p>
             </div>
-            <button onclick="endSessionManually()" class="btn btn-danger" id="end-session-btn"
-                    style="white-space: nowrap; display: flex; align-items: center; gap: 0.5rem;">
-                <i class="fas fa-stop-circle"></i>
-                <span class="btn-text">End Session</span>
-            </button>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button onclick="toggleSessionPause()" class="btn btn-secondary {% if session.status == 'Paused' %}btn-paused{% endif %}" id="pause-session-btn"
+                        style="white-space: nowrap; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas {% if session.status == 'Paused' %}fa-play-circle{% else %}fa-pause-circle{% endif %}"></i>
+                    <span class="btn-text" id="pause-btn-text">{% if session.status == 'Paused' %}Resume Session{% else %}Pause Session{% endif %}</span>
+                </button>
+                <button onclick="endSessionManually()" class="btn btn-danger" id="end-session-btn"
+                        style="white-space: nowrap; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-stop-circle"></i>
+                    <span class="btn-text">End Session</span>
+                </button>
+            </div>
         </header>
 
         <div class="main-content-inner">
@@ -402,6 +411,75 @@
 
     let pollInterval = setInterval(fetchStats, 3000);
     fetchStats();
+
+    async function toggleSessionPause() {
+        const btn = document.getElementById('pause-session-btn');
+        const icon = btn.querySelector('i');
+        const text = btn.querySelector('.btn-text');
+        
+        btn.disabled = true;
+        
+        try {
+            const response = await fetch("{{ url_for('teacher.toggle_session_pause') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF()
+                },
+                body: JSON.stringify({ session_id: "{{ session.session_id }}" })
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                if (data.new_status === 'Paused') {
+                    btn.style.background = '#f59e0b';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = '#f59e0b';
+                    icon.className = 'fas fa-play-circle';
+                    text.innerText = 'Resume Session';
+                    
+                    // Add overlay to QR code to indicate paused
+                    const qrContainer = document.querySelector('.qr-container');
+                    if (qrContainer && !document.getElementById('qr-paused-overlay')) {
+                        const overlay = document.createElement('div');
+                        overlay.id = 'qr-paused-overlay';
+                        overlay.style.position = 'absolute';
+                        overlay.style.top = '0';
+                        overlay.style.left = '0';
+                        overlay.style.width = '100%';
+                        overlay.style.height = '100%';
+                        overlay.style.background = 'rgba(255, 255, 255, 0.8)';
+                        overlay.style.display = 'flex';
+                        overlay.style.alignItems = 'center';
+                        overlay.style.justifyContent = 'center';
+                        overlay.style.fontSize = '1.5rem';
+                        overlay.style.fontWeight = 'bold';
+                        overlay.style.color = '#f59e0b';
+                        overlay.style.borderRadius = '14px';
+                        overlay.innerText = 'PAUSED';
+                        qrContainer.style.position = 'relative';
+                        qrContainer.appendChild(overlay);
+                    }
+                } else {
+                    btn.style.background = '';
+                    btn.style.color = '';
+                    btn.style.borderColor = '';
+                    icon.className = 'fas fa-pause-circle';
+                    text.innerText = 'Pause Session';
+                    
+                    const overlay = document.getElementById('qr-paused-overlay');
+                    if (overlay) overlay.remove();
+                }
+            } else {
+                Swal.fire('Error', data.message || 'Failed to toggle pause status.', 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Network Error', 'Could not reach the server.', 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
 
     async function endSessionManually() {
         const result = await Swal.fire({

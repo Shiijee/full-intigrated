@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Manage Students | Admin</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('admin.static', filename='Astyle.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="theme-admin">
@@ -33,9 +34,9 @@
                         <p class="text-muted">Register, enroll, and manage student accounts across the system.</p>
                     </div>
                     <div class="flex gap-3">
-                        <button class="btn btn-secondary" onclick="openBulkModal()"><i class="fas fa-users-cog"></i> Bulk Enroll</button>
-                        <button class="btn btn-success" onclick="openUploadModal()"><i class="fas fa-file-excel"></i> Upload Students</button>
-                        <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add Student</button>
+                        
+                        
+                        
                     </div>
                 </div>
             
@@ -58,11 +59,11 @@
                         </div>
                         
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Course</label>
-                            <select name="course_filter" class="form-control">
-                                <option value="">All Courses</option>
-                                {% for course in courses %}
-                                    <option value="{{ course }}" {% if course == course_filter %}selected{% endif %}>{{ course }}</option>
+                            <label class="form-label">Program</label>
+                            <select name="program_filter" class="form-control">
+                                <option value="">All Programs</option>
+                                {% for program in programs %}
+                                    <option value="{{ program }}" {% if program == program_filter %}selected{% endif %}>{{ program }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -102,10 +103,7 @@
                                 <small style="display: block; font-size: 0.65rem; opacity: 0.8;">{{ subject.teacher_name }}</small>
                             </button>
                         {% endfor %}
-                        <button class="tab-btn" onclick="showTab('unassigned')" style="border: 1px dashed var(--primary); color: var(--primary);">
-                            <i class="fas fa-user-plus mr-1"></i> Manual Enroll
-                            <span class="badge badge-primary" style="margin-left: 0.5rem;">{{ unassigned_students|length }}</span>
-                        </button>
+                        
                         <button class="tab-btn" onclick="showTab('archived')" style="margin-left: auto; color: var(--danger);">
                             <i class="fas fa-archive"></i> Archived
                         </button>
@@ -121,7 +119,9 @@
                                 <tr>
                                     <th class="hide-on-mobile">Student ID</th>
                                     <th>Student Details</th>
-                                    <th class="hide-on-mobile">Course & Level</th>
+                                    <th class="hide-on-mobile">College</th>
+<th class="hide-on-mobile">Program</th>
+<th class="hide-on-mobile">Block</th>
                                     <th class="hide-on-mobile">Email</th>
                                     <th>Status</th>
                                     <th>Action</th>
@@ -134,10 +134,12 @@
                                     <td data-label="Student Details">
                                         <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
                                         <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
-                                            ID: {{ student.user_id }} &bull; {{ student.course }} - {{ student.level }}
+                                            ID: {{ student.user_id }} &bull; {{ student.program }} - Sec {{ student.block }}
                                         </div>
                                     </td>
-                                    <td class="hide-on-mobile" data-label="Course & Level">{{ student.course }} - {{ student.level }}</td>
+                                    <td class="hide-on-mobile" data-label="College">{{ student.college }}</td>
+<td class="hide-on-mobile" data-label="Program">{{ student.program }}</td>
+<td class="hide-on-mobile" data-label="Block">{{ student.block }}</td>
                                     <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ student.email }}">{{ student.email }}</td>
                                     <td data-label="Status">
                                         <span class="badge {% if student.status == 'Active' %}badge-success{% else %}badge-danger{% endif %}">
@@ -158,18 +160,8 @@
                                             <i class="fas fa-unlock"></i>
                                         </a>
                                         {% endif %}
-                                        <button class="btn btn-secondary" 
-                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
-                                                title="Edit"
-                                                onclick="openEditModal(`{{ student.user_id }}`, `{{ student.first_name }}`, `{{ student.middle_name }}`, `{{ student.last_name }}`, `{{ student.email }}`, `{{ student.course }}`, `{{ student.level }}`, `{{ student.section }}`, `{{ student.status }}`)">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-primary" 
-                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
-                                                title="Enroll"
-                                                onclick="openEnrollModal(`{{ student.user_id }}`, `{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}`)">
-                                            <i class="fas fa-user-plus"></i>
-                                        </button>
+                                        
+                                        
                                         <a href="{{ url_for('admin.archive_student', user_id=student.user_id) }}" 
                                            class="btn btn-warning" 
                                            style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
@@ -277,12 +269,7 @@
                                         </td>
                                         <td class="action-cell" data-label="Action">
                                             <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
-                                            <button class="btn btn-secondary" 
-                                                    style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
-                                                    title="Edit"
-                                                    onclick="openEditModal('{{ estudent.user_id }}', '{{ estudent.first_name }}', '{{ estudent.middle_name }}', '{{ estudent.last_name }}', '{{ estudent.email }}', '{{ estudent.course }}', '{{ estudent.level }}', '{{ estudent.section }}', '{{ estudent.status }}')">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
+                                            
                                             <a href="{{ url_for('admin.archive_student', user_id=estudent.user_id) }}" 
                                                class="btn btn-warning" 
                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
@@ -290,13 +277,7 @@
                                                onclick="return confirm('Are you sure you want to archive this student?')">
                                                 <i class="fas fa-archive"></i>
                                             </a>
-                                            <a href="{{ url_for('admin.remove_enrollment', enrollment_id=estudent.enrollment_id if estudent.enrollment_id else 0) }}" 
-                                               class="btn btn-secondary" 
-                                               style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; text-decoration: none;"
-                                               title="Unenroll"
-                                               onclick="return confirm('Remove this student from this subject?')">
-                                                <i class="fas fa-user-minus"></i>
-                                            </a>
+                                            
 
                                             </div>
                                         </td>
@@ -320,63 +301,7 @@
             </div>
             {% endfor %}
 
-            <!-- Unassigned Students (Manual Enroll) Tab -->
-            <div id="tab-unassigned" class="tab-content" style="display: none;">
-                <div class="glass-panel p-4" style="padding: 1.5rem;">
-                    <div class="flex justify-between items-center mb-6">
-                        <div>
-                            <h3 style="margin: 0; color: var(--primary);">Manual Enrollment</h3>
-                            <p class="text-muted" style="font-size: 0.85rem;">Showing students who are not yet enrolled in any subjects or sections.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th class="hide-on-mobile">Student ID</th>
-                                    <th>Student Details</th>
-                                    <th class="hide-on-mobile">Course & Year</th>
-                                    <th class="hide-on-mobile">Email Address</th>
-                                    <th class="text-center">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for student in unassigned_students %}
-                                <tr>
-                                    <td class="hide-on-mobile" style="font-weight: 600;" data-label="Student ID">{{ student.user_id }}</td>
-                                    <td data-label="Student Details">
-                                        <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
-                                        <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
-                                            ID: {{ student.user_id }} &bull; {{ student.course }} - {{ student.level }}
-                                        </div>
-                                    </td>
-                                    <td class="hide-on-mobile" data-label="Course & Year">{{ student.course }} - {{ student.level }}</td>
-                                    <td class="hide-on-mobile" data-label="Email Address" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ student.email }}">{{ student.email }}</td>
-                                    <td class="text-center action-cell" style="justify-content: center;" data-label="Action">
-                                        <button class="btn btn-primary" 
-                                                style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"
-                                                title="Enroll Now"
-                                                onclick="openEnrollModal(`{{ student.user_id }}`, `{{ student.first_name }} {{ student.last_name }}`)">
-                                            <i class="fas fa-plus-circle"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="5" class="text-center" style="padding: 4rem 1rem;" data-label="Student ID">
-                                        <div style="opacity: 0.6;">
-                                            <i class="fas fa-check-double" style="font-size: 3rem; margin-bottom: 1rem; color: var(--success); display: block;"></i>
-                                            <p>All active students are currently enrolled in at least one subject!</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+            
 
             <!-- Archived Students Tab -->
             <div id="tab-archived" class="tab-content" style="display: none;">
@@ -388,7 +313,9 @@
                                 <tr>
                                     <th class="hide-on-mobile">Student ID</th>
                                     <th>Student Details</th>
-                                    <th class="hide-on-mobile">Course & Level</th>
+                                    <th class="hide-on-mobile">College</th>
+<th class="hide-on-mobile">Program</th>
+<th class="hide-on-mobile">Block</th>
                                     <th class="hide-on-mobile">Email</th>
                                     <th>Action</th>
                                 </tr>
@@ -400,10 +327,12 @@
                                     <td data-label="Student Details">
                                         <div style="font-weight: 600; color: var(--text-main);">{{ student.first_name }} {{ student.middle_name }} {{ student.last_name }}</div>
                                         <div class="text-muted hide-on-desktop" style="font-size: 0.75rem; margin-top: 2px;">
-                                            ID: {{ student.user_id }} &bull; {{ student.course }} - {{ student.level }}
+                                            ID: {{ student.user_id }} &bull; {{ student.program }} - Sec {{ student.block }}
                                         </div>
                                     </td>
-                                    <td class="hide-on-mobile" data-label="Course & Level">{{ student.course }} - {{ student.level }}</td>
+                                    <td class="hide-on-mobile" data-label="College">{{ student.college }}</td>
+<td class="hide-on-mobile" data-label="Program">{{ student.program }}</td>
+<td class="hide-on-mobile" data-label="Block">{{ student.block }}</td>
                                     <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ student.email }}">{{ student.email }}</td>
                                     <td class="action-cell" data-label="Action">
                                         <a href="{{ url_for('admin.unarchive_student', user_id=student.user_id) }}" 
@@ -452,208 +381,7 @@
         }
     </style>
 
-    <!-- Add Student Modal -->
-    <div id="addStudentModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
-        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
-            <button onclick="closeModal('addStudentModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            <h3 class="mb-4">Add New Student</h3>
-            <form method="POST" action="{{ url_for('admin.manage_students') }}" onsubmit="return validateStudentForm(this)">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group mb-3">
-                    <label class="form-label">First Name</label>
-                    <input type="text" name="first_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Middle Name</label>
-                    <input type="text" name="middle_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Last Name</label>
-                    <input type="text" name="last_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" required>
-                </div>
-                <div class="row" style="display: flex; gap: 1rem;">
-                    <div class="form-group mb-3" style="flex: 1;">
-                        <label class="form-label">Course</label>
-                        <input type="text" name="course" class="form-control" placeholder="e.g. BSIT" required>
-                    </div>
-                    <div class="form-group mb-3" style="flex: 1;">
-                        <label class="form-label">Level / Year</label>
-                        <select name="level" class="form-control" required>
-                            <option value="">-- Select Year --</option>
-                            <option value="1st Year">1st Year</option>
-                            <option value="2nd Year">2nd Year</option>
-                            <option value="3rd Year">3rd Year</option>
-                            <option value="4th Year">4th Year</option>
-                            <option value="Irregular Student">Irregular Student</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group mb-4">
-                    <label class="form-label">Section</label>
-                    <input type="text" name="section" class="form-control" placeholder="e.g. A" required>
-                </div>
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('addStudentModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Student</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Edit Student Modal -->
-    <div id="editStudentModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
-        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
-            <button onclick="closeModal('editStudentModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            <h3 class="mb-4">Edit Student</h3>
-            <form id="editStudentForm" method="POST" onsubmit="return validateStudentForm(this)">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group mb-3">
-                    <label class="form-label">First Name</label>
-                    <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Middle Name</label>
-                    <input type="text" name="middle_name" id="edit_middle_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Last Name</label>
-                    <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" id="edit_email" class="form-control" required>
-                </div>
-                <div class="row" style="display: flex; gap: 1rem;">
-                    <div class="form-group mb-3" style="flex: 1;">
-                        <label class="form-label">Course</label>
-                        <input type="text" name="course" id="edit_course" class="form-control" required>
-                    </div>
-                    <div class="form-group mb-3" style="flex: 1;">
-                        <label class="form-label">Level / Year</label>
-                        <select name="level" id="edit_level" class="form-control" required>
-                            <option value="1st Year">1st Year</option>
-                            <option value="2nd Year">2nd Year</option>
-                            <option value="3rd Year">3rd Year</option>
-                            <option value="4th Year">4th Year</option>
-                            <option value="Irregular Student">Irregular Student</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="row" style="display: flex; gap: 1rem;">
-                    <div class="form-group mb-4" style="flex: 1;">
-                        <label class="form-label">Section</label>
-                        <input type="text" name="section" id="edit_section" class="form-control" required>
-                    </div>
-                    <div class="form-group mb-4" style="flex: 1;">
-                        <label class="form-label">Status</label>
-                        <select name="status" id="edit_status" class="form-control">
-                            <option value="Active">Active</option>
-                            <option value="Archived">Archived</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('editStudentModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Student</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Enroll Student Modal -->
-    <div id="enrollStudentModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
-        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
-            <button onclick="closeModal('enrollStudentModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            <h3 class="mb-4">Enroll <span id="enroll_student_name"></span></h3>
-            <form method="POST" action="{{ url_for('admin.enroll_student') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <input type="hidden" name="user_id" id="enroll_usid">
-                <div class="form-group mb-4">
-                    <label class="form-label">Select Subject & Section</label>
-                    <select name="assignment_id" class="form-control" required>
-                        <option value="">-- Choose Class --</option>
-                        {% for a in all_assignments %}
-                            <option value="{{ a.assignment_id }}">{{ a.subject_code }} - {{ a.section }} ({{ a.first_name }} {{ a.middle_name }} {{ a.last_name }})</option>
-                        {% endfor %}
-                    </select>
-                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">Only classes with assigned teachers are shown.</p>
-                </div>
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('enrollStudentModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Enroll Student</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Upload Students Modal -->
-    <div id="uploadStudentsModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
-        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
-            <button onclick="closeModal('uploadStudentsModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            <h3 class="mb-4">Upload List of Students</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Upload an Excel file (.xlsx) containing student information. Students will be added to the system but not yet enrolled in any classes.</p>
-            <form method="POST" action="{{ url_for('admin.upload_students_excel') }}" enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group mb-4">
-                    <label class="form-label">Excel File</label>
-                    <input type="file" name="excel_file" class="form-control" accept=".xlsx, .xls" required style="padding: 0.5rem;">
-                </div>
-                <div class="form-group mb-4">
-                    <a href="{{ url_for('admin.download_student_template') }}" style="color: var(--primary); font-size: 0.85rem; text-decoration: underline;"><i class="fas fa-download mr-1"></i> Download Excel Template</a>
-                </div>
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('uploadStudentsModal')">Cancel</button>
-                    <button type="submit" class="btn btn-success">Upload and Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Bulk Enroll Modal -->
-    <div id="bulkEnrollModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
-        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
-            <button onclick="closeModal('bulkEnrollModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            <h3 class="mb-4">Quick Bulk Enrollment</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Automatically enroll a specific number of students into a class.</p>
-            
-            <form method="POST" action="{{ url_for('admin.bulk_enroll') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group mb-3">
-                    <label class="form-label">Target Class</label>
-                    <select name="assignment_id" class="form-control" required>
-                        <option value="">-- Select Class --</option>
-                        {% for a in all_assignments %}
-                            <option value="{{ a.assignment_id }}">{{ a.subject_code }} - {{ a.section }} ({{ a.first_name }} {{ a.middle_name }} {{ a.last_name }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="form-group mb-3">
-                    <label class="form-label">Number of Students</label>
-                    <input type="number" name="count" class="form-control" placeholder="e.g. 30" min="1" required>
-                </div>
-                
-                <div class="form-group mb-4">
-                    <label class="form-label">Filter by Course (Optional)</label>
-                    <select name="course_filter" class="form-control">
-                        <option value="">-- All Courses --</option>
-                        {% for course in courses %}
-                            <option value="{{ course }}">{{ course }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('bulkEnrollModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Start Enrollment</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    
 
     <script>
         function showTab(tabId) {
@@ -694,33 +422,15 @@
             Object.keys(data).forEach(k => { const el = f.querySelector(`[name="${k}"]`); if (el) el.value = data[k]; });
         }
         
-        function openEditModal(sid, fname, mname, lname, email, course, level, section, status) {
-            document.getElementById('editStudentForm').action = "/admin/edit_student/" + sid;
-            document.getElementById('edit_first_name').value = fname;
-            document.getElementById('edit_middle_name').value = mname;
-            document.getElementById('edit_last_name').value = lname;
-            document.getElementById('edit_email').value = email;
-            document.getElementById('edit_course').value = course;
-            document.getElementById('edit_level').value = level;
-            document.getElementById('edit_section').value = section;
-            document.getElementById('edit_status').value = status;
-            
-            document.getElementById('editStudentModal').classList.add('active');
-        }
+        
 
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
         }
 
-        function openEnrollModal(sid, name) {
-            document.getElementById('enroll_usid').value = sid;
-            document.getElementById('enroll_student_name').innerText = name;
-            document.getElementById('enrollStudentModal').classList.add('active');
-        }
+        
 
-        function openBulkModal() {
-            document.getElementById('bulkEnrollModal').classList.add('active');
-        }
+        
 
         function openUploadModal() {
             document.getElementById('uploadStudentsModal').classList.add('active');

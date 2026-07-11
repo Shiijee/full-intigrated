@@ -74,6 +74,7 @@ def require_login():
     if hasattr(result, 'status_code'):
         return result
     if result.get('role') != 'admin':
+        print(f"DEBUG: 403 Forbidden! Role mismatch. result={result}", flush=True)
         from flask import abort
         abort(403)
 
@@ -434,7 +435,7 @@ def manage_students():
     
     if request.args.get('clear'):
         session.pop('students_search', None)
-        session.pop('students_course', None)
+        session.pop('students_program', None)
         session.pop('students_status', None)
         return redirect(url_for('admin.manage_students'))
 
@@ -444,10 +445,10 @@ def manage_students():
         session['students_search'] = search_param.strip()
     search = session.get('students_search', '')
 
-    course_param = request.args.get('course_filter')
-    if course_param is not None:
-        session['students_course'] = course_param.strip()
-    course_filter = session.get('students_course', '')
+    program_param = request.args.get('program_filter')
+    if program_param is not None:
+        session['students_program'] = program_param.strip()
+    program_filter = session.get('students_program', '')
 
     status_param = request.args.get('status_filter')
     if status_param is not None:
@@ -467,10 +468,10 @@ def manage_students():
         search_val = f"%{search}%"
         params.extend([search_val, search_val, search_val, search_val, search_val])
         
-    if course_filter:
-        query += " AND course = %s"
-        count_query += " AND course = %s"
-        params.append(course_filter)
+    if program_filter:
+        query += " AND program = %s"
+        count_query += " AND program = %s"
+        params.append(program_filter)
         
     if status_filter and status_filter != 'All':
         query += " AND status = %s"
@@ -503,9 +504,9 @@ def manage_students():
         search_val = f"%{search}%"
         assignment_query += " AND (st.user_id LIKE %s OR st.first_name LIKE %s OR st.middle_name LIKE %s OR st.last_name LIKE %s OR st.email LIKE %s)"
         assignment_params.extend([search_val, search_val, search_val, search_val, search_val])
-    if course_filter:
-        assignment_query += " AND st.course = %s"
-        assignment_params.append(course_filter)
+    if program_filter:
+        assignment_query += " AND st.program = %s"
+        assignment_params.append(program_filter)
     if status_filter and status_filter != 'All':
         assignment_query += " AND st.status = %s"
         assignment_params.append(status_filter)
@@ -539,9 +540,9 @@ def manage_students():
     if search:
         enrolled_query += " AND (s.user_id LIKE %s OR s.first_name LIKE %s OR s.middle_name LIKE %s OR s.last_name LIKE %s OR s.email LIKE %s)"
         enrolled_params.extend([search_val, search_val, search_val, search_val, search_val])
-    if course_filter:
-        enrolled_query += " AND s.course = %s"
-        enrolled_params.append(course_filter)
+    if program_filter:
+        enrolled_query += " AND s.program = %s"
+        enrolled_params.append(program_filter)
     if status_filter and status_filter != 'All':
         enrolled_query += " AND s.status = %s"
         enrolled_params.append(status_filter)
@@ -567,8 +568,8 @@ def manage_students():
     """)
     all_assignments = cursor.fetchall()
 
-    cursor.execute("SELECT DISTINCT course FROM Students WHERE course IS NOT NULL AND status = 'Active'")
-    courses = [row['course'] for row in cursor.fetchall()]
+    cursor.execute("SELECT DISTINCT program FROM Students WHERE program IS NOT NULL AND status = 'Active'")
+    programs = [row['program'] for row in cursor.fetchall()]
 
     cursor.close()
     conn.close()
@@ -578,12 +579,12 @@ def manage_students():
                            enrolled_students=enrolled_students,
                            unassigned_students=unassigned_students, # New data for manual enroll
                            all_assignments=all_assignments,
-                           courses=courses,
+                           programs=programs,
                            total_pages=total_pages,
                            total_count=total_count,
                            current_page=page,
                            search=search,
-                           course_filter=course_filter,
+                           program_filter=program_filter,
                            status_filter=status_filter,
                            now=datetime.now())
 
@@ -705,61 +706,6 @@ def upload_students_excel():
         flash('Invalid file format. Please upload an Excel file (.xlsx or .xls)', 'error')
         
     return redirect(url_for('admin.manage_students'))
-
-@admin.route('/edit_student/<usid>', methods=['POST'])
-def edit_student(usid):
-    """
-    Handles updating an existing student's details.
-    Validates required fields, name format, and prevents email duplication.
-    """
-    first_name = request.form.get('first_name')
-    middle_name = request.form.get('middle_name')
-    last_name = request.form.get('last_name')
-    email = request.form.get('email')
-    course = request.form.get('course')
-    level = request.form.get('level')
-    section = request.form.get('section')
-    status = request.form.get('status')
-
-    is_valid, error_msg, validated_data = validate_user_data(first_name, middle_name, last_name, email)
-    if not is_valid:
-        flash(error_msg, 'error')
-        return redirect(url_for('admin.manage_students'))
-        
-    first_name, middle_name, last_name, email = validated_data
-
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    # Check duplicate email in Students and Teachers
-    cursor.execute("SELECT email FROM Students WHERE email = %s AND user_id != %s UNION SELECT email FROM Teachers WHERE email = %s", (email, usid, email))
-    if cursor.fetchone():
-        flash('Email already exists. Please use a different email.', 'error')
-        cursor.close()
-        conn.close()
-        return redirect(url_for('admin.manage_students'))
-    
-    try:
-        cursor.execute("""
-            UPDATE Students 
-            SET first_name = %s, middle_name = %s, last_name = %s, email = %s, course = %s, level = %s, section = %s, status = %s
-            WHERE user_id = %s
-        """, (first_name, middle_name, last_name, email, course, level, section, status, usid))
-        
-        # Audit Logging
-        log_system_action(cursor, 'Students', usid, 'Update', session['user_id'], session['role'], f"Student updated: {first_name} {last_name}, Status: {status}")
-        
-        conn.commit()
-        flash('Student updated successfully.', 'success')
-    except Exception as e:
-        flash(f'Error updating student: {str(e)}', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-        
-    return redirect(url_for('admin.manage_students'))
-    
-
 
 @admin.route('/manage_teachers', methods=['GET', 'POST'])
 def manage_teachers():
@@ -912,9 +858,15 @@ def manage_teachers():
     cursor.execute(query, query_params)
     teachers = cursor.fetchall()
     
-    # Fetch unique departments for filter
-    cursor.execute("SELECT DISTINCT department FROM Teachers WHERE department IS NOT NULL AND department != ''")
-    departments = [row['department'] for row in cursor.fetchall()]
+    # Fetch colleges from TestPoint database
+    try:
+        cursor.execute("SELECT college_name FROM db_exam.colleges WHERE is_active = 1 ORDER BY college_name")
+        colleges = [row['college_name'] for row in cursor.fetchall()]
+    except Exception as e:
+        print(f"Error fetching colleges from db_exam: {e}")
+        cursor.execute("SELECT DISTINCT department FROM Teachers WHERE department IS NOT NULL AND department != ''")
+        colleges = [row['department'] for row in cursor.fetchall()]
+        
     cursor.close()
     conn.close()
     return render_template('admin_manage_teachers.html', 
@@ -925,258 +877,8 @@ def manage_teachers():
                            search=search,
                            dept_filter=dept_filter,
                            status_filter=status_filter,
-                           departments=departments,
+                           colleges=colleges,
                            now=datetime.now())
-
-@admin.route('/edit_teacher/<utid>', methods=['POST'])
-def edit_teacher(utid):
-    """
-    Handles updating an existing teacher's details.
-    Validates required fields, name format, and prevents email duplication.
-    """
-    first_name = request.form.get('first_name')
-    middle_name = request.form.get('middle_name')
-    last_name = request.form.get('last_name')
-    department = request.form.get('department')
-    email = request.form.get('email')
-    status = request.form.get('status')
-
-    is_valid, error_msg, validated_data = validate_user_data(first_name, middle_name, last_name, email)
-    if not is_valid:
-        flash(error_msg, 'error')
-        return redirect(url_for('admin.manage_teachers'))
-        
-    first_name, middle_name, last_name, email = validated_data
-
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    # Check duplicate email
-    cursor.execute("SELECT email FROM Teachers WHERE email = %s AND user_id != %s UNION SELECT email FROM Students WHERE email = %s", (email, utid, email))
-    if cursor.fetchone():
-        flash('Email already exists. Please use a different email.', 'error')
-        cursor.close()
-        conn.close()
-        return redirect(url_for('admin.manage_teachers'))
-    
-    try:
-        cursor.execute("""
-            UPDATE Teachers 
-            SET first_name = %s, middle_name = %s, last_name = %s, department = %s, email = %s, status = %s
-            WHERE user_id = %s
-        """, (first_name, middle_name, last_name, department, email, status, utid))
-        
-        # Audit Logging
-        log_system_action(cursor, 'Teachers', utid, 'Update', session['user_id'], session['role'], f"Teacher updated: {first_name} {last_name}, Status: {status}")
-        
-        conn.commit()
-        flash('Teacher updated successfully.', 'success')
-    except Exception as e:
-        flash(f'Error updating teacher: {str(e)}', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-        
-    return redirect(url_for('admin.manage_teachers'))
-
-
-
-@admin.route('/manage_subjects', methods=['GET', 'POST'])
-def manage_subjects():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    if request.method == 'POST':
-        subject_code = request.form.get('subject_code')
-        subject_name = request.form.get('subject_name')
-        
-        cursor.execute("INSERT INTO Subjects (subject_code, subject_name) VALUES (%s, %s) RETURNING subject_id", (subject_code, subject_name))
-        subject_id = cursor.fetchone()['subject_id']
-        
-        # Audit Logging
-        log_system_action(cursor, 'Subjects', subject_id, 'Create', session['user_id'], session['role'], f"Subject created: {subject_code} - {subject_name}")
-        
-        conn.commit()
-        flash('Subject added successfully.', 'success')
-        return redirect(url_for('admin.manage_subjects'))
-        
-    if request.args.get('clear'):
-        session.pop('subjects_search', None)
-        return redirect(url_for('admin.manage_subjects'))
-
-    # Persist search in session
-    search_param = request.args.get('search')
-    if search_param is not None:
-        session['subjects_search'] = search_param.strip()
-    search = session.get('subjects_search', '')
-    
-    
-    query = "SELECT * FROM Subjects WHERE 1=1"
-    params = []
-    if search:
-        query += " AND (subject_code LIKE %s OR subject_name LIKE %s)"
-        search_val = f"%{search}%"
-        params.extend([search_val, search_val])
-        
-    cursor.execute(query, params)
-    subjects = cursor.fetchall()
-    
-    cursor.execute("SELECT COUNT(*) as total FROM Subjects")
-    total_count = cursor.fetchone()['total']
-    
-    cursor.close()
-    conn.close()
-    return render_template('admin_manage_subjects.html', subjects=subjects, total_count=total_count, search=search)
-
-@admin.route('/edit_subject/<int:subject_id>', methods=['POST'])
-def edit_subject(subject_id):
-    subject_code = request.form.get('subject_code')
-    subject_name = request.form.get('subject_name')
-    
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("UPDATE Subjects SET subject_code = %s, subject_name = %s WHERE subject_id = %s", 
-                   (subject_code, subject_name, subject_id))
-    
-    # Audit Logging
-    log_system_action(cursor, 'Subjects', subject_id, 'Update', session['user_id'], session['role'], f"Subject updated: {subject_code} - {subject_name}")
-    
-    conn.commit()
-    cursor.close()
-    conn.close()
-    flash('Subject updated successfully.', 'success')
-    return redirect(url_for('admin.manage_subjects'))
-
-
-
-@admin.route('/archive_subject/<int:subject_id>', methods=['POST', 'GET'])
-def archive_subject(subject_id):
-    """Archive a subject (currently removes it - can be updated to use status column)"""
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        cursor.execute("DELETE FROM Subjects WHERE subject_id = %s", (subject_id,))
-        
-        # Audit Logging
-        log_system_action(cursor, 'Subjects', subject_id, 'Delete', session['user_id'], session['role'], f"Subject archived (ID: {subject_id})")
-        
-        conn.commit()
-        flash('Subject archived successfully.', 'success')
-    except Exception as e:
-        flash('Cannot archive: subject has attendance records or assignments.', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-    return redirect(url_for('admin.manage_subjects'))
-
-
-
-@admin.route('/assign_classes', methods=['GET', 'POST'])
-def assign_classes():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    if request.method == 'POST':
-        teacher_id = request.form.get('teacher_id')
-        subject_id = request.form.get('subject_id')
-        section = request.form.get('section')
-        
-        cursor.execute("INSERT INTO Teacher_Assignments (teacher_id, subject_id, section) VALUES (%s, %s, %s) RETURNING assignment_id", (teacher_id, subject_id, section))
-        assignment_id = cursor.fetchone()['assignment_id']
-        
-        # Audit Logging
-        log_system_action(cursor, 'Teacher_Assignments', assignment_id, 'Create', session['user_id'], session['role'], f"Class assigned to teacher {teacher_id}: Subject ID {subject_id}, Section {section}")
-        
-        conn.commit()
-        flash('Class successfully assigned to teacher.', 'success')
-        return redirect(url_for('admin.assign_classes'))
-
-    if request.args.get('clear'):
-        session.pop('assignments_search', None)
-        return redirect(url_for('admin.assign_classes'))
-
-    # Persist search in session
-    search_param = request.args.get('search')
-    if search_param is not None:
-        session['assignments_search'] = search_param.strip()
-    search = session.get('assignments_search', '')
-    
-
-    cursor.execute("SELECT * FROM Teachers WHERE status = 'Active'")
-    teachers = cursor.fetchall()
-    
-    cursor.execute("SELECT * FROM Subjects")
-    subjects = cursor.fetchall()
-    
-    query = """
-        SELECT ta.assignment_id, t.first_name, t.middle_name, t.last_name, s.subject_code, s.subject_name, ta.section
-        FROM Teacher_Assignments ta
-        JOIN Teachers t ON ta.teacher_id = t.user_id
-        JOIN Subjects s ON ta.subject_id = s.subject_id
-        WHERE 1=1
-    """
-    params = []
-    if search:
-        query += " AND (s.subject_code LIKE %s OR s.subject_name LIKE %s OR t.first_name LIKE %s OR t.last_name LIKE %s OR ta.section LIKE %s)"
-        search_val = f"%{search}%"
-        params.extend([search_val, search_val, search_val, search_val, search_val])
-        
-    cursor.execute(query, params)
-    assignments = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
-    return render_template('admin_assign_classes.html', teachers=teachers, subjects=subjects, assignments=assignments, search=search)
-
-@admin.route('/enroll_student', methods=['POST'])
-def enroll_student():
-    usid = request.form.get('user_id')
-    assignment_id = request.form.get('assignment_id') # Selected from Teacher_Assignments
-    
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    try:
-        # Get assignment details
-        cursor.execute("SELECT * FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
-        assignment = cursor.fetchone()
-        
-        if not assignment:
-            flash('Selected class assignment not found.', 'error')
-            return redirect(url_for('admin.manage_students'))
-            
-        # Check if already enrolled in this specific SUBJECT or with this TEACHER
-        cursor.execute("""
-            SELECT s.subject_name, (t.first_name || ' ' || t.last_name) as teacher_name, 
-                   ta.subject_id, ta.teacher_id
-            FROM Enrollments e
-            JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
-            JOIN Subjects s ON ta.subject_id = s.subject_id
-            JOIN Teachers t ON ta.teacher_id = t.user_id
-            WHERE e.user_id = %s AND ta.subject_id = %s
-        """, (usid, assignment['subject_id']))
-        
-        conflict = cursor.fetchone()
-        if conflict:
-            flash(f"Student is already enrolled in '{conflict['subject_name']}'. Duplicate subject enrollment is not allowed.", 'warning')
-        else:
-            cursor.execute("INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s) RETURNING enrollment_id", 
-                           (usid, assignment_id))
-            enrollment_id = cursor.fetchone()['enrollment_id']
-            
-            # Audit Logging
-            log_system_action(cursor, 'Enrollments', enrollment_id, 'Create', session['user_id'], session['role'], f"Student {usid} enrolled in Assignment ID {assignment_id} (Subject: {assignment['subject_id']}, Section: {assignment['section']})")
-            
-            conn.commit()
-            flash('Student successfully enrolled in the class.', 'success')
-        
-    except Exception as e:
-        flash(f'Error enrolling student: {str(e)}', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-        
-    return redirect(url_for('admin.manage_students'))
 
 @admin.route('/manage_schedules', methods=['GET', 'POST'])
 def manage_schedules():
@@ -1237,9 +939,8 @@ def manage_schedules():
                 cursor.execute("""
                     INSERT INTO schedule (subject_id, teacher_id, section, day_of_week, start_time, end_time, room)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING schedule_id
                 """, (ta['subject_id'], ta['teacher_id'], ta['section'], day, start, end, room))
-                schedule_id = cursor.fetchone()['schedule_id']
+                schedule_id = cursor.lastrowid
                 
                 # Audit Logging
                 log_system_action(cursor, 'schedule', schedule_id, 'Create', session['user_id'], session['role'], f"Schedule created for {ta['subject_id']} - {ta['section']} on {day} ({start}-{end})")
@@ -1297,16 +998,6 @@ def remove_schedule(schedule_id):
     flash('Schedule removed successfully.', 'success')
     return redirect(url_for('admin.manage_schedules'))
 
-@admin.route('/remove_enrollment/<int:enrollment_id>')
-def remove_enrollment(enrollment_id):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("DELETE FROM Enrollments WHERE enrollment_id = %s", (enrollment_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    flash('Enrollment removed successfully.', 'success')
-    return redirect(url_for('admin.manage_students'))
 
 @admin.route('/archive_student/<user_id>')
 def archive_student(user_id):
@@ -1506,124 +1197,7 @@ def reject_drop(request_id):
     flash('Drop request rejected.', 'info')
     return redirect(url_for('admin.drop_requests'))
 
-@admin.route('/bulk_enroll', methods=['POST'])
-def bulk_enroll():
-    assignment_id = request.form.get('assignment_id')
-    try:
-        count = int(request.form.get('count', 0))
-    except ValueError:
-        count = 0
-    course_filter = request.form.get('course_filter')
-    
-    if count <= 0:
-        flash('Please enter a valid number of students.', 'error')
-        return redirect(url_for('admin.manage_students'))
-        
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    try:
-        # Get assignment details
-        cursor.execute("SELECT * FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
-        assignment = cursor.fetchone()
-        
-        if not assignment:
-            flash('Selected class assignment not found.', 'error')
-            return redirect(url_for('admin.manage_students'))
-            
-        # Get students who are NOT enrolled in THIS subject AND do NOT have THIS teacher
-        query = """
-            SELECT user_id AS usid FROM Students 
-            WHERE status = 'Active'
-            AND user_id NOT IN (
-                SELECT e.user_id FROM Enrollments e
-                JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
-                WHERE ta.subject_id = %s
-            )
-        """
-        params = [assignment['subject_id']]
-        
-        if course_filter:
-            query += " AND course = %s"
-            params.append(course_filter)
-            
-        query += " ORDER BY RANDOM() LIMIT %s"
-        params.append(count)
-        
-        cursor.execute(query, tuple(params))
-        students_to_enroll = cursor.fetchall()
-        
-        if not students_to_enroll:
-            flash('No eligible students found for bulk enrollment matching your criteria.', 'warning')
-        else:
-            enroll_query = "INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s)"
-            enroll_data = [(s['usid'], assignment_id) for s in students_to_enroll]
-            
-            cursor.executemany(enroll_query, enroll_data)
-            conn.commit()
-            flash(f'Successfully enrolled {len(students_to_enroll)} students into {assignment["section"]} with teacher {assignment["teacher_id"]}.', 'success')
-            
-    except Exception as e:
-        flash(f'Error in bulk enrollment: {str(e)}', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-        
-    return redirect(url_for('admin.manage_students'))
 
-@admin.route('/bulk_enroll_selected', methods=['POST'])
-def bulk_enroll_selected():
-    assignment_id = request.form.get('assignment_id')
-    selected_usids = request.form.get('selected_user_ids', '').split(',')
-    
-    if not assignment_id or not selected_usids or selected_usids == ['']:
-        flash('Please select at least one student and a target class.', 'error')
-        return redirect(url_for('admin.manual_enroll'))
-        
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    try:
-        # Get assignment details
-        cursor.execute("SELECT * FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
-        assignment = cursor.fetchone()
-        
-        if not assignment:
-            flash('Selected class assignment not found.', 'error')
-            return redirect(url_for('admin.manual_enroll'))
-            
-        # Filter out students already enrolled in this subject or with this teacher
-        cursor.execute("""
-            SELECT e.user_id FROM Enrollments e
-            JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
-            WHERE ta.subject_id = %s
-        """, (assignment['subject_id'],))
-        ineligible_usids = {row['user_id'] for row in cursor.fetchall()}
-        
-        to_enroll = [usid for usid in selected_usids if usid not in ineligible_usids]
-        
-        if not to_enroll:
-            flash('All selected students are already enrolled in this subject or assigned to this teacher.', 'warning')
-        else:
-            enroll_query = "INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s)"
-            enroll_data = [(usid, assignment_id) for usid in to_enroll]
-            
-            cursor.executemany(enroll_query, enroll_data)
-            
-            # Audit Logging (Bulk)
-            log_system_action(cursor, 'Enrollments', 'BULK', 'Create', session['user_id'], session['role'], 
-                              f"Bulk enrolled {len(to_enroll)} students into Assignment {assignment_id}")
-            
-            conn.commit()
-            flash(f'Successfully enrolled {len(to_enroll)} students into {assignment["section"]}.', 'success')
-            
-    except Exception as e:
-        flash(f'Error in bulk enrollment: {str(e)}', 'error')
-    finally:
-        cursor.close()
-        conn.close()
-        
-    return redirect(url_for('admin.manual_enroll'))
 
 @admin.route('/audit_logs')
 def audit_logs():
@@ -1745,13 +1319,13 @@ def attendance_analytics():
         if selected_class:
             # Weekly Trends
             cursor.execute("""
-                SELECT CONCAT('Week ', CEIL(EXTRACT(DAY FROM a.scan_time) / 7), ' - ', TO_CHAR(a.scan_time, 'Month'), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
+                SELECT CONCAT('Week ', CEIL(EXTRACT(DAY FROM a.scan_time) / 7), ' - ', MONTHNAME(a.scan_time), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
                        EXTRACT(YEAR FROM a.scan_time) as yr,
                        EXTRACT(MONTH FROM a.scan_time) as mo,
                        CEIL(EXTRACT(DAY FROM a.scan_time) / 7) as wk,
-                       MIN(a.scan_time::date) as week_start,
-                       MAX(a.scan_time::date) as week_end,
-                       COUNT(DISTINCT (a.user_id, a.scan_time::date)) as total_students,
+                       MIN(DATE(a.scan_time)) as week_start,
+                       MAX(DATE(a.scan_time)) as week_end,
+                       COUNT(DISTINCT a.user_id, DATE(a.scan_time)) as total_students,
                        SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present_count,
                        SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent_count,
                        SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) as late_count
@@ -1765,10 +1339,10 @@ def attendance_analytics():
             
             # Monthly Trends
             cursor.execute("""
-                SELECT CONCAT(TO_CHAR(a.scan_time, 'Month'), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
+                SELECT CONCAT(MONTHNAME(a.scan_time), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
                        EXTRACT(YEAR FROM a.scan_time) as yr,
                        EXTRACT(MONTH FROM a.scan_time) as mo,
-                       COUNT(DISTINCT (a.user_id, a.scan_time::date)) as total_students,
+                       COUNT(DISTINCT a.user_id, DATE(a.scan_time)) as total_students,
                        SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present_count,
                        SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent_count,
                        SUM(CASE WHEN a.status = 'Late' THEN 1 ELSE 0 END) as late_count
@@ -1790,82 +1364,6 @@ def attendance_analytics():
                            monthly_trends=monthly_trends)
 
 
-@admin.route('/manual_enroll', methods=['GET', 'POST'])
-def manual_enroll():
-    """
-    Dedicated page for selective manual enrollment.
-    Allows searching any active student and enrolling them in any assigned class.
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    if request.method == 'POST':
-        usid = request.form.get('user_id')
-        assignment_id = request.form.get('assignment_id')
-        
-        # Get assignment details
-        cursor.execute("SELECT * FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
-        assignment = cursor.fetchone()
-        
-        if assignment:
-            # Check if already enrolled in this SUBJECT or with this TEACHER
-            cursor.execute("""
-                SELECT s.subject_name, (t.first_name || ' ' || t.last_name) as teacher_name,
-                       ta.subject_id, ta.teacher_id
-                FROM Enrollments e
-                JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
-                JOIN Subjects s ON ta.subject_id = s.subject_id
-                JOIN Teachers t ON ta.teacher_id = t.user_id
-                WHERE e.user_id = %s AND (ta.subject_id = %s OR ta.teacher_id = %s)
-            """, (usid, assignment['subject_id'], assignment['teacher_id']))
-            
-            conflict = cursor.fetchone()
-            if not conflict:
-                cursor.execute("INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s) RETURNING enrollment_id", 
-                               (usid, assignment_id))
-                enrollment_id = cursor.fetchone()['enrollment_id']
-                
-                # Audit Logging
-                log_system_action(cursor, 'Enrollments', enrollment_id, 'Create', session['user_id'], session['role'], 
-                                   f"Manual Enrollment: Student {usid} enrolled in Assignment ID {assignment_id}")
-                
-                conn.commit()
-                flash('Student successfully enrolled.', 'success')
-            else:
-                flash(f"Student is already enrolled in '{conflict['subject_name']}'. Duplicate subject enrollment is not allowed.", 'warning')
-        else:
-            flash('Selected class not found.', 'error')
-            
-        return redirect(url_for('admin.manual_enroll'))
-
-    # GET Logic
-    search = request.args.get('search', '').strip()
-    
-    # Fetch all assigned classes for selection
-    cursor.execute("""
-        SELECT ta.assignment_id, s.subject_code, s.subject_name, ta.section, t.first_name, t.last_name
-        FROM Teacher_Assignments ta
-        JOIN Subjects s ON ta.subject_id = s.subject_id
-        JOIN Teachers t ON ta.teacher_id = t.user_id
-        ORDER BY s.subject_code, ta.section
-    """)
-    all_assignments = cursor.fetchall()
-    
-    # Fetch students based on search
-    query = "SELECT * FROM Students WHERE status = 'Active'"
-    params = []
-    if search:
-        query += " AND (first_name LIKE %s OR last_name LIKE %s OR user_id LIKE %s OR email LIKE %s)"
-        val = f"%{search}%"
-        params.extend([val, val, val, val])
-    
-    query += " ORDER BY level, last_name LIMIT 50" # Limit for performance, search will find specific ones
-    cursor.execute(query, params)
-    students = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
-    return render_template('manual_enroll.html', students=students, all_assignments=all_assignments, search=search)
 
 @admin.route('/retry_syncs', methods=['POST'])
 def retry_syncs():

@@ -325,6 +325,20 @@
                     </div>
                     {% endif %}
 
+                    {% if user.role == 'teacher' %}
+                    <div class="tp-section-label">Academic Assignment</div>
+                    <div class="form-group mb-4">
+                        <label class="small font-weight-bold">Assigned College</label>
+                        <select class="form-control" name="college_id">
+                            <option value="">-- No College Assigned --</option>
+                            {% for c in colleges %}
+                            <option value="{{ c.college_id }}" {% if c.college_id == user.college_id %}selected{% endif %}>
+                                {{ c.college_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
                     <div class="tp-section-label">Access Control</div>
                     <div class="row">
                         <div class="col-md-6">
@@ -431,6 +445,16 @@
                             <option value="">-- Select Block --</option>
                             {% for b in blocks %}
                             <option value="{{ b.block_id }}">{{ b.program_name }} - {{ b.block_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group mb-4" id="collegeSelectionArea" style="display: none;">
+                        <label class="small font-weight-bold text-primary"><i class="fas fa-university mr-1"></i> College Assignment</label>
+                        <select class="form-control" name="college_id">
+                            <option value="">-- Select College --</option>
+                            {% for c in colleges %}
+                            <option value="{{ c.college_id }}">{{ c.college_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -721,7 +745,9 @@
         });
 
         $('#addUserRole').on('change', function () {
-            $(this).val() === 'student' ? $('#blockSelectionArea').slideDown() : $('#blockSelectionArea').slideUp();
+            let role = $(this).val();
+            role === 'student' ? $('#blockSelectionArea').slideDown() : $('#blockSelectionArea').slideUp();
+            role === 'teacher' ? $('#collegeSelectionArea').slideDown() : $('#collegeSelectionArea').slideUp();
         });
 
         // Hierarchy Fix

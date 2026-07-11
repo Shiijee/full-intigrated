@@ -89,7 +89,7 @@ def sync_user_to_portal(username: str, password: str, full_name: str,
 
 
 def _provision(endpoint: str, target_module: str, username: str, password: str,
-               full_name: str, role: str, email: str = None) -> dict:
+               full_name: str, role: str, email: str = None, extra_data: dict = None) -> dict:
     """
     Shared helper for calling a module's /api/provision-user.
 
@@ -107,6 +107,8 @@ def _provision(endpoint: str, target_module: str, username: str, password: str,
         "role":      role,
         "email":     email,
     }
+    if extra_data:
+        payload.update(extra_data)
     last_reason = "Unknown error"
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
@@ -128,7 +130,7 @@ def _provision(endpoint: str, target_module: str, username: str, password: str,
 
 
 def mirror_user_to_modules(username: str, password: str, full_name: str,
-                            role: str, email: str = None) -> dict:
+                            role: str, email: str = None, extra_data: dict = None) -> dict:
     """
     Mirror a newly-created TestPoint user into Voxify and Attendance.
 
@@ -148,7 +150,7 @@ def mirror_user_to_modules(username: str, password: str, full_name: str,
     survives the retries is logged to `sync_failures` for later replay.
     """
     results = {
-        "attendance": _provision(ATTENDANCE_PROVISION_URL, "attendance", username, password, full_name, role, email),
+        "attendance": _provision(ATTENDANCE_PROVISION_URL, "attendance", username, password, full_name, role, email, extra_data),
     }
     if role != "teacher":
         results["voxify"] = _provision(VOXIFY_PROVISION_URL, "voxify", username, password, full_name, role, email)
@@ -169,7 +171,13 @@ def retry_failed_syncs() -> dict:
     cursor.execute("SELECT * FROM sync_failures WHERE resolved = 0")
     rows = cursor.fetchall()
 
-    endpoints = {"voxify": VOXIFY_PROVISION_URL, "attendance": ATTENDANCE_PROVISION_URL}
+    endpoints = {
+        "voxify": VOXIFY_PROVISION_URL, 
+        "attendance": ATTENDANCE_PROVISION_URL,
+        "attendance_subject": f"{ATTENDANCE_URL}/api/sync-subject",
+        "attendance_class": f"{ATTENDANCE_URL}/api/sync-class",
+        "attendance_enrollment": f"{ATTENDANCE_URL}/api/sync-enrollment"
+    }
     fixed = 0
     reasons = []
     for row in rows:
@@ -209,3 +217,93 @@ def portal_role(testpoint_role: str) -> str:
     if testpoint_role == "super_admin":
         return "superadmin"
     return testpoint_role
+
+def _generic_sync(endpoint: str, target_module: str, payload: dict) -> dict:
+    last_reason = "Unknown error"
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        try:
+            resp = requests.post(endpoint, json=payload, timeout=5, verify=False)
+            data = resp.json() if resp.text else {}
+            if resp.status_code == 201:
+                return {"success": True}
+            last_reason = data.get("reason", f"HTTP {resp.status_code}")
+            break
+        except requests.exceptions.RequestException as e:
+            last_reason = f"Unreachable: {e}"
+            if attempt < _RETRY_ATTEMPTS:
+                time.sleep(_RETRY_DELAY_S)
+
+    _log_sync_failure(target_module, payload, last_reason)
+    return {"success": False, "reason": last_reason}
+
+
+
+
+def sync_class_to_attendance(class_code: str, teacher_id: str, course_code: str, block_name: str, is_active: int = 1) -> dict:
+    '''
+    Pushes a class assignment to NewChange (Attendeez).
+    '''
+    payload = {
+        "class_code": class_code,
+        "teacher_id": teacher_id,
+        "course_code": course_code,
+        "block_name": block_name,
+        "is_active": is_active
+    }
+    
+    ATTENDANCE_PROVISION_CLASS_URL = f"{ATTENDANCE_URL}/api/provision-class"
+    
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        try:
+            resp = requests.post(ATTENDANCE_PROVISION_CLASS_URL, json=payload, timeout=5, verify=False)
+            if resp.status_code == 200:
+                return {"success": True}
+        except requests.exceptions.RequestException as e:
+            if attempt == _RETRY_ATTEMPTS:
+                _log_sync_failure("newchange_class", payload, f"Failed after {attempt} attempts: {e}")
+                return {"success": False, "reason": str(e)}
+        time.sleep(_RETRY_DELAY_S)
+        
+    return {"success": False, "reason": "Failed to sync class to Attendance"}
+
+def sync_enrollment_to_attendance(student_id: str, class_code: str) -> dict:
+    payload = {
+        "user_id": student_id,
+        "class_code": class_code
+    }
+    return _generic_sync(f"{ATTENDANCE_URL}/api/sync-enrollment", "attendance_enrollment", payload)
+
+def sync_unenroll_to_attendance(student_id: str, class_code: str) -> dict:
+    payload = {
+        "user_id": student_id,
+        "class_code": class_code
+    }
+    return _generic_sync(f"{ATTENDANCE_URL}/api/sync-unenroll", "attendance_unenroll", payload)
+
+
+def sync_subject_to_attendance(course_code: str, course_name: str, is_active: int = 1) -> dict:
+    '''
+    Pushes a subject (course) to NewChange (Attendeez).
+    is_active: 1 = Active, 0 = Archived
+    '''
+    payload = {
+        "subject_code": course_code,
+        "subject_name": course_name,
+        "is_active": is_active
+    }
+    
+    ATTENDANCE_PROVISION_SUBJECT_URL = f"{ATTENDANCE_URL}/api/provision-subject"
+    
+    # Retry logic similar to _provision
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        try:
+            resp = requests.post(ATTENDANCE_PROVISION_SUBJECT_URL, json=payload, timeout=5, verify=False)
+            if resp.status_code == 200:
+                return {"success": True}
+        except requests.exceptions.RequestException as e:
+            if attempt == _RETRY_ATTEMPTS:
+                _log_sync_failure("newchange_subject", payload, f"Failed after {attempt} attempts: {e}")
+                return {"success": False, "reason": str(e)}
+        time.sleep(_RETRY_DELAY_S)
+        
+    return {"success": False, "reason": "Failed to sync subject to Attendance"}

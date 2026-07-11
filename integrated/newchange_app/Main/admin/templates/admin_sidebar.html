@@ -41,9 +41,6 @@
                 <a href="{{ url_for('admin.manage_teachers') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_teachers' else '' }}" data-tooltip="Manage Teachers"><i class="fas fa-chalkboard-teacher"></i><span class="nav-item-text"> Manage Teachers</span></a>
                 
                 <div class="sidebar-category">Academic Setup</div>
-                <a href="{{ url_for('admin.manage_subjects') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_subjects' else '' }}" data-tooltip="Manage Subjects"><i class="fas fa-book"></i><span class="nav-item-text"> Manage Subjects</span></a>
-                <a href="{{ url_for('admin.manual_enroll') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manual_enroll' else '' }}" data-tooltip="Manual Enrollment"><i class="fas fa-user-plus"></i><span class="nav-item-text"> Manual Enrollment</span></a>
-                <a href="{{ url_for('admin.assign_classes') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.assign_classes' else '' }}" data-tooltip="Assign Classes"><i class="fas fa-link"></i><span class="nav-item-text"> Assign Classes</span></a>
                 <a href="{{ url_for('admin.manage_schedules') }}" class="nav-item {{ 'active' if request.endpoint == 'admin.manage_schedules' else '' }}" data-tooltip="Manage Schedules"><i class="fas fa-calendar-alt"></i><span class="nav-item-text"> Manage Schedules</span></a>
                 
                 <div class="sidebar-category">Analytics & Logs</div>

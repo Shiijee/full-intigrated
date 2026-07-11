@@ -78,31 +78,45 @@ def provision_user():
         if role in ("superadmin", "admin"):
             cursor.execute("SELECT admin_id FROM admins WHERE username = %s", (username,))
             if cursor.fetchone():
-                return jsonify({"success": False, "reason": f"'{username}' already exists in admins"}), 409
-            cursor.execute(
-                "INSERT INTO admins (username, password_hash, email) VALUES (%s, %s, %s)",
-                (username, password_hash, email),
-            )
+                cursor.execute("UPDATE admins SET email = %s WHERE username = %s", (email, username))
+            else:
+                cursor.execute(
+                    "INSERT INTO admins (username, password_hash, email) VALUES (%s, %s, %s)",
+                    (username, password_hash, email),
+                )
 
         elif role == "teacher":
+            department = body.get("department", "")
             cursor.execute("SELECT user_id FROM teachers WHERE user_id = %s", (username,))
             if cursor.fetchone():
-                return jsonify({"success": False, "reason": f"'{username}' already exists in teachers"}), 409
-            cursor.execute(
-                "INSERT INTO teachers (user_id, user_role, first_name, middle_name, last_name, email, password_hash) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (username, "teacher", first_name, middle_name or "", last_name, email, password_hash),
-            )
+                cursor.execute(
+                    "UPDATE teachers SET first_name = %s, middle_name = %s, last_name = %s, department = %s, email = %s WHERE user_id = %s",
+                    (first_name, middle_name or "", last_name, department, email, username)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO teachers (user_id, user_role, first_name, middle_name, last_name, department, email, password_hash) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (username, "teacher", first_name, middle_name or "", last_name, department, email, password_hash),
+                )
 
         elif role == "student":
+            program = body.get("program", "")
+            college = body.get("college", "")
+            year = body.get("year", "")
+            block = body.get("block", "")
             cursor.execute("SELECT user_id FROM students WHERE user_id = %s", (username,))
             if cursor.fetchone():
-                return jsonify({"success": False, "reason": f"'{username}' already exists in students"}), 409
-            cursor.execute(
-                "INSERT INTO students (user_id, first_name, middle_name, last_name, email, password_hash) "
-                "VALUES (%s, %s, %s, %s, %s, %s)",
-                (username, first_name, middle_name or "", last_name, email, password_hash),
-            )
+                cursor.execute(
+                    "UPDATE students SET first_name = %s, middle_name = %s, last_name = %s, email = %s, program = %s, college = %s, year = %s, block = %s WHERE user_id = %s",
+                    (first_name, middle_name or "", last_name, email, program, college, year, block, username)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO students (user_id, first_name, middle_name, last_name, email, program, college, year, block, password_hash) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (username, first_name, middle_name or "", last_name, email, program, college, year, block, password_hash),
+                )
 
         conn.commit()
         return jsonify({"success": True}), 201
@@ -320,3 +334,256 @@ def enroll_verified():
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@nc_api.route('/sync-subject', methods=['POST'])
+def sync_subject():
+    body = request.get_json(silent=True) or {}
+    subject_code = body.get('subject_code')
+    subject_name = body.get('subject_name')
+    
+    if not subject_code or not subject_name:
+        return jsonify({"success": False, "reason": "Missing fields"}), 400
+        
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "reason": "Database connection failed"}), 500
+        
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = %s", (subject_code,))
+        if cursor.fetchone():
+            cursor.execute("UPDATE Subjects SET subject_name = %s WHERE subject_code = %s", 
+                           (subject_name, subject_code))
+        else:
+            cursor.execute("INSERT INTO Subjects (subject_code, subject_name) VALUES (%s, %s)",
+                           (subject_code, subject_name))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+        
+    return jsonify({"success": True}), 201
+
+
+@nc_api.route('/sync-class', methods=['POST'])
+def sync_class():
+    body = request.get_json(silent=True) or {}
+    class_code = body.get('class_code')
+    teacher_id = body.get('teacher_id')
+    course_code = body.get('course_code')
+    
+    if not class_code or not teacher_id or not course_code:
+        return jsonify({"success": False, "reason": "Missing fields"}), 400
+        
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "reason": "Database connection failed"}), 500
+        
+    try:
+        cursor = conn.cursor()
+        # Find subject_id from course_code
+        cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = %s", (course_code,))
+        subject = cursor.fetchone()
+        if not subject:
+            return jsonify({"success": False, "reason": f"Subject {course_code} not found in newchange_app"}), 400
+        subject_id = subject[0] if type(subject) is tuple else subject.get('subject_id')
+        
+        cursor.execute("SELECT assignment_id FROM Teacher_Assignments WHERE section = %s", (class_code,))
+        if cursor.fetchone():
+            cursor.execute("UPDATE Teacher_Assignments SET teacher_id = %s, subject_id = %s WHERE section = %s", 
+                           (teacher_id, subject_id, class_code))
+        else:
+            cursor.execute("INSERT INTO Teacher_Assignments (teacher_id, subject_id, section) VALUES (%s, %s, %s)",
+                           (teacher_id, subject_id, class_code))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+        
+    return jsonify({"success": True}), 201
+
+
+@nc_api.route('/sync-enrollment', methods=['POST'])
+def sync_enrollment():
+    body = request.get_json(silent=True) or {}
+    user_id = body.get('user_id')
+    class_code = body.get('class_code')
+    
+    if not user_id or not class_code:
+        return jsonify({"success": False, "reason": "Missing fields"}), 400
+        
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "reason": "Database connection failed"}), 500
+        
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT assignment_id FROM Teacher_Assignments WHERE class_code = %s", (class_code,))
+        assignment = cursor.fetchone()
+        if not assignment:
+            return jsonify({"success": False, "reason": f"Class {class_code} not found in newchange_app"}), 400
+        assignment_id = assignment['assignment_id']
+
+        cursor.execute("SELECT enrollment_id FROM Enrollments WHERE user_id = %s AND assignment_id = %s", (user_id, assignment_id))
+        if not cursor.fetchone():
+            cursor.execute("INSERT INTO Enrollments (user_id, assignment_id) VALUES (%s, %s)", (user_id, assignment_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+        
+    return jsonify({"success": True})
+
+@nc_api.route('/sync-unenroll', methods=['POST'])
+def sync_unenroll():
+    body = request.get_json(silent=True) or {}
+    user_id = body.get('user_id')
+    class_code = body.get('class_code')
+    
+    if not user_id or not class_code:
+        return jsonify({"success": False, "reason": "Missing fields"}), 400
+        
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "reason": "Database connection failed"}), 500
+        
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT assignment_id FROM Teacher_Assignments WHERE class_code = %s", (class_code,))
+        assignment = cursor.fetchone()
+        if not assignment:
+            return jsonify({"success": False, "reason": f"Class {class_code} not found"}), 400
+        assignment_id = assignment['assignment_id']
+
+        cursor.execute("DELETE FROM Enrollments WHERE user_id = %s AND assignment_id = %s", (user_id, assignment_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+        
+    return jsonify({"success": True}), 201
+
+
+@nc_api.route('/provision-subject', methods=['POST'])
+def provision_subject():
+    '''
+    Webhook called by TestPoint to sync courses (subjects).
+    '''
+    data = request.json
+    if not data:
+        return jsonify({"error": "No JSON payload"}), 400
+        
+    subject_code = data.get('subject_code')
+    subject_name = data.get('subject_name')
+    is_active = data.get('is_active', True)
+
+    if not subject_code or not subject_name:
+        return jsonify({"error": "Missing required fields (subject_code, subject_name)"}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database error"}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = %s", (subject_code,))
+        existing = cursor.fetchone()
+
+        # In TestPoint, it's is_active. In NewChange, it's is_archived (inverted).
+        is_archived = 0 if is_active in [1, True, "1", "true"] else 1
+
+        if existing:
+            # Update existing subject
+            cursor.execute("""
+                UPDATE Subjects
+                SET subject_name = %s, is_archived = %s
+                WHERE subject_code = %s
+            """, (subject_name, is_archived, subject_code))
+        else:
+            # Insert new subject
+            cursor.execute("""
+                INSERT INTO Subjects (subject_code, subject_name, is_archived)
+                VALUES (%s, %s, %s)
+            """, (subject_code, subject_name, is_archived))
+        
+        conn.commit()
+        return jsonify({"success": True, "message": "Subject synced successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@nc_api.route('/provision-class', methods=['POST'])
+def provision_class():
+    '''
+    Webhook called by TestPoint to sync classes (Teacher_Assignments).
+    '''
+    data = request.json
+    if not data:
+        return jsonify({"error": "No JSON payload"}), 400
+        
+    class_code = data.get('class_code')
+    course_code = data.get('course_code')
+    section = data.get('block_name')
+    teacher_id = data.get('teacher_id')
+    is_active = data.get('is_active', 1)
+
+    if not class_code or not course_code:
+        return jsonify({"error": "Missing required fields (class_code, course_code)"}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database error"}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Lookup subject_id
+        cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = %s", (course_code,))
+        subject = cursor.fetchone()
+        if not subject:
+            return jsonify({"error": f"Subject {course_code} not found in NewChange"}), 404
+        subject_id = subject['subject_id']
+
+        # 2. Check if Teacher_Assignment exists by class_code
+        cursor.execute("SELECT assignment_id FROM Teacher_Assignments WHERE class_code = %s", (class_code,))
+        existing = cursor.fetchone()
+
+        is_archived = 0 if is_active in [1, True, "1", "true"] else 1
+
+        if existing:
+            # Update existing assignment
+            cursor.execute("""
+                UPDATE Teacher_Assignments
+                SET teacher_id = %s, subject_id = %s, section = %s, is_archived = %s
+                WHERE class_code = %s
+            """, (teacher_id, subject_id, section, is_archived, class_code))
+        else:
+            # Insert new assignment
+            cursor.execute("""
+                INSERT INTO Teacher_Assignments (class_code, teacher_id, subject_id, section, is_archived)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (class_code, teacher_id, subject_id, section, is_archived))
+        
+        conn.commit()
+        return jsonify({"success": True, "message": "Class synced successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()

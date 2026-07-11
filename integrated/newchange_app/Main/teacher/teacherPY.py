@@ -680,7 +680,7 @@ def reports():
             # Daily Report: Raw Logs — all records with date and time
             query_daily = """
             SELECT DATE(a.scan_time) as date,
-                   DATE_FORMAT(a.scan_time, '%%h:%%i %%p') as time,
+                   a.scan_time as time_raw,
                    s.user_id AS usid, s.first_name, s.middle_name, s.last_name,
                    a.status, a.is_valid
             FROM Attendance a
@@ -694,6 +694,10 @@ def reports():
             for row in daily_logs:
                 if row['date'] and not isinstance(row['date'], str):
                     row['date'] = row['date'].strftime('%Y-%m-%d')
+                if row.get('time_raw'):
+                    row['time'] = row['time_raw'].strftime('%I:%M %p')
+                else:
+                    row['time'] = 'N/A'
 
             # Daily Trends
             cursor.execute("""
@@ -914,7 +918,7 @@ def daily_attendance_log():
         if selected_class:
             cursor.execute("""
                 SELECT DATE(a.scan_time) as date,
-                       DATE_FORMAT(a.scan_time, '%%h:%%i %%p') as time,
+                       a.scan_time as time_raw,
                        s.user_id AS usid, s.first_name, s.middle_name, s.last_name,
                        a.status, a.is_valid
                 FROM Attendance a
@@ -927,6 +931,10 @@ def daily_attendance_log():
             for row in daily_logs:
                 if row['date'] and not isinstance(row['date'], str):
                     row['date'] = row['date'].strftime('%Y-%m-%d')
+                if row.get('time_raw'):
+                    row['time'] = row['time_raw'].strftime('%I:%M %p')
+                else:
+                    row['time'] = 'N/A'
 
             # Build per-date finalization map for accordion headers
             cursor.execute("""
@@ -1335,7 +1343,7 @@ def manual_attendance():
         # NOTE: `user_id AS usid` alias kept so manual_attendance.html
         # (which reads `s.usid`) keeps working unchanged.
         cursor.execute("""
-            SELECT s.user_id AS usid, s.first_name, s.middle_name, s.last_name, s.email, s.level
+            SELECT s.user_id AS usid, s.first_name, s.middle_name, s.last_name, s.email, s.year AS level
             FROM Enrollments e
             JOIN Students s ON e.user_id = s.user_id
             JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
@@ -1527,11 +1535,14 @@ def review_attendance(session_id):
     cursor.close()
     conn.close()
 
+    pending_flagged = sum(1 for r in records if r['status'] == 'Flagged')
+
     return render_template('review_attendance.html',
                            name=session.get('name'),
                            ses=ses,
                            records=records,
-                           is_finalized=bool(ses['is_finalized']))
+                           is_finalized=bool(ses['is_finalized']),
+                           pending_flagged_count=pending_flagged)
 
 @teacher.route('/view_excuses')
 def view_excuses():
@@ -1685,3 +1696,111 @@ def my_schedule():
                            days=days, 
                            time_labels=time_labels,
                            name=session.get('name'))
+
+@teacher.route('/accept_flagged_student', methods=['POST'])
+def accept_flagged_student():
+    body = request.get_json(silent=True) or {}
+    attendance_id = body.get('attendance_id')
+    if not attendance_id:
+        return jsonify({"success": False, "reason": "No attendance_id provided"}), 400
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE Attendance SET status = 'Present' WHERE attendance_id = %s", (attendance_id,))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@teacher.route('/decline_flagged_student', methods=['POST'])
+def decline_flagged_student():
+    body = request.get_json(silent=True) or {}
+    attendance_id = body.get('attendance_id')
+    if not attendance_id:
+        return jsonify({"success": False, "reason": "No attendance_id provided"}), 400
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE Attendance SET status = 'Absent' WHERE attendance_id = %s", (attendance_id,))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@teacher.route('/bulk_accept_flagged', methods=['POST'])
+def bulk_accept_flagged():
+    body = request.get_json(silent=True) or {}
+    session_id = body.get('session_id')
+    if not session_id:
+        return jsonify({"success": False, "reason": "No session_id provided"}), 400
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE Attendance SET status = 'Present' WHERE session_id = %s AND status = 'Flagged'", (session_id,))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@teacher.route('/bulk_decline_flagged', methods=['POST'])
+def bulk_decline_flagged():
+    body = request.get_json(silent=True) or {}
+    session_id = body.get('session_id')
+    if not session_id:
+        return jsonify({"success": False, "reason": "No session_id provided"}), 400
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE Attendance SET status = 'Absent' WHERE session_id = %s AND status = 'Flagged'", (session_id,))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@teacher.route('/toggle_session_pause', methods=['POST'])
+def toggle_session_pause():
+    data = request.json
+    session_id = data.get('session_id')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT status FROM Sessions WHERE session_id = %s", (session_id,))
+        ses = cursor.fetchone()
+        if not ses:
+            return jsonify({'success': False, 'message': 'Session not found'})
+
+        new_status = 'Paused' if ses['status'] == 'Active' else 'Active'
+        
+        cursor.execute("UPDATE Sessions SET status = %s WHERE session_id = %s", (new_status, session_id))
+        conn.commit()
+        
+        return jsonify({'success': True, 'new_status': new_status})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': str(e)})
+    finally:
+        cursor.close()
+        conn.close()

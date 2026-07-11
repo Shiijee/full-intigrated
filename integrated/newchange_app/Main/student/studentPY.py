@@ -312,7 +312,9 @@ def submit_attendance():
         if not ses:
             return jsonify({'success': False, 'message': 'Session not found.'})
         
-        if ses['status'] != 'Active':
+        if ses['status'] == 'Paused':
+            return jsonify({'success': False, 'message': 'The teacher has temporarily paused this attendance session. Please wait.'})
+        elif ses['status'] != 'Active':
             return jsonify({'success': False, 'message': 'Session has already ended.'})
             
         if ses['random_token'] != token:

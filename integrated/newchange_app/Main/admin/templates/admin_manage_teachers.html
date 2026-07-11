@@ -31,9 +31,8 @@
                 <div class="flex flex-responsive justify-between items-center mb-8">
                     <div>
                         <h1 class="auth-title">Faculty Management</h1>
-                        <p class="text-muted">Register and manage faculty members across departments.</p>
+                        <p class="text-muted">Register and manage faculty members across colleges.</p>
                     </div>
-                    <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> Add Teacher</button>
                 </div>
             
                 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -55,11 +54,11 @@
                         </div>
                         
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Department</label>
+                            <label class="form-label">College</label>
                             <select name="dept_filter" class="form-control">
-                                <option value="">All Departments</option>
-                                {% for dept in departments %}
-                                    <option value="{{ dept }}" {% if dept == dept_filter %}selected{% endif %}>{{ dept }}</option>
+                                <option value="">All Colleges</option>
+                                {% for college in colleges %}
+                                    <option value="{{ college }}" {% if college == dept_filter %}selected{% endif %}>{{ college }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -110,7 +109,7 @@
                             <tr>
                                 <th class="hide-on-mobile">Teacher ID</th>
                                 <th>Teacher Details</th>
-                                <th class="hide-on-mobile">Department</th>
+                                <th class="hide-on-mobile">College</th>
                                 <th class="hide-on-mobile">Email</th>
                                 <th>Status</th>
                                 <th>Action</th>
@@ -126,7 +125,7 @@
                                         ID: {{ teacher.utid }} &bull; {{ teacher.department }}
                                     </div>
                                 </td>
-                                <td class="hide-on-mobile" data-label="Department">{{ teacher.department }}</td>
+                                <td class="hide-on-mobile" data-label="College">{{ teacher.department }}</td>
                                 <td class="hide-on-mobile" data-label="Email" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ teacher.email }}">{{ teacher.email }}</td>
                                 <td data-label="Status">
                                     <span class="badge {% if teacher.status == 'Active' %}badge-success{% else %}badge-danger{% endif %}">
@@ -148,11 +147,7 @@
                                         {% endif %}
                                         {% set m_name = teacher.middle_name if teacher.middle_name else '' %}
                                         {% set dept = teacher.department if teacher.department else '' %}
-                                         <button class="btn btn-secondary" 
-                                                  style="padding: 0.25rem 0.5rem; font-size: 0.8rem;"
-                                                  onclick="openEditModal(`{{ teacher.utid }}`, `{{ teacher.first_name }}`, `{{ m_name }}`, `{{ teacher.last_name }}`, `{{ dept }}`, `{{ teacher.email }}`, `{{ teacher.status }}`)">
-                                              <i class="fas fa-edit"></i> <span class="btn-text">Edit</span>
-                                          </button>
+                                         
                                          <a href="{{ url_for('admin.archive_teacher', utid=teacher.utid) }}" 
                                             class="btn btn-warning" 
                                             style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;"
@@ -227,83 +222,41 @@
     </div>
 
     <!-- Add Teacher Modal -->
-    <div id="addTeacherModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
-        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
+    <div id="addTeacherModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; display: none;">
+        <div class="glass-panel" style="width: 100%; max-width: 500px; padding: 2rem; position: relative;">
             <button onclick="closeModal('addTeacherModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            <h3 class="mb-4">Add New Teacher</h3>
-            <form method="POST" action="{{ url_for('admin.manage_teachers') }}" onsubmit="return validateTeacherForm(this)">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group mb-3">
-                    <label class="form-label">First Name</label>
+            <h3 style="margin-top: 0; margin-bottom: 1.5rem; color: var(--text-main);"><i class="fas fa-user-plus mr-2"></i> Add New Faculty</h3>
+            
+            <form method="POST" action="{{ url_for('admin.manage_teachers') }}" onsubmit="return validateTeacherForm(this);">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group">
+                    <label class="form-label">First Name <span class="text-danger">*</span></label>
                     <input type="text" name="first_name" class="form-control" required>
                 </div>
-                <div class="form-group mb-3">
+                <div class="form-group">
                     <label class="form-label">Middle Name</label>
-                    <input type="text" name="middle_name" class="form-control" required>
+                    <input type="text" name="middle_name" class="form-control">
                 </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Last Name</label>
+                <div class="form-group">
+                    <label class="form-label">Last Name <span class="text-danger">*</span></label>
                     <input type="text" name="last_name" class="form-control" required>
                 </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Department</label>
-                    <input type="text" name="department" class="form-control" placeholder="e.g. Computer Science" required>
+                <div class="form-group">
+                    <label class="form-label">Department / College <span class="text-danger">*</span></label>
+                    <input type="text" name="department" class="form-control" placeholder="e.g., CSS" required>
                 </div>
-                <div class="form-group mb-4">
-                    <label class="form-label">Email</label>
+                <div class="form-group">
+                    <label class="form-label">Email Address <span class="text-danger">*</span></label>
                     <input type="email" name="email" class="form-control" required>
                 </div>
-                <div class="flex justify-end gap-2">
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">Add Faculty</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('addTeacherModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Teacher</button>
                 </div>
             </form>
         </div>
-    </div>
-
-    <!-- Edit Teacher Modal -->
-    <div id="editTeacherModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
-        <div class="glass-panel" style="width: 500px; padding: 2rem; position: relative;">
-            <button onclick="closeModal('editTeacherModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            <h3 class="mb-4">Edit Teacher</h3>
-            <form id="editTeacherForm" method="POST" onsubmit="return validateTeacherForm(this)">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group mb-3">
-                    <label class="form-label">First Name</label>
-                    <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Middle Name</label>
-                    <input type="text" name="middle_name" id="edit_middle_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Last Name</label>
-                    <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Department</label>
-                    <input type="text" name="department" id="edit_department" class="form-control" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" id="edit_email" class="form-control" required>
-                </div>
-                <div class="form-group mb-4">
-                    <label class="form-label">Status</label>
-                    <select name="status" id="edit_status" class="form-control">
-                        <option value="Active">Active</option>
-                        <option value="Archived">Archived</option>
-                    </select>
-                </div>
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('editTeacherModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Teacher</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
+    </div><script>
         // Persist add form data in localStorage
         function saveAddForm() {
             const f = document.getElementById('addTeacherModal');
@@ -324,16 +277,7 @@
             document.getElementById('addTeacherModal').classList.add('active');
         }
 
-        function openEditModal(tid, fname, mname, lname, dept, email, status) {
-            document.getElementById('editTeacherForm').action = "/admin/edit_teacher/" + tid;
-            document.getElementById('edit_first_name').value = fname;
-            document.getElementById('edit_middle_name').value = mname;
-            document.getElementById('edit_last_name').value = lname;
-            document.getElementById('edit_department').value = dept;
-            document.getElementById('edit_email').value = email;
-            document.getElementById('edit_status').value = status;
-            document.getElementById('editTeacherModal').classList.add('active');
-        }
+        
 
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
