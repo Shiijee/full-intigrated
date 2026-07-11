@@ -176,8 +176,11 @@ def get_announcements():
 @voxify_api.route('/voters/status/<student_id>')
 def voter_status(student_id):
     """
-    Checks if a student is a registered voter and whether they've voted.
-    Consumed by: TestPoint student dashboard (show voting reminder/badge).
+    Checks if a student is a registered voter and whether they've voted,
+    and whether their college's election is CURRENTLY active (not just
+    "exists in some status").
+    Consumed by: TestPoint student dashboard, NewChange student dashboard
+    (show voting reminder/badge).
     """
     try:
         conn = db()
@@ -203,19 +206,32 @@ def voter_status(student_id):
                 "has_voted": False,
                 "college_id": None,
                 "election_id": None,
-                "election_title": None
+                "election_title": None,
+                "election_status": None,
+                "election_is_open": False
             })
 
-        # Find their active/recent election
+        # Find their currently ACTIVE election, if any
         cursor.execute("""
             SELECT id, title, status
             FROM elections
-            WHERE college_id = %s
-              AND status IN ('active','completed','closed')
+            WHERE college_id = %s AND status = 'active'
             ORDER BY start_date DESC
             LIMIT 1
         """, (voter['college_id'],))
         election = cursor.fetchone()
+
+        # Fall back to the most recent election (any status) just for context/title
+        if not election:
+            cursor.execute("""
+                SELECT id, title, status
+                FROM elections
+                WHERE college_id = %s
+                ORDER BY start_date DESC
+                LIMIT 1
+            """, (voter['college_id'],))
+            election = cursor.fetchone()
+
         cursor.close(); conn.close()
 
         return jsonify({
@@ -224,7 +240,9 @@ def voter_status(student_id):
             "has_voted": bool(voter['has_voted']),
             "college_id": voter['college_id'],
             "election_id": election['id'] if election else None,
-            "election_title": election['title'] if election else None
+            "election_title": election['title'] if election else None,
+            "election_status": election['status'] if election else None,
+            "election_is_open": bool(election and election['status'] == 'active')
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

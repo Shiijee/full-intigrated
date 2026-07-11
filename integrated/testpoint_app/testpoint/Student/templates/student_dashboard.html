@@ -9,7 +9,7 @@
 {% if voting_status %}
 <div class="row mb-3">
     <div class="col-lg-12">
-        <div class="card border-0 shadow-sm overflow-hidden" style="border-radius: var(--tp-student-radius); background: {% if voting_status.has_voted %}#f0fdf4{% else %}#fffbeb{% endif %}; border-left: 4px solid {% if voting_status.has_voted %}#16a34a{% else %}#d97706{% endif %};">
+        <div class="card border-0 shadow-sm overflow-hidden" style="border-radius: var(--tp-student-radius); background: {% if voting_status.has_voted %}#f0fdf4{% elif voting_status.is_registered_voter and voting_status.election_is_open %}#fffbeb{% else %}#f8fafc{% endif %}; border-left: 4px solid {% if voting_status.has_voted %}#16a34a{% elif voting_status.is_registered_voter and voting_status.election_is_open %}#d97706{% else %}#94a3b8{% endif %};">
             <div class="card-body py-3 px-4 d-flex align-items-center justify-content-between">
                 <div>
                     {% if voting_status.is_registered_voter %}
@@ -18,10 +18,15 @@
                             {% if voting_status.election_title %}
                             <span class="text-muted ml-2" style="font-size:13px;">in <em>{{ voting_status.election_title }}</em></span>
                             {% endif %}
-                        {% else %}
+                        {% elif voting_status.election_is_open %}
                             <span style="color:#b45309;font-weight:700;"><i class="fas fa-vote-yea mr-2"></i>Election is open — you haven't voted yet</span>
                             {% if voting_status.election_title %}
                             <span class="text-muted ml-2" style="font-size:13px;"><em>{{ voting_status.election_title }}</em></span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color:#6b7280;font-weight:700;"><i class="fas fa-info-circle mr-2"></i>No election is currently open</span>
+                            {% if voting_status.election_title %}
+                            <span class="text-muted ml-2" style="font-size:13px;">last: <em>{{ voting_status.election_title }}</em></span>
                             {% endif %}
                         {% endif %}
                     {% else %}

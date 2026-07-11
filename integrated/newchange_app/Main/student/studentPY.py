@@ -76,16 +76,21 @@ def dashboard():
     notifications = cursor.fetchall()
     unread_notifs = [n for n in notifications if not n['is_read']]
 
-    # ── Integration: Fetch Voxify announcements (filtered to this student's college) ──
+    # ── Integration: Fetch Voxify voting status + announcements (filtered to this student's college) ──
     VOXIFY_URL = os.getenv('VOXIFY_URL', 'http://127.0.0.1:5001')
+    voting_status = None
     voxify_announcements = []
     try:
-        ann_params = {}
         vx_resp = requests.get(f"{VOXIFY_URL}/api/voters/status/{usid}", timeout=3)
         if vx_resp.status_code == 200:
-            college_id = vx_resp.json().get('college_id')
-            if college_id:
-                ann_params['college_id'] = college_id
+            voting_status = vx_resp.json()
+    except Exception:
+        voting_status = None  # Voxify offline — degrade gracefully
+
+    try:
+        ann_params = {}
+        if voting_status and voting_status.get('college_id'):
+            ann_params['college_id'] = voting_status['college_id']
         ann_resp = requests.get(f"{VOXIFY_URL}/api/announcements", params=ann_params, timeout=3)
         if ann_resp.status_code == 200:
             voxify_announcements = ann_resp.json().get('announcements', [])
@@ -103,6 +108,7 @@ def dashboard():
                            stats=overall_stats,
                            notifications=notifications,
                            unread_count=len(unread_notifs),
+                           voting_status=voting_status,
                            voxify_announcements=voxify_announcements,
                            voxify_url=VOXIFY_URL)
 

@@ -35,6 +35,34 @@
                     </div>
                 </div>
 
+                {% if voting_status %}
+                <div class="alert" style="background: {% if voting_status.has_voted %}#f0fdf4{% elif voting_status.is_registered_voter and voting_status.election_is_open %}#fffbeb{% else %}#f8fafc{% endif %}; border-left: 5px solid {% if voting_status.has_voted %}#16a34a{% elif voting_status.is_registered_voter and voting_status.election_is_open %}#d97706{% else %}#94a3b8{% endif %}; padding:1rem 1.5rem; border-radius:20px; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+                    <div>
+                        {% if voting_status.is_registered_voter %}
+                            {% if voting_status.has_voted %}
+                                <span style="color:#15803d;font-weight:700;"><i class="fas fa-check-circle mr-2"></i>You have already voted</span>
+                                {% if voting_status.election_title %}
+                                <span class="text-muted" style="font-size:13px; margin-left:0.5rem;">in <em>{{ voting_status.election_title }}</em></span>
+                                {% endif %}
+                            {% elif voting_status.election_is_open %}
+                                <span style="color:#b45309;font-weight:700;"><i class="fas fa-vote-yea mr-2"></i>Election is open — you haven't voted yet</span>
+                                {% if voting_status.election_title %}
+                                <span class="text-muted" style="font-size:13px; margin-left:0.5rem;"><em>{{ voting_status.election_title }}</em></span>
+                                {% endif %}
+                            {% else %}
+                                <span style="color:#6b7280;font-weight:700;"><i class="fas fa-info-circle mr-2"></i>No election is currently open</span>
+                                {% if voting_status.election_title %}
+                                <span class="text-muted" style="font-size:13px; margin-left:0.5rem;">last: <em>{{ voting_status.election_title }}</em></span>
+                                {% endif %}
+                            {% endif %}
+                        {% else %}
+                            <span style="color:#6b7280;font-weight:700;"><i class="fas fa-info-circle mr-2"></i>You are not yet registered as a voter in Voxify</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-muted" style="font-size:11px;">via Voxify 🗳️</div>
+                </div>
+                {% endif %}
+
                 {% if voxify_announcements %}
                 <div class="alert alert-info" style="background:#eef2ff; border-color:#c7d2fe; color:#1e3a8a; border-left: 5px solid #2563eb; padding:1.5rem; border-radius:20px;">
                     <div style="font-weight:700; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.75rem; color:#1d4ed8; font-size:1rem;">
