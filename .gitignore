@@ -1,33 +1,45 @@
+# Environment files
 .env
-integrated\portal\__pycache__
-integrated/portal/__pycache__/db_config.cpython-314.pyc
-integrated/testpoint_app/testpoint/__pycache__/api.cpython-314.pyc
-integrated/testpoint_app/testpoint/__pycache__/sso.cpython-314.pyc
-integrated/voxify_app/Voxify/__pycache__/__init__.cpython-314.pyc
-integrated/voxify_app/Voxify/__pycache__/api.cpython-314.pyc
-integrated/voxify_app/Voxify/Admin/__pycache__/routes.cpython-314.pyc
-integrated/voxify_app/Voxify/Authentication/__pycache__/routes.cpython-314.pyc
-integrated/testpoint_app/testpoint/__pycache__/portal_sync.cpython-314.pyc
-integrated/voxify_app/Voxify/SuperAdmin/__pycache__/routes.cpython-314.pyc
-integrated/voxify_app/Voxify/utils/__pycache__/__init__.cpython-314.pyc
-integrated/voxify_app/Voxify/utils/__pycache__/election_status.cpython-314.pyc
-integrated/voxify_app/Voxify/utils/__pycache__/otp.cpython-314.pyc
-integrated/voxify_app/Voxify/Voter/__pycache__/routes.cpython-314.pyca
-integrated/voxify_app/Voxify/utils/__pycache__/__init__.cpython-314.pyc
-integrated/voxify_app/Voxify/utils/__pycache__/election_status.cpython-314.pyc
-integrated/voxify_app/Voxify/utils/__pycache__/otp.cpython-314.pyc
-integrated/newchange_app/Main/auth/__pycache__/loginPY.cpython-314.pyc
-integrated/newchange_app/Main/__pycache__/__init__.cpython-314.pyc
-integrated/newchange_app/Main/__pycache__/db.cpython-314.pyc
-integrated/newchange_app/Main/__pycache__/sso.cpython-314.pyc
-integrated/newchange_app/Main/admin/__pycache__/adminPY.cpython-314.pyc
-integrated/newchange_app/Main/admin/__pycache__/crudPY.cpython-314.pyc
-integrated/newchange_app/Main/teacher/__pycache__/teacherPY.cpython-314.pyc
-integrated/newchange_app/Main/student/__pycache__/studentPY.cpython-314.pyc
-integrated/newchange_app/.env
-integrated/newchange_app/Main/student/__pycache__/studentPY.cpython-314.pyc
-integrated/newchange_app/Main/teacher/__pycache__/teacherPY.cpython-314.pyc
-integrated/newchange_app/Main/student/__pycache__/studentPY.cpython-314.pyc
+**/.env
+
+# Python cache
+__pycache__/
+**/__pycache__/
+
+# Compiled Python files
+*.py[cod]
+*$py.class
+
+# Python cache directories
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Session files
+.vscode/sessions.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Project-generated files
 FILE TREE.json
-.vscode/sessions.json
-.vscode/sessions.json
