@@ -140,7 +140,58 @@ def sso_required(f):
         return f(*args, current_user=result, **kwargs)
     return decorated
 
+# ── Real-Time Global Request Interceptor (Enforces Local Active Status) ──────
+@sso_bp.before_app_request
+def enforce_local_active_status():
+    """
+    Runs before any route inside Attendeez is handled.
+    Verifies that active sessions correspond to non-archived database profiles in real time.
+    """
+    if request.path.startswith('/static') or request.path.startswith('/api') or request.path == '/sso/status':
+        return
 
+    user_id = session.get('user_id') or session.get('username')
+    role = session.get('role')
+
+    # Debug line to reveal keys and identity types in console
+    print(f"\n[Attendeez Guard Debug] Path: {request.path} | Session Keys: {list(session.keys())} | User ID: {user_id} | Role: {role}")
+
+    if user_id and role:
+        from Main.db import get_db_connection
+        conn = get_db_connection()
+        is_active = False
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                if role == 'student':
+                    cursor.execute("SELECT status FROM students WHERE user_id = %s", (user_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        is_active = (row['status'] == 'Active')
+                        print(f"[Attendeez Guard Debug] Student status found: {row['status']}")
+                elif role == 'teacher':
+                    cursor.execute("SELECT status FROM teachers WHERE user_id = %s", (user_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        is_active = (row['status'] == 'Active')
+                        print(f"[Attendeez Guard Debug] Teacher status found: {row['status']}")
+                elif role in ('admin', 'superadmin', 'super_admin'):
+                    cursor.execute("SELECT admin_id FROM admins WHERE username = %s", (user_id,))
+                    row = cursor.fetchone()
+                    is_active = (row is not None)
+                    print(f"[Attendeez Guard Debug] Admin existence status: {is_active}")
+            except Exception as e:
+                print(f"[Attendeez Guard Debug] Error checking local active status: {e}")
+                is_active = True
+            finally:
+                if 'cursor' in locals(): cursor.close()
+                conn.close()
+
+            if not is_active:
+                print(f"[Attendeez Guard Debug] BLOCKED: Evicting session for {user_id} and redirecting to Portal.")
+                session.clear()
+                return redirect(f"{PORTAL_URL}?next={request.url}")
+            
 # ── SSO status endpoint (for debugging / health checks) ───────────────────────
 @sso_bp.route('/sso/status')
 def sso_status():

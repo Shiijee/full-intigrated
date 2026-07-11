@@ -678,3 +678,43 @@ def sync_college():
 
     except Exception as e:
         return jsonify({"success": False, "reason": str(e)}), 500
+
+# ── Real-Time Global Request Interceptor (Enforces Local Active Status) ──────
+@voxify_api.before_app_request
+def enforce_local_active_status():
+    """
+    Intercepts all requests destined for Voxify routes.
+    Locks out any voters, admins, or superadmins who are locally flagged as archived.
+    """
+    if request.path.startswith('/static') or request.path.startswith('/api') or request.path == '/logout':
+        return
+
+    from flask import session, redirect
+    # Voxify often stores the DB numeric id in "user_id" or "voter_id"
+    user_id = session.get("user_id") or session.get("student_id") or session.get("id") or session.get("voter_id")
+
+    # Debug line to reveal keys and identity types in console
+    print(f"\n[Voxify Guard Debug] Path: {request.path} | Session Keys: {list(session.keys())} | User ID: {user_id}")
+
+    if user_id:
+        is_active = False
+        try:
+            conn = db()
+            cursor = conn.cursor(dictionary=True)
+            # Query using both ID (integer) and student_id (string) to cover all bases
+            cursor.execute("SELECT is_active, is_archived FROM users WHERE id = %s OR student_id = %s", (user_id, user_id))
+            row = cursor.fetchone()
+            if row:
+                is_active = (row["is_active"] == 1 and row["is_archived"] == 0)
+                print(f"[Voxify Guard Debug] User status: is_active={row['is_active']} | is_archived={row['is_archived']}")
+            else:
+                print(f"[Voxify Guard Debug] No user record found in Voxify users table for ID: {user_id}")
+            cursor.close(); conn.close()
+        except Exception as e:
+            print(f"[SSO-Voxify enforce] Database check failed: {e}")
+            is_active = True
+
+        if not is_active:
+            print(f"[Voxify Guard Debug] BLOCKED: Evicting session for {user_id} and redirecting to Portal.")
+            session.clear()
+            return redirect("http://127.0.0.1:5000?next=" + request.url)

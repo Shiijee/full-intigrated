@@ -55,6 +55,7 @@ def reg_app():
     from Main.student.studentPY import user
     from Main.teacher.teacherPY import teacher
     from Main.api import nc_api
+    from Main.sso import sso_bp
 
     app.register_blueprint(admin, url_prefix='/admin')
     app.register_blueprint(crud)
@@ -62,6 +63,7 @@ def reg_app():
     app.register_blueprint(user, url_prefix='/user')
     app.register_blueprint(teacher, url_prefix='/teacher')
     app.register_blueprint(nc_api)  # already has url_prefix='/api' set on the Blueprint itself
+    app.register_blueprint(sso_bp)
 
     # This is a server-to-server API called by Voxify/TestPoint with a JSON
     # body, not a browser form — it can't carry a CSRF token, so it must be
