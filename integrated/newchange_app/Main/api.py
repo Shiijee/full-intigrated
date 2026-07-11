@@ -341,19 +341,19 @@ def sync_subject():
     body = request.get_json(silent=True) or {}
     subject_code = body.get('subject_code')
     subject_name = body.get('subject_name')
-    
+
     if not subject_code or not subject_name:
         return jsonify({"success": False, "reason": "Missing fields"}), 400
-        
+
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "reason": "Database connection failed"}), 500
-        
+
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = %s", (subject_code,))
         if cursor.fetchone():
-            cursor.execute("UPDATE Subjects SET subject_name = %s WHERE subject_code = %s", 
+            cursor.execute("UPDATE Subjects SET subject_name = %s WHERE subject_code = %s",
                            (subject_name, subject_code))
         else:
             cursor.execute("INSERT INTO Subjects (subject_code, subject_name) VALUES (%s, %s)",
@@ -365,7 +365,7 @@ def sync_subject():
     finally:
         cursor.close()
         conn.close()
-        
+
     return jsonify({"success": True}), 201
 
 
@@ -375,14 +375,14 @@ def sync_class():
     class_code = body.get('class_code')
     teacher_id = body.get('teacher_id')
     course_code = body.get('course_code')
-    
+
     if not class_code or not teacher_id or not course_code:
         return jsonify({"success": False, "reason": "Missing fields"}), 400
-        
+
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "reason": "Database connection failed"}), 500
-        
+
     try:
         cursor = conn.cursor()
         # Find subject_id from course_code
@@ -391,10 +391,10 @@ def sync_class():
         if not subject:
             return jsonify({"success": False, "reason": f"Subject {course_code} not found in newchange_app"}), 400
         subject_id = subject[0] if type(subject) is tuple else subject.get('subject_id')
-        
+
         cursor.execute("SELECT assignment_id FROM Teacher_Assignments WHERE section = %s", (class_code,))
         if cursor.fetchone():
-            cursor.execute("UPDATE Teacher_Assignments SET teacher_id = %s, subject_id = %s WHERE section = %s", 
+            cursor.execute("UPDATE Teacher_Assignments SET teacher_id = %s, subject_id = %s WHERE section = %s",
                            (teacher_id, subject_id, class_code))
         else:
             cursor.execute("INSERT INTO Teacher_Assignments (teacher_id, subject_id, section) VALUES (%s, %s, %s)",
@@ -406,7 +406,7 @@ def sync_class():
     finally:
         cursor.close()
         conn.close()
-        
+
     return jsonify({"success": True}), 201
 
 
@@ -415,14 +415,14 @@ def sync_enrollment():
     body = request.get_json(silent=True) or {}
     user_id = body.get('user_id')
     class_code = body.get('class_code')
-    
+
     if not user_id or not class_code:
         return jsonify({"success": False, "reason": "Missing fields"}), 400
-        
+
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "reason": "Database connection failed"}), 500
-        
+
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT assignment_id FROM Teacher_Assignments WHERE class_code = %s", (class_code,))
@@ -441,7 +441,7 @@ def sync_enrollment():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
-        
+
     return jsonify({"success": True})
 
 @nc_api.route('/sync-unenroll', methods=['POST'])
@@ -449,14 +449,14 @@ def sync_unenroll():
     body = request.get_json(silent=True) or {}
     user_id = body.get('user_id')
     class_code = body.get('class_code')
-    
+
     if not user_id or not class_code:
         return jsonify({"success": False, "reason": "Missing fields"}), 400
-        
+
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "reason": "Database connection failed"}), 500
-        
+
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT assignment_id FROM Teacher_Assignments WHERE class_code = %s", (class_code,))
@@ -473,7 +473,7 @@ def sync_unenroll():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
-        
+
     return jsonify({"success": True}), 201
 
 
@@ -485,7 +485,7 @@ def provision_subject():
     data = request.json
     if not data:
         return jsonify({"error": "No JSON payload"}), 400
-        
+
     subject_code = data.get('subject_code')
     subject_name = data.get('subject_name')
     is_active = data.get('is_active', True)
@@ -518,7 +518,7 @@ def provision_subject():
                 INSERT INTO Subjects (subject_code, subject_name, is_archived)
                 VALUES (%s, %s, %s)
             """, (subject_code, subject_name, is_archived))
-        
+
         conn.commit()
         return jsonify({"success": True, "message": "Subject synced successfully"}), 200
     except Exception as e:
@@ -536,7 +536,7 @@ def provision_class():
     data = request.json
     if not data:
         return jsonify({"error": "No JSON payload"}), 400
-        
+
     class_code = data.get('class_code')
     course_code = data.get('course_code')
     section = data.get('block_name')
@@ -552,7 +552,7 @@ def provision_class():
 
     try:
         cursor = conn.cursor(dictionary=True)
-        
+
         # 1. Lookup subject_id
         cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = %s", (course_code,))
         subject = cursor.fetchone()
@@ -579,7 +579,7 @@ def provision_class():
                 INSERT INTO Teacher_Assignments (class_code, teacher_id, subject_id, section, is_archived)
                 VALUES (%s, %s, %s, %s, %s)
             """, (class_code, teacher_id, subject_id, section, is_archived))
-        
+
         conn.commit()
         return jsonify({"success": True, "message": "Class synced successfully"}), 200
     except Exception as e:
@@ -587,3 +587,165 @@ def provision_class():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+# ── Update User (called by TestPoint to sync profile modifications here) ──────
+@nc_api.route('/update-user', methods=['POST'])
+def update_user():
+    """
+    Called by TestPoint right after an admin updates a user profile.
+    Updates the matching profile in db_attendance (admins, students, or teachers).
+
+    Request body (JSON):
+        {
+            "username":  "<string>",        required — used as user_id or admin.username
+            "role":      "<string>",        required — superadmin|admin|teacher|student
+            "changed_fields": { ... }      required — fields delta
+        }
+    """
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    role = (body.get("role") or "").strip()
+    changed_fields = body.get("changed_fields") or {}
+
+    if not username or not changed_fields:
+        return jsonify({"success": False, "reason": "username and changed_fields are required"}), 400
+
+    if role not in ("superadmin", "admin", "teacher", "student"):
+        return jsonify({"success": False, "reason": "role must be superadmin, admin, teacher, or student"}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "reason": "Database connection failed"}), 500
+
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        if role in ("superadmin", "admin"):
+            cursor.execute("SELECT admin_id FROM admins WHERE username = %s", (username,))
+            admin_record = cursor.fetchone()
+            if not admin_record:
+                cursor.close(); conn.close()
+                return jsonify({"success": False, "reason": f"Admin '{username}' not found in Attendeez"}), 404
+
+            update_clauses = []
+            params = []
+
+            if "email" in changed_fields:
+                update_clauses.append("email = %s")
+                params.append(changed_fields["email"])
+
+            if "password" in changed_fields:
+                update_clauses.append("password_hash = %s")
+                params.append(generate_password_hash(changed_fields["password"]))
+
+            if update_clauses:
+                query = f"UPDATE admins SET {', '.join(update_clauses)} WHERE username = %s"
+                params.append(username)
+                cursor.execute(query, tuple(params))
+
+        elif role == "teacher":
+            cursor.execute("SELECT user_id FROM teachers WHERE user_id = %s", (username,))
+            if not cursor.fetchone():
+                cursor.close(); conn.close()
+                return jsonify({"success": False, "reason": f"Teacher '{username}' not found in Attendeez"}), 404
+
+            update_clauses = []
+            params = []
+
+            if "firstname" in changed_fields:
+                update_clauses.append("first_name = %s")
+                params.append(changed_fields["firstname"])
+
+            if "middlename" in changed_fields:
+                update_clauses.append("middle_name = %s")
+                params.append(changed_fields["middlename"] or "")
+
+            if "lastname" in changed_fields:
+                update_clauses.append("last_name = %s")
+                params.append(changed_fields["lastname"])
+
+            if "email" in changed_fields:
+                update_clauses.append("email = %s")
+                params.append(changed_fields["email"])
+
+            if "password" in changed_fields:
+                update_clauses.append("password_hash = %s")
+                params.append(generate_password_hash(changed_fields["password"]))
+
+            if "department" in changed_fields:
+                update_clauses.append("department = %s")
+                params.append(changed_fields["department"])
+
+            if "is_active" in changed_fields:
+                update_clauses.append("status = %s")
+                params.append("Active" if int(changed_fields["is_active"]) == 1 else "Inactive")
+
+            if update_clauses:
+                query = f"UPDATE teachers SET {', '.join(update_clauses)} WHERE user_id = %s"
+                params.append(username)
+                cursor.execute(query, tuple(params))
+
+        elif role == "student":
+            cursor.execute("SELECT user_id FROM students WHERE user_id = %s", (username,))
+            if not cursor.fetchone():
+                cursor.close(); conn.close()
+                return jsonify({"success": False, "reason": f"Student '{username}' not found in Attendeez"}), 404
+
+            update_clauses = []
+            params = []
+
+            if "firstname" in changed_fields:
+                update_clauses.append("first_name = %s")
+                params.append(changed_fields["firstname"])
+
+            if "middlename" in changed_fields:
+                update_clauses.append("middle_name = %s")
+                params.append(changed_fields["middlename"] or "")
+
+            if "lastname" in changed_fields:
+                update_clauses.append("last_name = %s")
+                params.append(changed_fields["lastname"])
+
+            if "email" in changed_fields:
+                update_clauses.append("email = %s")
+                params.append(changed_fields["email"])
+
+            if "password" in changed_fields:
+                update_clauses.append("password_hash = %s")
+                params.append(generate_password_hash(changed_fields["password"]))
+
+            if "is_active" in changed_fields:
+                update_clauses.append("status = %s")
+                params.append("Active" if int(changed_fields["is_active"]) == 1 else "Inactive")
+
+            if "program" in changed_fields:
+                update_clauses.append("program = %s")
+                params.append(changed_fields["program"] or "")
+
+            if "college" in changed_fields:
+                update_clauses.append("college = %s")
+                params.append(changed_fields["college"] or "")
+
+            if "year" in changed_fields:
+                update_clauses.append("year = %s")
+                params.append(changed_fields["year"] or "")
+
+            if "block" in changed_fields:
+                update_clauses.append("block = %s")
+                params.append(changed_fields["block"] or "")
+
+            if update_clauses:
+                query = f"UPDATE students SET {', '.join(update_clauses)} WHERE user_id = %s"
+                params.append(username)
+                cursor.execute(query, tuple(params))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        conn.rollback()
+        if cursor: cursor.close()
+        if conn: conn.close()
+        return jsonify({"success": False, "reason": str(e)}), 500

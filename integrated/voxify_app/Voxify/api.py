@@ -395,3 +395,116 @@ def provision_user():
 
     except Exception as e:
         return jsonify({"success": False, "reason": str(e)}), 500
+
+
+# ── Update User (called by TestPoint to sync profile modifications here) ──────
+@voxify_api.route('/update-user', methods=['POST'])
+def update_user():
+    """
+    Called by TestPoint right after an admin updates a user profile.
+    Updates the local voter or admin profile in db_voting.users.
+
+    Request body (JSON):
+        {
+            "username":  "<string>",        required — used as student_id
+            "role":      "<string>",        required — superadmin|admin|teacher|student
+            "changed_fields": { ... }      required — fields delta
+        }
+    """
+    from werkzeug.security import generate_password_hash
+
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    role = (body.get("role") or "").strip()
+    changed_fields = body.get("changed_fields") or {}
+
+    if not username or not changed_fields:
+        return jsonify({"success": False, "reason": "username and changed_fields are required"}), 400
+
+    # Map Portal/TestPoint roles to Voxify roles.
+    # Voxify does not track 'teacher' profiles, so we acknowledge and skip gracefully.
+    role_map = {
+        "superadmin": "superadmin",
+        "admin":      "admin",
+        "student":    "voter",
+    }
+    voxify_role = role_map.get(role)
+    if not voxify_role:
+        return jsonify({"success": True, "message": "Teachers are not tracked in Voxify"}), 200
+
+    try:
+        conn = db()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT id FROM users WHERE student_id = %s", (username,))
+        user_record = cursor.fetchone()
+        if not user_record:
+            cursor.close(); conn.close()
+            return jsonify({"success": False, "reason": f"User '{username}' not found in Voxify"}), 404
+
+        update_clauses = []
+        params = []
+
+        # Name mapping updates
+        first_name = changed_fields.get("firstname")
+        last_name = changed_fields.get("lastname")
+        middle_name = changed_fields.get("middlename")
+
+        if first_name is not None:
+            update_clauses.append("firstname = %s")
+            params.append(first_name)
+        if middle_name is not None:
+            update_clauses.append("middlename = %s")
+            params.append(middle_name)
+        if last_name is not None:
+            update_clauses.append("surname = %s")
+            params.append(last_name)
+
+        if "email" in changed_fields:
+            update_clauses.append("email = %s")
+            params.append(changed_fields["email"])
+
+        if "password" in changed_fields:
+            update_clauses.append("password = %s")
+            params.append(generate_password_hash(changed_fields["password"]))
+
+        if "is_active" in changed_fields:
+            update_clauses.append("is_active = %s")
+            params.append(int(changed_fields["is_active"]))
+
+        if "college" in changed_fields:
+            college_name = changed_fields["college"]
+            if college_name:
+                # Flexible matching: Map abbreviations or program acronyms back to voting database college names.
+                abbr_map = {
+                    "CCS": "Computer Studies",
+                    "COED": "Education",
+                    "COED1Q": "Education",
+                    "BSIT": "Computer Studies",
+                    "BSCS": "Computer Studies",
+                    "BSED": "Education",
+                }
+                search_term = abbr_map.get(college_name, college_name)
+                cursor.execute("SELECT id FROM colleges WHERE name LIKE %s OR name = %s", (f"%{search_term}%", college_name))
+                col_row = cursor.fetchone()
+                if col_row:
+                    update_clauses.append("college_id = %s")
+                    params.append(col_row['id'])
+                else:
+                    update_clauses.append("college_id = NULL")
+            else:
+                update_clauses.append("college_id = NULL")
+
+        if update_clauses:
+            query = f"UPDATE users SET {', '.join(update_clauses)} WHERE student_id = %s"
+            params.append(username)
+            cursor.execute(query, tuple(params))
+            conn.commit()
+
+        cursor.close(); conn.close()
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "reason": str(e)}), 500
+
+

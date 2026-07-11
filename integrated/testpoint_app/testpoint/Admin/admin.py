@@ -126,7 +126,7 @@ def manage_accounts():
 
         cursor.execute("SELECT b.block_id, b.block_name, p.program_name FROM blocks b JOIN programs p ON b.program_id = p.program_id")
         blocks = cursor.fetchall()
-        
+
         cursor.execute("SELECT college_id, college_name FROM colleges WHERE is_active = 1")
         colleges = cursor.fetchall()
 
@@ -205,6 +205,24 @@ def update_account(user_id):
             is_active = 1
 
         connection = mysql.connector.connect(**db_config)
+
+        # 1. Fetch current/old profile before updating so we can do delta tracking
+        temp_cursor = connection.cursor(dictionary=True)
+        temp_cursor.execute("""
+            SELECT u.user_id, u.email, u.role, u.is_active,
+                   COALESCE(s.firstname, t.firstname, a.firstname) AS firstname,
+                   COALESCE(s.middlename, t.middlename, a.middlename) AS middlename,
+                   COALESCE(s.lastname, t.lastname, a.lastname) AS lastname,
+                   s.block_id, t.college_id
+            FROM users u
+            LEFT JOIN students s ON u.user_id = s.student_id
+            LEFT JOIN teachers t ON u.user_id = t.teacher_id
+            LEFT JOIN admins a ON u.user_id = a.admin_id
+            WHERE u.user_id = %s
+        """, (user_id,))
+        old_user = temp_cursor.fetchone()
+        temp_cursor.close()
+
         cursor = connection.cursor()
         try:
             # Update the core users table
@@ -231,7 +249,7 @@ def update_account(user_id):
                     SET firstname = %s, middlename = %s, lastname = %s, college_id = %s
                     WHERE teacher_id = %s
                 """, (firstname, middlename, lastname, c_id, user_id))
-                
+
                 # Directly update Attendance DB since this route doesn't use the full sync logic
                 if c_id:
                     cursor.execute("SELECT college_name FROM colleges WHERE college_id = %s", (c_id,))
@@ -259,11 +277,116 @@ def update_account(user_id):
 
             connection.commit()
 
+            # 2. Delta Sync Calculation
+            changed_fields = {}
+            if old_user:
+                if firstname != old_user.get('firstname'):
+                    changed_fields['firstname'] = firstname
+                if lastname != old_user.get('lastname'):
+                    changed_fields['lastname'] = lastname
+                if middlename != old_user.get('middlename'):
+                    changed_fields['middlename'] = middlename
+                if email != old_user.get('email'):
+                    changed_fields['email'] = email
+                if is_active is not None and int(is_active) != int(old_user.get('is_active')):
+                    changed_fields['is_active'] = int(is_active)
+                if new_password:
+                    changed_fields['password'] = new_password
+
+                # Role specific sub-table fields tracking
+                if role == 'teacher':
+                    college_id = request.form.get('college_id')
+                    c_id = college_id if college_id and college_id.strip() != "" else None
+                    old_c_id = str(old_user.get('college_id')) if old_user.get('college_id') is not None else None
+                    if str(c_id) != old_c_id:
+                        changed_fields['college_id'] = c_id
+                        if c_id:
+                            cursor_col = connection.cursor(dictionary=True)
+                            cursor_col.execute("SELECT college_name FROM colleges WHERE college_id = %s", (c_id,))
+                            coll = cursor_col.fetchone()
+                            cursor_col.close()
+                            if coll:
+                                c_name = coll['college_name']
+                                changed_fields['department'] = c_name
+                        else:
+                            changed_fields['department'] = None
+
+                elif role == 'student':
+                    b_id = block_id if block_id and block_id.strip() != "" else None
+                    old_b_id = str(old_user.get('block_id')) if old_user.get('block_id') is not None else None
+                    if str(b_id) != old_b_id:
+                        changed_fields['block_id'] = b_id
+                        if b_id:
+                            cursor_blk = connection.cursor(dictionary=True)
+                            cursor_blk.execute("""
+                                SELECT b.block_name, p.program_name, c.college_name
+                                FROM blocks b
+                                JOIN programs p ON b.program_id = p.program_id
+                                LEFT JOIN colleges c ON p.college_id = c.college_id
+                                WHERE b.block_id = %s
+                            """, (b_id,))
+                            block_info = cursor_blk.fetchone()
+                            cursor_blk.close()
+                            if block_info:
+                                block_name = block_info['block_name']
+                                program_name = block_info['program_name']
+                                college_name = block_info['college_name']
+
+                                changed_fields['program'] = program_name
+                                changed_fields['college'] = college_name
+                                if block_name and "-" in block_name:
+                                    parts = block_name.split("-")
+                                    if len(parts) == 2 and len(parts[1]) >= 2:
+                                        changed_fields['year'] = parts[1][0]
+                                        changed_fields['block'] = parts[1][1:]
+                                    else:
+                                        changed_fields['block'] = block_name
+                                else:
+                                    changed_fields['block'] = block_name
+                        else:
+                            changed_fields['block'] = None
+                            changed_fields['program'] = None
+                            changed_fields['college'] = None
+                            changed_fields['year'] = None
+
+                # Compute full_name
+                final_fname = firstname if firstname is not None else old_user.get('firstname', '')
+                final_mname = middlename if middlename is not None else old_user.get('middlename', '')
+                final_lname = lastname if lastname is not None else old_user.get('lastname', '')
+                fullname_for_portal = ' '.join([final_fname, final_mname, final_lname] if final_mname else [final_fname, final_lname])
+                changed_fields['full_name'] = fullname_for_portal
+
+            # 3. Trigger remote updates
+            if changed_fields:
+                from testpoint.portal_sync import sync_user_update_to_portal, mirror_user_update_to_modules, portal_role
+
+                # Update main SSO portal database
+                portal_result = sync_user_update_to_portal(user_id, changed_fields)
+
+                # Update downstream Voter (Voxify) and Attendance (Attendeez) modules
+                mirror_results = mirror_user_update_to_modules(user_id, portal_role(role), changed_fields)
+
+                failed_modules = []
+                if not portal_result["success"]:
+                    failed_modules.append(f"Portal ({portal_result['reason']})")
+                for module, result in mirror_results.items():
+                    if not result.get('success'):
+                        failed_modules.append(f"{module.capitalize()} ({result.get('reason')})")
+
+                if failed_modules:
+                    flash(
+                        f"Account updated locally, but failed to sync changes to: "
+                        f"{'; '.join(failed_modules)}.",
+                        'warning'
+                    )
+                else:
+                    flash('Account updated and changes propagated successfully to all modules.', 'success')
+            else:
+                flash('Account updated successfully.', 'success')
+
             # Specific flash message if an attempt to deactivate an admin was blocked
             if request.form.get('is_active') == '0' and role in ['admin', 'super_admin']:
                 flash('Account info updated, but Administrative accounts cannot be deactivated.', 'warning')
-            else:
-                flash('Account updated successfully.', 'success')
 
         except mysql.connector.Error as err:
             connection.rollback()
@@ -354,7 +477,7 @@ def add_user():
                 email=email,
                 external_id=custom_user_id,
             )
-            
+
             extra_data = {}
             if role == 'teacher' and 'college_id' in locals() and college_id:
                 try:
@@ -375,7 +498,7 @@ def add_user():
                         block_name = block_info[0] if isinstance(block_info, tuple) else block_info.get('block_name')
                         program_name = block_info[1] if isinstance(block_info, tuple) else block_info.get('program_name')
                         college_name = block_info[2] if isinstance(block_info, tuple) else block_info.get('college_name')
-                        
+
                         extra_data["program"] = program_name
                         extra_data["college"] = college_name
                         if block_name and "-" in block_name:
@@ -972,11 +1095,11 @@ def deactivate_course(course_code):
         cursor.execute("SELECT course_name FROM courses WHERE course_code = %s", (course_code,))
         course = cursor.fetchone()
         course_name = course['course_name'] if course else course_code
-        
+
         cursor.execute("UPDATE courses SET is_active = 0 WHERE course_code = %s", (course_code,))
         try: sync_subject_to_attendance(course_code, course_name, 0)
         except Exception as e: print(e)
-        
+
         connection.commit(); cursor.close(); connection.close()
         flash('Subject moved to trash.', 'success'); return redirect(url_for('admin.manage_courses'))
     return redirect(url_for('auth.login'))
@@ -996,11 +1119,11 @@ def restore_course(course_code):
         cursor.execute("SELECT course_name FROM courses WHERE course_code = %s", (course_code,))
         course = cursor.fetchone()
         course_name = course['course_name'] if course else course_code
-        
+
         cursor.execute("UPDATE courses SET is_active = 1 WHERE course_code = %s", (course_code,))
         try: sync_subject_to_attendance(course_code, course_name, 1)
         except Exception as e: print(e)
-        
+
         connection.commit(); cursor.close(); connection.close()
         flash('Subject restored.', 'success'); return redirect(url_for('admin.manage_courses'))
     return redirect(url_for('auth.login'))
@@ -1230,9 +1353,9 @@ def archive_class(class_code):
         cursor.execute(
             "UPDATE classes SET is_active = 0 WHERE class_code = %s", (class_code,)
         )
-        cursor.execute("""SELECT c.course_code, c.teacher_id, b.block_name 
-                          FROM classes c 
-                          JOIN blocks b ON c.block_id = b.block_id 
+        cursor.execute("""SELECT c.course_code, c.teacher_id, b.block_name
+                          FROM classes c
+                          JOIN blocks b ON c.block_id = b.block_id
                           WHERE c.class_code = %s""", (class_code,))
         cls_data = cursor.fetchone()
         if cls_data:
@@ -1277,9 +1400,9 @@ def restore_class(class_code):
         cursor.execute(
             "UPDATE classes SET is_active = 1 WHERE class_code = %s", (class_code,)
         )
-        cursor.execute("""SELECT c.course_code, c.teacher_id, b.block_name 
-                          FROM classes c 
-                          JOIN blocks b ON c.block_id = b.block_id 
+        cursor.execute("""SELECT c.course_code, c.teacher_id, b.block_name
+                          FROM classes c
+                          JOIN blocks b ON c.block_id = b.block_id
                           WHERE c.class_code = %s""", (class_code,))
         cls_data = cursor.fetchone()
         if cls_data:

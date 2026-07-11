@@ -172,7 +172,7 @@ def retry_failed_syncs() -> dict:
     rows = cursor.fetchall()
 
     endpoints = {
-        "voxify": VOXIFY_PROVISION_URL, 
+        "voxify": VOXIFY_PROVISION_URL,
         "attendance": ATTENDANCE_PROVISION_URL,
         "attendance_subject": f"{ATTENDANCE_URL}/api/sync-subject",
         "attendance_class": f"{ATTENDANCE_URL}/api/sync-class",
@@ -237,8 +237,6 @@ def _generic_sync(endpoint: str, target_module: str, payload: dict) -> dict:
     return {"success": False, "reason": last_reason}
 
 
-
-
 def sync_class_to_attendance(class_code: str, teacher_id: str, course_code: str, block_name: str, is_active: int = 1) -> dict:
     '''
     Pushes a class assignment to NewChange (Attendeez).
@@ -250,9 +248,9 @@ def sync_class_to_attendance(class_code: str, teacher_id: str, course_code: str,
         "block_name": block_name,
         "is_active": is_active
     }
-    
+
     ATTENDANCE_PROVISION_CLASS_URL = f"{ATTENDANCE_URL}/api/provision-class"
-    
+
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
             resp = requests.post(ATTENDANCE_PROVISION_CLASS_URL, json=payload, timeout=5, verify=False)
@@ -263,7 +261,7 @@ def sync_class_to_attendance(class_code: str, teacher_id: str, course_code: str,
                 _log_sync_failure("newchange_class", payload, f"Failed after {attempt} attempts: {e}")
                 return {"success": False, "reason": str(e)}
         time.sleep(_RETRY_DELAY_S)
-        
+
     return {"success": False, "reason": "Failed to sync class to Attendance"}
 
 def sync_enrollment_to_attendance(student_id: str, class_code: str) -> dict:
@@ -291,9 +289,9 @@ def sync_subject_to_attendance(course_code: str, course_name: str, is_active: in
         "subject_name": course_name,
         "is_active": is_active
     }
-    
+
     ATTENDANCE_PROVISION_SUBJECT_URL = f"{ATTENDANCE_URL}/api/provision-subject"
-    
+
     # Retry logic similar to _provision
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
@@ -305,5 +303,70 @@ def sync_subject_to_attendance(course_code: str, course_name: str, is_active: in
                 _log_sync_failure("newchange_subject", payload, f"Failed after {attempt} attempts: {e}")
                 return {"success": False, "reason": str(e)}
         time.sleep(_RETRY_DELAY_S)
-        
+
     return {"success": False, "reason": "Failed to sync subject to Attendance"}
+
+
+def sync_user_update_to_portal(username: str, changed_fields: dict) -> dict:
+    """
+    Propagates user profile modifications to the central Portal identity service.
+    """
+    payload = {"username": username, "changed_fields": changed_fields}
+    try:
+        resp = requests.post(f"{PORTAL_URL}/api/update-user", json=payload, timeout=5)
+        data = resp.json() if resp.text else {}
+        if resp.status_code == 200:
+            return {"success": True}
+        return {
+            "success": False,
+            "reason": data.get("reason", f"HTTP {resp.status_code}"),
+        }
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "reason": f"Portal unreachable: {e}"}
+
+
+def _update_provision(
+    endpoint: str, target_module: str, username: str, role: str, changed_fields: dict
+) -> dict:
+    """
+    Utility wrapper to securely dispatch change deltas to down-stream application APIs.
+    """
+    payload = {"username": username, "role": role, "changed_fields": changed_fields}
+    last_reason = "Unknown error"
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        try:
+            resp = requests.post(endpoint, json=payload, timeout=5, verify=False)
+            data = resp.json() if resp.text else {}
+            if resp.status_code == 200:
+                return {"success": True}
+            last_reason = data.get("reason", f"HTTP {resp.status_code}")
+            break
+        except requests.exceptions.RequestException as e:
+            last_reason = f"Unreachable: {e}"
+            if attempt < _RETRY_ATTEMPTS:
+                time.sleep(_RETRY_DELAY_S)
+
+    _log_sync_failure(f"{target_module}_update", payload, last_reason)
+    return {"success": False, "reason": last_reason}
+
+
+def mirror_user_update_to_modules(
+    username: str, role: str, changed_fields: dict
+) -> dict:
+    """
+    Dispatches modification updates out to the corresponding downstream Voter and Attendance profiles.
+    """
+    results = {
+        "attendance": _update_provision(
+            f"{ATTENDANCE_URL}/api/update-user",
+            "attendance",
+            username,
+            role,
+            changed_fields,
+        )
+    }
+    if role != "teacher":
+        results["voxify"] = _update_provision(
+            f"{VOXIFY_URL}/api/update-user", "voxify", username, role, changed_fields
+        )
+    return results

@@ -233,13 +233,13 @@ def update_password():
     try:
         cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
         user = cursor.fetchone()
-        
+
         if not user:
             return jsonify({"success": False, "reason": "User not found"}), 404
-            
+
         if not check_password_hash(user["password"], current_password):
             return jsonify({"success": False, "reason": "Incorrect current password"}), 401
-            
+
         cursor.execute("UPDATE users SET password = %s WHERE username = %s", (generate_password_hash(new_password), username))
         conn.commit()
         return jsonify({"success": True}), 200
@@ -250,6 +250,66 @@ def update_password():
         cursor.close()
         conn.close()
 
+
+@app.route("/api/update-user", methods=["POST"])
+def update_user():
+    """
+    Executes profile updates on the master users table inside db_portal.
+    Accepts JSON body specifying the target username and changed_fields delta.
+    """
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    changed_fields = body.get("changed_fields") or {}
+
+    if not username or not changed_fields:
+        return (
+            jsonify(
+                {"success": False, "reason": "username and changed_fields are required"}
+            ),
+            400,
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user_record = cursor.fetchone()
+        if not user_record:
+            return (
+                jsonify({"success": False, "reason": f"User '{username}' not found"}),
+                404,
+            )
+
+        update_clauses = []
+        params = []
+
+        if "full_name" in changed_fields:
+            update_clauses.append("full_name = %s")
+            params.append(changed_fields["full_name"])
+
+        if "email" in changed_fields:
+            update_clauses.append("email = %s")
+            params.append(changed_fields["email"])
+
+        if "password" in changed_fields:
+            update_clauses.append("password = %s")
+            params.append(generate_password_hash(changed_fields["password"]))
+
+        if update_clauses:
+            query = f"UPDATE users SET {', '.join(update_clauses)} WHERE username = %s"
+            params.append(username)
+            cursor.execute(query, tuple(params))
+            conn.commit()
+
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "reason": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
