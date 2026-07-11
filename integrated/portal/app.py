@@ -10,6 +10,7 @@ NEW in this version
 
 import jwt
 import datetime
+import os
 from flask import Flask, render_template, request, redirect, make_response, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from db_config import get_db_connection
@@ -41,18 +42,142 @@ def decode_token(token):
         return None
 
 
+def get_module_connection(db_name):
+    """
+    Connects to the specified module's database using the shared server credentials.
+    Gracefully falls back to alternative naming conventions (e.g. test_point / db_exam).
+    """
+    import mysql.connector
+
+    db_names_to_try = [db_name]
+    if db_name == "db_exam":
+        db_names_to_try.append("test_point")
+    elif db_name == "test_point":
+        db_names_to_try.append("db_exam")
+
+    password = os.getenv("DBPASSWORD", "dion8185")
+
+    for name in db_names_to_try:
+        try:
+            return mysql.connector.connect(
+                host="127.0.0.1",
+                user="root",
+                password=password,
+                database=name
+            )
+        except Exception:
+            continue
+    return None
+
+
+def check_module_active_status(username, role):
+    """
+    Independently queries each module database to check if the user is archived.
+    Default fallbacks are set to True to ensure graceful recovery if a module is offline.
+    """
+    status = {
+        "testpoint": True,
+        "attendance": True,
+        "voxify": True
+    }
+
+    # 1. Check TestPoint (db_exam / test_point)
+    conn = get_module_connection("db_exam")
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT is_active FROM users WHERE user_id = %s", (username,))
+            row = cursor.fetchone()
+            if row:
+                status["testpoint"] = (row["is_active"] == 1)
+            else:
+                status["testpoint"] = False
+        except Exception as e:
+            print(f"TestPoint status check error: {e}")
+        finally:
+            if 'cursor' in locals(): cursor.close()
+            conn.close()
+
+    # 2. Check Attendance/Attendeez (db_attendance)
+    conn = get_module_connection("db_attendance")
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            if role == "student":
+                cursor.execute("SELECT status FROM students WHERE user_id = %s", (username,))
+                row = cursor.fetchone()
+                if row:
+                    status["attendance"] = (row["status"] == "Active")
+                else:
+                    status["attendance"] = False
+            elif role == "teacher":
+                cursor.execute("SELECT status FROM teachers WHERE user_id = %s", (username,))
+                row = cursor.fetchone()
+                if row:
+                    status["attendance"] = (row["status"] == "Active")
+                else:
+                    status["attendance"] = False
+            elif role in ("admin", "superadmin", "super_admin"):
+                cursor.execute("SELECT admin_id FROM admins WHERE username = %s", (username,))
+                row = cursor.fetchone()
+                status["attendance"] = (row is not None)
+        except Exception as e:
+            print(f"Attendance status check error: {e}")
+        finally:
+            if 'cursor' in locals(): cursor.close()
+            conn.close()
+
+    # 3. Check Voxify (db_voting)
+    if role == "teacher":
+        status["voxify"] = False
+    else:
+        conn = get_module_connection("db_voting")
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT is_active, is_archived FROM users WHERE student_id = %s", (username,))
+                row = cursor.fetchone()
+                if row:
+                    status["voxify"] = (row["is_active"] == 1 and row["is_archived"] == 0)
+                else:
+                    status["voxify"] = False
+            except Exception as e:
+                print(f"Voxify status check error: {e}")
+            finally:
+                if 'cursor' in locals(): cursor.close()
+                conn.close()
+
+    return status
+
+
 # ── Pages ─────────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
     token = request.cookies.get("auth_token")
-    next_url = request.args.get("next", "")
+    next_url = request.args.get("next", "").strip()
     if token:
         user_data = decode_token(token)
         if user_data:
-            if next_url:
+            username = user_data.get("username")
+            role = user_data.get("role")
+
+            # Retrieve independent active/archived statuses across modules
+            statuses = check_module_active_status(username, role)
+
+            # Ignore standard root level redirects to avoid infinite looping
+            if next_url and next_url != "/" and next_url != "":
+                # Intercept direct links and enforce module archive status
+                if "5003" in next_url and not statuses["testpoint"]:
+                    return render_template("login.html", error="Your account has been archived for this module. Please contact your administrator if you believe this is an error.", next=next_url)
+                if "5002" in next_url and not statuses["attendance"]:
+                    return render_template("login.html", error="Your account has been archived for this module. Please contact your administrator if you believe this is an error.", next=next_url)
+                if "5001" in next_url and not statuses["voxify"]:
+                    return render_template("login.html", error="Your account has been archived for this module. Please contact your administrator if you believe this is an error.", next=next_url)
+
                 return redirect(next_url)
-            return render_template("index.html", user=user_data)
+
+            return render_template("index.html", user=user_data, statuses=statuses)
     return render_template("login.html", next=next_url)
 
 
@@ -76,11 +201,18 @@ def login():
     cursor.close()
     conn.close()
 
+    # --- Live Diagnostic Console Logging ---
+    print(f"\n[SSO Portal Diagnostic] Attempting login for username: '{username}'")
+    if not user:
+        print(f"[SSO Portal Diagnostic] FAILURE: Username '{username}' does NOT exist in the db_portal.users table.")
+    else:
+        pw_match = check_password_hash(user["password"], password)
+        print(f"[SSO Portal Diagnostic] User record found: ID {user['id']} | Role: {user['role']}")
+        print(f"[SSO Portal Diagnostic] Cryptographic password verification status: {pw_match}")
+
     if user and check_password_hash(user["password"], password):
         token = create_token(user["id"], user["username"], user["full_name"], user.get("role", "student"))
         resp  = make_response(redirect(next_url))
-        # SameSite=Lax so the cookie is sent when the browser follows the
-        # redirect back from a module's /login page.
         resp.set_cookie(
             "auth_token", token,
             httponly=True, samesite="Lax",
@@ -88,7 +220,7 @@ def login():
         )
         return resp
 
-    return render_template("login.html", error="Invalid username or password.")
+    return render_template("login.html", error="Invalid username or password.", next=next_url)
 
 
 @app.route("/logout")
@@ -110,22 +242,6 @@ def ping():
 def verify_token():
     """
     Called by every module's sso.py to validate a cookie.
-
-    Request body (JSON):
-        { "token": "<jwt string>" }
-
-    Success response (200):
-        {
-            "valid": true,
-            "user": {
-                "user_id":   <int>,
-                "full_name": "<string>",
-                "role":      "<string>"
-            }
-        }
-
-    Failure response (401):
-        { "valid": false, "reason": "<string>" }
     """
     body  = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -153,23 +269,6 @@ def create_user():
     """
     Called by a module right after it creates a user locally, so that
     person can immediately log in via the Portal across every module.
-
-    Request body (JSON):
-        {
-            "username":    "<string>",   required
-            "password":    "<string>",   required, PLAINTEXT
-            "full_name":   "<string>",   required
-            "role":        "<string>",   required - one of:
-                                          superadmin | admin | teacher | student
-            "email":       "<string>",   optional
-            "external_id": "<string>"    optional - module's own ID for this person
-        }
-
-    Success response (201):
-        { "success": true, "user_id": <int> }
-
-    Failure response (400 or 409):
-        { "success": false, "reason": "<string>" }
     """
     body = request.get_json(silent=True) or {}
 

@@ -66,11 +66,12 @@ def _map_role(portal_role: str) -> str:
 
 # ── Public helpers ────────────────────────────────────────────────────────────
 
+
 def require_sso() -> dict:
     """
     Call at the top of any protected route.
-    - Valid token  → populates session, returns user dict.
-    - Missing/bad  → redirects to Portal login.
+    - Valid token and locally active → populates session, returns user dict.
+    - Missing, bad, or locally archived  → redirects to Portal login.
     """
     token = request.cookies.get("auth_token")
     if token:
@@ -79,19 +80,42 @@ def require_sso() -> dict:
             mapped_role = _map_role(user.get("role", "student"))
             user = dict(user)
             user["role"] = mapped_role
-            # TestPoint's db_exam.users.user_id IS the username
-            # (e.g. "S26-0005") — not the Portal's numeric id. Existing
-            # TestPoint code throughout Admin/Teacher/Student routes
-            # expects session['user_id'] to be that string.
             local_user_id = user.get("username") or user["user_id"]
             user["user_id"] = local_user_id
+
+            # --- Check local active status first ---
+            import mysql.connector
+            from testpoint import db_config
+
+            conn = mysql.connector.connect(**db_config)
+            is_active = False
+            try:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT is_active FROM users WHERE user_id = %s", (local_user_id,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    is_active = row["is_active"] == 1
+            except Exception as e:
+                print(f"[SSO-TestPoint] Database check failed: {e}")
+                is_active = True  # Graceful fallback on exception
+            finally:
+                if "cursor" in locals():
+                    cursor.close()
+                conn.close()
+
+            if not is_active:
+                session.clear()
+                return redirect(f"{PORTAL_URL}?next={request.url}")
+
             # Keep legacy session keys so existing route logic still works
-            session["user_logged_in"]   = True
-            session["admin_logged_in"]  = mapped_role in ("admin", "super_admin")
+            session["user_logged_in"] = True
+            session["admin_logged_in"] = mapped_role in ("admin", "super_admin")
             session["teacher_logged_in"] = mapped_role == "teacher"
-            session["user_id"]          = local_user_id
-            session["full_name"]        = user["full_name"]
-            session["role"]             = mapped_role
+            session["user_id"] = local_user_id
+            session["full_name"] = user["full_name"]
+            session["role"] = mapped_role
             return user
 
     return redirect(f"{PORTAL_URL}?next={request.url}")
@@ -113,16 +137,8 @@ def sso_required(f):
 
 def sync_session_from_cookie():
     """
-    If a valid Portal auth_token cookie is present, populate the Flask
-    session from it (silently — no redirect, no error if missing/invalid).
-
-    Intended for use as a blueprint's before_request hook, so routes that
-    only check session values (e.g. admin_logged_in(), teacher_logged_in())
-    get a freshly-synced session on every request without each route
-    needing to call require_sso() individually.
-
-    Routes are still responsible for their own access control — this only
-    keeps the session in sync; it does not redirect unauthenticated users.
+    If a valid Portal auth_token cookie is present and user is locally active,
+    populate the Flask session silently (no redirect, no error if missing/invalid/archived).
     """
     token = request.cookies.get("auth_token")
     if not token:
@@ -134,12 +150,38 @@ def sync_session_from_cookie():
     mapped_role = _map_role(user.get("role", "student"))
     local_user_id = user.get("username") or user.get("user_id")
 
-    session["user_logged_in"]    = True
-    session["admin_logged_in"]   = mapped_role in ("admin", "super_admin")
+    # --- Check local active status first ---
+    import mysql.connector
+    from testpoint import db_config
+
+    conn = mysql.connector.connect(**db_config)
+    is_active = False
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT is_active FROM users WHERE user_id = %s", (local_user_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            is_active = row["is_active"] == 1
+    except Exception as e:
+        print(f"[SSO-TestPoint] Database check failed: {e}")
+        is_active = True
+    finally:
+        if "cursor" in locals():
+            cursor.close()
+        conn.close()
+
+    if not is_active:
+        session.clear()
+        return
+
+    session["user_logged_in"] = True
+    session["admin_logged_in"] = mapped_role in ("admin", "super_admin")
     session["teacher_logged_in"] = mapped_role == "teacher"
-    session["user_id"]           = local_user_id
-    session["full_name"]         = user.get("full_name")
-    session["role"]              = mapped_role
+    session["user_id"] = local_user_id
+    session["full_name"] = user.get("full_name")
+    session["role"] = mapped_role
 
 
 # ── Debug endpoint ────────────────────────────────────────────────────────────

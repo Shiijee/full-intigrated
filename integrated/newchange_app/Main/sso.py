@@ -47,38 +47,73 @@ def _verify_token(token: str) -> dict | None:
 def require_sso():
     """
     Call this at the top of any protected route.
-    - If valid: populates Flask session and returns user dict.
-    - If invalid/missing: redirects browser to Portal login.
-
-    Example:
-        @admin_bp.route('/dashboard')
-        def dashboard():
-            user = require_sso()
-            return render_template('dashboard.html', user=user)
+    - If valid and locally active: populates Flask session and returns user dict.
+    - If invalid, missing, or archived: redirects browser to Central Portal.
     """
-    token = request.cookies.get('auth_token')
+    token = request.cookies.get("auth_token")
     if token:
         user = _verify_token(token)
         if user:
-            # Use username as session['user_id'] — Attendance's tables
-            # (teachers.user_id, students.user_id, admins.username) all
-            # use the Portal username as the local identifier, not the
-            # Portal's numeric id. Storing the numeric id here caused
-            # profile queries to return None (no matching row found).
-            local_user_id = user.get('username') or user['user_id']
-            session['user_id']   = local_user_id
-            session['name']      = user['full_name']
-            session['full_name'] = user['full_name']
-            session['role']      = user['role']
+            local_user_id = user.get("username") or user["user_id"]
+            role = user.get("role", "student")
+
+            # --- Check local active status first ---
+            from Main.db import get_db_connection
+
+            conn = get_db_connection()
+            is_active = False
+            if conn:
+                try:
+                    cursor = conn.cursor(dictionary=True)
+                    if role == "student":
+                        cursor.execute(
+                            "SELECT status FROM students WHERE user_id = %s",
+                            (local_user_id,),
+                        )
+                        row = cursor.fetchone()
+                        if row:
+                            is_active = row["status"] == "Active"
+                    elif role == "teacher":
+                        cursor.execute(
+                            "SELECT status FROM teachers WHERE user_id = %s",
+                            (local_user_id,),
+                        )
+                        row = cursor.fetchone()
+                        if row:
+                            is_active = row["status"] == "Active"
+                    elif role in ("admin", "superadmin"):
+                        cursor.execute(
+                            "SELECT admin_id FROM admins WHERE username = %s",
+                            (local_user_id,),
+                        )
+                        row = cursor.fetchone()
+                        is_active = row is not None
+                except Exception as e:
+                    print(f"[SSO] Error checking local active status: {e}")
+                    is_active = True  # Fallback gracefully on query failure
+                finally:
+                    if "cursor" in locals():
+                        cursor.close()
+                    conn.close()
+
+            if not is_active:
+                session.clear()
+                return redirect(f"{PORTAL_URL}?next={request.url}")
+
+            # Populate session
+            session["user_id"] = local_user_id
+            session["name"] = user["full_name"]
+            session["full_name"] = user["full_name"]
+            session["role"] = user["role"]
             return user
 
     # Fall back to an existing authenticated local session when possible.
-    if session.get('user_id') and session.get('role'):
+    if session.get("user_id") and session.get("role"):
         return {
-            'user_id': session['user_id'],
-            'username': session['user_id'],
-            'full_name': session.get('name') or session.get('full_name', ''),
-            'role': session['role'],
+            "user_id": session["user_id"],
+            "username": session["user_id"],
+            "full_name": session.get("name") or session.get("full_name", ""),
+            "role": session["role"],
         }
 
     # No valid token or session → send them to the portal to log in

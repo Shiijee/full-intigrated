@@ -225,7 +225,7 @@ def update_account(user_id):
 
         cursor = connection.cursor()
         try:
-            # Update the core users table
+            # Update the core users table (is_active is modified purely locally)
             if new_password:
                 hashed_pw = generate_password_hash(new_password)
                 cursor.execute("""
@@ -277,7 +277,7 @@ def update_account(user_id):
 
             connection.commit()
 
-            # 2. Delta Sync Calculation
+            # 2. Delta Sync Calculation (profile fields only, is_active excluded so archiving remains strictly local)
             changed_fields = {}
             if old_user:
                 if firstname != old_user.get('firstname'):
@@ -288,8 +288,6 @@ def update_account(user_id):
                     changed_fields['middlename'] = middlename
                 if email != old_user.get('email'):
                     changed_fields['email'] = email
-                if is_active is not None and int(is_active) != int(old_user.get('is_active')):
-                    changed_fields['is_active'] = int(is_active)
                 if new_password:
                     changed_fields['password'] = new_password
 
@@ -585,25 +583,54 @@ def generate_id(role_prefix):
     cursor.close(); connection.close()
     return f"{role_prefix}{year_suffix}-{str(new_num).zfill(4)}"
 
-@admin.route('/delete_account/<string:user_id>', methods=['POST'])
-def delete_account(user_id):
-    if admin_logged_in():
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
-        cursor.execute("UPDATE users SET is_active = 0 WHERE user_id = %s", (user_id,))
-        connection.commit(); cursor.close(); connection.close()
-        flash('Account deleted successfully.', 'success')
-        return redirect(url_for('admin.manage_accounts'))
-    return redirect(url_for('auth.login'))
 
-@admin.route('/restore_account/<string:user_id>', methods=['POST'])
-def restore_account(user_id):
+@admin.route("/delete_account/<string:user_id>", methods=["POST"])
+def delete_account(user_id):
+    """
+    Archives the specified user account purely inside TestPoint's database.
+    Does not synchronize active status outwards, maintaining per-module lifecycle permissions.
+    """
     if admin_logged_in():
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
-        cursor.execute("UPDATE users SET is_active = 1 WHERE user_id = %s", (user_id,))
-        connection.commit(); cursor.close(); connection.close()
-        flash('Account restored successfully.', 'success')
-        return redirect(url_for('admin.trashed_accounts'))
-    return redirect(url_for('auth.login'))
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                "UPDATE users SET is_active = 0 WHERE user_id = %s", (user_id,)
+            )
+            connection.commit()
+            flash("Account successfully archived locally in TestPoint.", "success")
+        except mysql.connector.Error as err:
+            flash(f"Database Error: {err}", "danger")
+        finally:
+            cursor.close()
+            connection.close()
+        return redirect(url_for("admin.manage_accounts"))
+    return redirect(url_for("auth.login"))
+
+
+@admin.route("/restore_account/<string:user_id>", methods=["POST"])
+def restore_account(user_id):
+    """
+    Restores the specified user account to active status purely inside TestPoint's database.
+    Does not affect active status inside the other integrated systems.
+    """
+    if admin_logged_in():
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                "UPDATE users SET is_active = 1 WHERE user_id = %s", (user_id,)
+            )
+            connection.commit()
+            flash("Account successfully restored locally in TestPoint.", "success")
+        except mysql.connector.Error as err:
+            flash(f"Database Error: {err}", "danger")
+        finally:
+            cursor.close()
+            connection.close()
+        return redirect(url_for("admin.trashed_accounts"))
+    return redirect(url_for("auth.login"))
+
 
 @admin.route('/delete_account_permanently/<string:user_id>', methods=['POST'])
 def delete_account_permanently(user_id):
