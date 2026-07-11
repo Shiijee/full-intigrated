@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuki Gutiza - Interactive Dog Animation</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap');
+
+        :root {
+            --bg-color: #EBF5FB;
+            --dog-body: #cdbf8d;
+            --dog-dark: #A78C63;
+            --dog-light: #ECD9C2;
+            --dog-chest: #ECD9C2;
+            --dog-tongue: #FF7675;
+            --dog-nose: #2D3436;
+            --dog-collar: #E74C3C;
+            --dog-tag: #F1C40F;
+            --shadow: rgba(0, 0, 0, 0.08);
+            --shadow-dark: rgba(0, 0, 0, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--bg-color);
+            font-family: 'Quicksand', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Background decorative elements */
+        .bg-clouds {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 100px;
+            opacity: 0.6;
+            animation: floatClouds 40s linear infinite;
+        }
+
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+        }
+
+        .cloud-1 {
+            width: 120px;
+            height: 40px;
+            top: 10%;
+            left: -150px;
+            animation-delay: 0s;
+        }
+        .cloud-1::before { width: 50px; height: 50px; top: -25px; left: 15px; }
+        .cloud-1::after { width: 70px; height: 70px; top: -35px; left: 45px; }
+
+        .cloud-2 {
+            width: 180px;
+            height: 60px;
+            top: 25%;
+            left: -200px;
+            animation-delay: 15s;
+            animation-duration: 55s;
+        }
+        .cloud-2::before { width: 80px; height: 80px; top: -40px; left: 25px; }
+        .cloud-2::after { width: 100px; height: 100px; top: -50px; left: 65px; }
+
+        .cloud-3 {
+            width: 100px;
+            height: 35px;
+            top: 15%;
+            left: -120px;
+            animation-delay: 8s;
+            animation-duration: 30s;
+        }
+        .cloud-3::before { width: 40px; height: 40px; top: -20px; left: 15px; }
+        .cloud-3::after { width: 55px; height: 55px; top: -25px; left: 40px; }
+
+        @keyframes floatClouds {
+            0% { left: -200px; }
+            100% { left: calc(100vw + 200px); }
+        }
+
+        /* Main Container */
+        .app-container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+        }
+
+        h1 {
+            font-family: 'Fredoka One', cursive;
+            color: #2C3E50;
+            font-size: 2.8rem;
+            margin: 0 0 5px 0;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 0px white, 4px 4px 0px rgba(0,0,0,0.05);
+            text-align: center;
+            animation: popIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .subtitle {
+            color: #7F8C8D;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+
+        /* Canvas of the dog */
+        .canvas {
+            position: relative;
+            width: 350px;
+            height: 350px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            margin-bottom: 25px;
+        }
+
+        /* Interactive floating items */
+        .falling-bone {
+            position: absolute;
+            width: 40px;
+            height: 20px;
+            z-index: 15;
+            pointer-events: none;
+            filter: drop-shadow(2px 4px 5px rgba(0,0,0,0.15));
+            transform-origin: center;
+        }
+
+        .bone-shape {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #F0F3F4;
+            border-radius: 10px;
+        }
+
+        .bone-shape::before, .bone-shape::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background-color: #F0F3F4;
+            border-radius: 50%;
+        }
+
+        .bone-shape::before {
+            left: -8px;
+            top: -4px;
+            box-shadow: 0 12px 0 #F0F3F4;
+        }
+
+        .bone-shape::after {
+            right: -8px;
+            top: -4px;
+            box-shadow: 0 12px 0 #F0F3F4;
+        }
+
+        /* Shadow beneath the dog */
+        .dog-shadow {
+            position: absolute;
+            width: 240px;
+            height: 20px;
+            background: var(--shadow-dark);
+            border-radius: 50%;
+            bottom: 10px;
+            left: calc(50% - 120px);
+            z-index: 2;
+            animation: shadowPulse 3s ease-in-out infinite;
+        }
+
+        /* THE DOG STRUCTURE */
+        .dog-wrapper {
+            position: relative;
+            width: 220px;
+            height: 280px;
+            z-index: 5;
+            cursor: pointer;
+            transform-origin: bottom center;
+            animation: breathe 3s ease-in-out infinite;
+        }
+
+        /* Dog body parts */
+        .dog-body-container {
+            position: absolute;
+            width: 100%;
+            height: 150px;
+            bottom: 10px;
+            z-index: 3;
+        }
+
+        /* Dog body block */
+        .dog-body {
+            position: absolute;
+            width: 140px;
+            height: 110px;
+            background-color: var(--dog-body);
+            border-radius: 60px 40px 40px 50px;
+            bottom: 25px;
+            left: 30px;
+            box-shadow: inset -10px -10px 0 var(--dog-dark);
+        }
+
+        /* Chest (white patch) */
+        .dog-chest {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background-color: var(--dog-chest);
+            border-radius: 50% 50% 40% 40%;
+            top: 15px;
+            left: 20px;
+            transform: rotate(-15deg);
+        }
+
+        /* Collar & Tag */
+        .dog-collar {
+            position: absolute;
+            width: 65px;
+            height: 14px;
+            background-color: var(--dog-collar);
+            border-radius: 20px;
+            top: 15px;
+            left: 20px;
+            transform: rotate(-18deg);
+            z-index: 6;
+            box-shadow: 0 3px 5px var(--shadow-dark);
+        }
+
+        .dog-tag {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: var(--dog-tag);
+            border-radius: 50%;
+            bottom: -8px;
+            left: 25px;
+            border: 1px solid #D4AC0D;
+            animation: tagJiggle 3s ease-in-out infinite;
+            transform-origin: top center;
+        }
+
+        /* Dog tail */
+        .dog-tail {
+            position: absolute;
+            width: 25px;
+            height: 70px;
+            background-color: var(--dog-body);
+            border-radius: 15px;
+            bottom: 75px;
+            right: 25px;
+            transform-origin: bottom center;
+            transform: rotate(35deg);
+            z-index: 2;
+            animation: tailWag 0.6s ease-in-out infinite alternate;
+            box-shadow: inset -4px 0 0 var(--dog-dark);
+        }
+
+        .dog-tail.excited {
+            animation: tailWagExcited 0.15s ease-in-out infinite alternate !important;
+        }
+
+        /* Legs and Paws */
+        .dog-legs {
+            position: absolute;
+            width: 100%;
+            height: 40px;
+            bottom: 0;
+            z-index: 4;
+        }
+
+        .paw {
+            position: absolute;
+            width: 26px;
+            height: 35px;
+            background-color: var(--dog-body);
+            border-radius: 12px 12px 6px 6px;
+            bottom: 0;
+            box-shadow: inset -4px -4px 0 var(--dog-dark);
+        }
+
+        .paw::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 8px;
+            background-color: var(--dog-light);
+            bottom: 0;
+            border-radius: 0 0 6px 6px;
+        }
+
+        .paw-fl { left: 45px; }
+        .paw-fr { left: 80px; }
+        .paw-bl { left: 115px; }
+        .paw-br { left: 145px; }
+
+        /* DOG HEAD */
+        .dog-head {
+            position: absolute;
+            width: 130px;
+            height: 130px;
+            top: 30px;
+            left: 15px;
+            z-index: 10;
+            transform-origin: bottom center;
+            transition: transform 0.15s ease-out;
+        }
+
+        /* Head shape */
+        .head-base {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--dog-body);
+            border-radius: 50% 50% 45% 45%;
+            box-shadow: inset -10px -10px 0 var(--dog-dark), 0 5px 15px var(--shadow);
+            z-index: 2;
+        }
+
+        /* Ears */
+        .ear {
+            position: absolute;
+            width: 32px;
+            height: 85px;
+            background-color: var(--dog-dark);
+            border-radius: 20px 20px 15px 15px;
+            z-index: 1;
+            transform-origin: top center;
+            animation: earWiggleLeft 5s ease-in-out infinite;
+        }
+
+        .ear-l {
+            left: -10px;
+            top: 15px;
+            transform: rotate(18deg);
+        }
+
+        .ear-r {
+            right: -10px;
+            top: 15px;
+            transform: rotate(-18deg);
+            animation-name: earWiggleRight;
+        }
+
+        /* Snout / Muzzle */
+        .muzzle {
+            position: absolute;
+            width: 72px;
+            height: 54px;
+            background-color: var(--dog-chest);
+            border-radius: 35px;
+            bottom: 12px;
+            left: calc(50% - 36px);
+            z-index: 4;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.05);
+        }
+
+        /* Nose */
+        .nose {
+            position: absolute;
+            width: 24px;
+            height: 16px;
+            background-color: var(--dog-nose);
+            border-radius: 12px 12px 8px 8px;
+            top: 8px;
+            left: calc(50% - 12px);
+            z-index: 5;
+        }
+
+        .nose-highlight {
+            position: absolute;
+            width: 8px;
+            height: 4px;
+            background-color: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 4px;
+            opacity: 0.8;
+        }
+
+        /* Mouth & Tongue */
+        .mouth-line {
+            position: absolute;
+            width: 20px;
+            height: 10px;
+            border: 2px solid var(--dog-nose);
+            border-top: none;
+            bottom: 16px;
+            z-index: 4;
+        }
+
+        .mouth-line.ml-l {
+            right: 50%;
+            border-radius: 0 0 0 10px;
+        }
+
+        .mouth-line.ml-r {
+            left: 50%;
+            border-radius: 0 0 10px 0;
+            margin-left: -1px;
+        }
+
+        .tongue {
+            position: absolute;
+            width: 18px;
+            height: 0px;
+            background-color: var(--dog-tongue);
+            border-radius: 0 0 10px 10px;
+            bottom: 8px;
+            left: calc(50% - 9px);
+            z-index: 3;
+            transform-origin: top center;
+            transition: height 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: inset 0 -4px 0 rgba(0,0,0,0.1);
+        }
+
+        /* Open mouth during panting/eating */
+        .dog-wrapper.panting .tongue,
+        .dog-wrapper.excited .tongue {
+            height: 22px;
+            animation: tongueFlap 0.3s ease-in-out infinite alternate;
+        }
+
+        /* Eyes */
+        .eye {
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            background-color: white;
+            border-radius: 50%;
+            top: 45px;
+            z-index: 3;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: all 0.15s ease-out;
+        }
+
+        .eye-l { left: 25px; }
+        .eye-r { right: 25px; }
+
+        .pupil {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background-color: var(--dog-nose);
+            border-radius: 50%;
+            transition: transform 0.05s linear;
+        }
+
+        .pupil-shine {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background-color: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+        }
+
+        /* Happy closed eyes */
+        .eye.happy-eye {
+            height: 8px !important;
+            border-radius: 10px 10px 0 0 !important;
+            background-color: transparent !important;
+            border: 3.5px solid var(--dog-nose) !important;
+            border-bottom: none !important;
+            box-shadow: none !important;
+            top: 54px !important;
+        }
+
+        .eye.happy-eye .pupil {
+            display: none !important;
+        }
+
+        /* Blinking / Eating animation */
+        .eye.blink {
+            height: 2px !important;
+            background-color: var(--dog-nose) !important;
+            border-radius: 0 !important;
+            top: 57px !important;
+            box-shadow: none !important;
+        }
+
+        .eye.blink .pupil {
+            display: none;
+        }
+
+        /* Cute blush on cheeks */
+        .blush {
+            position: absolute;
+            width: 14px;
+            height: 8px;
+            background-color: rgba(255, 118, 117, 0.4);
+            border-radius: 50%;
+            top: 72px;
+            z-index: 3;
+        }
+
+        .blush-l { left: 16px; }
+        .blush-r { right: 16px; }
+
+        /* Snout spot / freckles */
+        .freckle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background-color: rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+            top: 24px;
+            z-index: 5;
+        }
+
+        .fr-1 { left: 12px; }
+        .fr-2 { left: 18px; top: 20px; }
+        .fr-3 { left: 16px; top: 28px; }
+        .fr-4 { right: 12px; }
+        .fr-5 { right: 18px; top: 20px; }
+        .fr-6 { right: 16px; top: 28px; }
+
+        /* Floating interaction feedback icons */
+        .feedback-bubble {
+            position: absolute;
+            color: #FF5252;
+            font-size: 1.5rem;
+            pointer-events: none;
+            z-index: 20;
+            animation: bubbleUp 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .text-bubble {
+            position: absolute;
+            background-color: white;
+            color: #2C3E50;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            pointer-events: none;
+            z-index: 20;
+            transform-origin: bottom left;
+            animation: textPopUp 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .text-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 20px;
+            border-width: 8px 8px 0;
+            border-style: solid;
+            border-color: white transparent;
+            display: block;
+            width: 0;
+        }
+
+        /* ANIMATION DEFINITIONS */
+
+        /* Dog Breathing */
+        @keyframes breathe {
+            0%, 100% {
+                transform: scaleY(1);
+            }
+            50% {
+                transform: scaleY(1.03) scaleX(0.99);
+            }
+        }
+
+        /* Tail Wagging */
+        @keyframes tailWag {
+            0% {
+                transform: rotate(20deg);
+            }
+            100% {
+                transform: rotate(50deg);
+            }
+        }
+
+        @keyframes tailWagExcited {
+            0% {
+                transform: rotate(15deg) scaleY(1.1);
+            }
+            100% {
+                transform: rotate(65deg) scaleY(1.1);
+            }
+        }
+
+        /* Collar Tag Jiggle */
+        @keyframes tagJiggle {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-10deg); }
+            75% { transform: rotate(10deg); }
+        }
+
+        /* Ear Wiggle Left */
+        @keyframes earWiggleLeft {
+            0%, 90%, 100% { transform: rotate(18deg); }
+            93% { transform: rotate(24deg); }
+            96% { transform: rotate(12deg); }
+        }
+
+        /* Ear Wiggle Right */
+        @keyframes earWiggleRight {
+            0%, 88%, 100% { transform: rotate(-18deg); }
+            91% { transform: rotate(-24deg); }
+            94% { transform: rotate(-12deg); }
+        }
+
+        /* Shadow expansion while breathing */
+        @keyframes shadowPulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 0.15;
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 0.18;
+            }
+        }
+
+        /* Tongue flapping during fast wag */
+        @keyframes tongueFlap {
+            0% { transform: rotate(-2deg) scaleY(1); }
+            100% { transform: rotate(2deg) scaleY(1.08); }
+        }
+
+        /* UI Pop In animations */
+        @keyframes popIn {
+            0% { transform: scale(0.6); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Heart / Star float up animation */
+        @keyframes bubbleUp {
+            0% {
+                transform: translate(0, 0) scale(0.5);
+                opacity: 0;
+            }
+            15% {
+                opacity: 1;
+                transform: translate(var(--rand-x), -30px) scale(1.1);
+            }
+            100% {
+                transform: translate(calc(var(--rand-x) * 1.8), -150px) scale(0.7);
+                opacity: 0;
+            }
+        }
+
+        /* Text pop up */
+        @keyframes textPopUp {
+            0% {
+                transform: translate(0, 0) scale(0.4);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+                transform: translate(15px, -60px) scale(1);
+            }
+            85% {
+                opacity: 1;
+                transform: translate(18px, -70px) scale(1);
+            }
+            100% {
+                transform: translate(22px, -110px) scale(0.8);
+                opacity: 0;
+            }
+        }
+
+        /* Action buttons panel */
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            width: 100%;
+            margin-top: 10px;
+            z-index: 10;
+        }
+
+        .btn {
+            background-color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 14px 24px;
+            font-family: 'Quicksand', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #2C3E50;
+            cursor: pointer;
+            box-shadow: 0 4px 6px var(--shadow), 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: linear-gradient(rgba(255,255,255,0.2), rgba(255,255,255,0));
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 7px 14px rgba(0,0,0,0.08), 0 3px 6px rgba(0,0,0,0.06);
+            color: #2980B9;
+        }
+
+        .btn:hover::after {
+            opacity: 1;
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 5px var(--shadow);
+        }
+
+        .btn-feed {
+            background-color: #3498DB;
+            color: white;
+        }
+        .btn-feed:hover {
+            color: white;
+            background-color: #2980B9;
+        }
+
+        .btn-pet {
+            background-color: #2ECC71;
+            color: white;
+        }
+        .btn-pet:hover {
+            color: white;
+            background-color: #27AE60;
+        }
+
+        .btn-love {
+            background-color: #FD79A8;
+            color: white;
+        }
+        .btn-love:hover {
+            color: white;
+            background-color: #E84393;
+        }
+
+        /* Sound control toggle in top-right */
+        .sound-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+
+        .sound-toggle:hover {
+            transform: scale(1.1);
+            background-color: #F8F9F9;
+        }
+
+        /* Instructions overlay */
+        .tip-box {
+            background-color: rgba(255, 255, 255, 0.7);
+            border: 1px dashed rgba(44, 62, 80, 0.15);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            color: #5D6D7E;
+            margin-top: 25px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            animation: popIn 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Particle Stars */
+        .star {
+            position: absolute;
+            background-color: #F1C40F;
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            width: 18px;
+            height: 18px;
+            pointer-events: none;
+            z-index: 20;
+            animation: bubbleUp 1s ease-out forwards;
+        }
+
+        /* Chew animation classes */
+        @keyframes chew {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scaleY(0.9) scaleX(1.05); }
+        }
+
+        .chewing-head {
+            animation: chew 0.25s ease-in-out infinite alternate !important;
+        }
+
+        .chewing-jaw {
+            animation: chew 0.25s ease-in-out infinite alternate-reverse !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Cloud Background -->
+    <div class="bg-clouds">
+        <div class="cloud cloud-1"></div>
+        <div class="cloud cloud-2"></div>
+        <div class="cloud cloud-3"></div>
+    </div>
+
+    <!-- Sound Control Toggle -->
+    <button class="sound-toggle" id="soundToggle" title="Toggle Sound">🔊</button>
+
+    <div class="app-container">
+        <h1>NUKI GUTIZA</h1>
+        <div class="subtitle">Your Cute, Interactive AI Pup 🐾</div>
+
+        <!-- Animation Canvas -->
+        <div class="canvas" id="interactiveCanvas">
+            <!-- Ground Shadow -->
+            <div class="dog-shadow"></div>
+
+            <!-- Fully CSS Built Dog -->
+            <div class="dog-wrapper" id="dog" onclick="petDog()">
+                <!-- Tail -->
+                <div class="dog-tail" id="tail"></div>
+
+                <!-- Body (Legs, Chest, Collar, Body Shape) -->
+                <div class="dog-body-container">
+                    <div class="dog-body">
+                        <div class="dog-chest"></div>
+                    </div>
+
+                    <div class="dog-collar">
+                        <div class="dog-tag"></div>
+                    </div>
+
+                    <div class="dog-legs">
+                        <div class="paw paw-fl"></div>
+                        <div class="paw paw-fr"></div>
+                        <div class="paw paw-bl"></div>
+                        <div class="paw paw-br"></div>
+                    </div>
+                </div>
+
+                <!-- Head Layer -->
+                <div class="dog-head" id="head">
+                    <!-- Ears (behind face) -->
+                    <div class="ear ear-l"></div>
+                    <div class="ear ear-r"></div>
+
+                    <!-- Face Base -->
+                    <div class="head-base">
+                        <!-- Eyes -->
+                        <div class="eye eye-l" id="eyeL">
+                            <div class="pupil" id="pupilL">
+                                <div class="pupil-shine"></div>
+                            </div>
+                        </div>
+                        <div class="eye eye-r" id="eyeR">
+                            <div class="pupil" id="pupilR">
+                                <div class="pupil-shine"></div>
+                            </div>
+                        </div>
+
+                        <!-- Blush -->
+                        <div class="blush blush-l"></div>
+                        <div class="blush blush-r"></div>
+
+                        <!-- Muzzle Snout -->
+                        <div class="muzzle" id="jaw">
+                            <div class="nose">
+                                <div class="nose-highlight"></div>
+                            </div>
+
+                            <!-- Snout Freckles -->
+                            <div class="freckle fr-1"></div>
+                            <div class="freckle fr-2"></div>
+                            <div class="freckle fr-3"></div>
+                            <div class="freckle fr-4"></div>
+                            <div class="freckle fr-5"></div>
+                            <div class="freckle fr-6"></div>
+
+                            <!-- Mouth Lines -->
+                            <div class="mouth-line ml-l"></div>
+                            <div class="mouth-line ml-r"></div>
+
+                            <!-- Tongue -->
+                            <div class="tongue" id="tongue"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buttons Panel -->
+        <div class="controls">
+            <button class="btn btn-feed" onclick="feedBone()">🍖 Feed Bone</button>
+            <button class="btn btn-pet" onclick="triggerPetting()">❤️ Pet Nuki</button>
+            <button class="btn btn-love" onclick="sayLoveYou()">💖 Love You Nuki</button>
+            <button class="btn" onclick="woofBark()">🔊 Bark!</button>
+            <button class="btn" onclick="playWhine()">🎵 Happy Whine</button>
+        </div>
+
+        <!-- Tiny guide -->
+        <div class="tip-box">
+            <span>💡 Try moving your mouse around, clicking on Nuki, or feeding him a treat!</span>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dog = document.getElementById('dog');
+        const head = document.getElementById('head');
+        const jaw = document.getElementById('jaw');
+        const tail = document.getElementById('tail');
+        const tongue = document.getElementById('tongue');
+        const canvas = document.getElementById('interactiveCanvas');
+        const soundToggle = document.getElementById('soundToggle');
+
+        const eyeL = document.getElementById('eyeL');
+        const eyeR = document.getElementById('eyeR');
+        const pupilL = document.getElementById('pupilL');
+        const pupilR = document.getElementById('pupilR');
+
+        // State variables
+        let soundEnabled = true;
+        let isBlinking = false;
+        let isExcited = false;
+        let isChewing = false;
+        let targetX = null;
+        let targetY = null;
+        let activeBone = null;
+
+        // Initialize Audio Context (Web Audio API) lazy-loaded
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Toggle Sound State
+        soundToggle.addEventListener('click', (e) => {
+            soundEnabled = !soundEnabled;
+            soundToggle.textContent = soundEnabled ? '🔊' : '🔇';
+            e.stopPropagation();
+            if (soundEnabled) initAudio();
+        });
+
+        // Track Mouse Movements for Eyes and Head
+        document.addEventListener('mousemove', (e) => {
+            if (isChewing) return; // Don't look at cursor while eating
+
+            // If there's an active bone, track the bone instead!
+            if (activeBone) {
+                const boneRect = activeBone.getBoundingClientRect();
+                lookAt(boneRect.left + boneRect.width / 2, boneRect.top + boneRect.height / 2);
+            } else {
+                lookAt(e.clientX, e.clientY);
+            }
+        });
+
+        // For touch devices
+        document.addEventListener('touchmove', (e) => {
+            if (isChewing || e.touches.length === 0) return;
+            const touch = e.touches[0];
+            if (activeBone) {
+                const boneRect = activeBone.getBoundingClientRect();
+                lookAt(boneRect.left + boneRect.width / 2, boneRect.top + boneRect.height / 2);
+            } else {
+                lookAt(touch.clientX, touch.clientY);
+            }
+        });
+
+        function lookAt(x, y) {
+            // Get center position of each eye
+            const eyeLRect = eyeL.getBoundingClientRect();
+            const eyeRRect = eyeR.getBoundingClientRect();
+
+            const centerL = { x: eyeLRect.left + eyeLRect.width/2, y: eyeLRect.top + eyeLRect.height/2 };
+            const centerR = { x: eyeRRect.left + eyeRRect.width/2, y: eyeRRect.top + eyeRRect.height/2 };
+
+            // Pupil tracking movement
+            movePupil(pupilL, x, y, centerL);
+            movePupil(pupilR, x, y, centerR);
+
+            // Head tilting slightly towards mouse
+            const headRect = head.getBoundingClientRect();
+            const headCenter = { x: headRect.left + headRect.width/2, y: headRect.top + headRect.height/2 };
+
+            const dx = x - headCenter.x;
+            const dy = y - headCenter.y;
+            const angle = Math.atan2(dy, dx);
+            const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 300) / 300; // normalized dist up to 300px
+
+            // Tilts & moves head slightly
+            const tiltX = Math.cos(angle) * dist * 8; // Max 8px translation
+            const tiltY = Math.sin(angle) * dist * 6; // Max 6px translation
+            const rotateDeg = Math.cos(angle) * dist * 5; // Max 5deg tilt
+
+            head.style.transform = `translate(${tiltX}px, ${tiltY}px) rotate(${rotateDeg}deg)`;
+        }
+
+        function movePupil(pupil, targetX, targetY, eyeCenter) {
+            const dx = targetX - eyeCenter.x;
+            const dy = targetY - eyeCenter.y;
+            const angle = Math.atan2(dy, dx);
+            const maxDistance = 6; // Pupils stay within eye borders (max 6px offset)
+            const distance = Math.min(Math.sqrt(dx * dx + dy * dy), 150) / 150 * maxDistance;
+
+            const pupilX = Math.cos(angle) * distance;
+            const pupilY = Math.sin(angle) * distance;
+
+            pupil.style.transform = `translate(${pupilX}px, ${pupilY}px)`;
+        }
+
+        // Automatic Periodic Blinking
+        function triggerBlink() {
+            if (isBlinking || isExcited || isChewing) return;
+            isBlinking = true;
+
+            eyeL.classList.add('blink');
+            eyeR.classList.add('blink');
+
+            setTimeout(() => {
+                eyeL.classList.remove('blink');
+                eyeR.classList.remove('blink');
+                isBlinking = false;
+
+                // Schedule next blink at random interval (2 - 6 seconds)
+                setTimeout(triggerBlink, Math.random() * 4000 + 2000);
+            }, 150);
+        }
+        // Start blink cycle
+        setTimeout(triggerBlink, 3000);
+
+        // Panting cycle for idle excitement
+        function togglePanting(start) {
+            if (start) {
+                dog.classList.add('panting');
+            } else {
+                dog.classList.remove('panting');
+            }
+        }
+
+        // --- WEB AUDIO API SYNTHESIS CODES ---
+
+        // Generate custom sound using oscillators
+        function synthBark(time, pitchScale = 1.0) {
+            if (!soundEnabled) return;
+            initAudio();
+
+            const now = time || audioCtx.currentTime;
+
+            // 1. Core dog bark frequency (Low triangle wave)
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'triangle';
+            // Scale frequencies for puppies or deep bark
+            const startFreq = 260 * pitchScale;
+            const endFreq = 90 * pitchScale;
+
+            osc.frequency.setValueAtTime(startFreq, now);
+            osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.12);
+
+            gain.gain.setValueAtTime(0.35, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start(now);
+            osc.stop(now + 0.13);
+
+            // 2. Air/Breathiness Noise generator
+            const bufferSize = audioCtx.sampleRate * 0.12;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(450 * pitchScale, now);
+            filter.Q.setValueAtTime(1.5, now);
+
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(0.12, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(audioCtx.destination);
+
+            noise.start(now);
+            noise.stop(now + 0.12);
+        }
+
+        function synthWhine() {
+            if (!soundEnabled) return;
+            initAudio();
+
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(900, now);
+            osc.frequency.exponentialRampToValueAtTime(1200, now + 0.4);
+            osc.frequency.exponentialRampToValueAtTime(800, now + 0.8);
+
+            gain.gain.setValueAtTime(0.001, now);
+            gain.gain.linearRampToValueAtTime(0.05, now + 0.1);
+            gain.gain.linearRampToValueAtTime(0.05, now + 0.5);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start(now);
+            osc.stop(now + 0.8);
+        }
+
+        function synthCrunch(time) {
+            if (!soundEnabled) return;
+            initAudio();
+
+            const now = time;
+
+            // Crunch is a short, aggressive burst of filtered high frequency noise
+            const bufferSize = audioCtx.sampleRate * 0.06;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(1800, now);
+            filter.Q.setValueAtTime(2.0, now);
+
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            noise.start(now);
+            noise.stop(now + 0.06);
+        }
+
+        // Play crunching sounds sequentially
+        function chewCrunchSound() {
+            const now = audioCtx.currentTime;
+            synthCrunch(now);
+            synthCrunch(now + 0.15);
+            synthCrunch(now + 0.3);
+            synthCrunch(now + 0.45);
+        }
+
+        // --- INTERACTION HANDLERS ---
+
+        // Bark Function
+        function woofBark(pitch = 1.0) {
+            if (isChewing) return;
+
+            const now = audioCtx ? audioCtx.currentTime : 0;
+            synthBark(now, pitch);
+            // Double woof!
+            setTimeout(() => synthBark(audioCtx ? audioCtx.currentTime : 0, pitch * 1.05), 140);
+
+            // Pop visual bubble
+            createFloatingText("WOOF!");
+
+            // Trigger visual woof feedback
+            togglePanting(true);
+            head.style.transform = `translateY(-15px) scale(1.05)`;
+            tail.classList.add('excited');
+
+            setTimeout(() => {
+                togglePanting(false);
+                tail.classList.remove('excited');
+                head.style.transform = `translateY(0) scale(1)`;
+            }, 500);
+        }
+
+        // Click directly on Nuki (Pets him!)
+        function petDog() {
+            if (isChewing) return;
+            triggerPetting();
+        }
+
+        function triggerPetting() {
+            if (isChewing) return;
+
+            isExcited = true;
+            createFloatingEmoji('❤️');
+
+            // Play sound
+            if (Math.random() > 0.5) {
+                synthWhine();
+            } else {
+                woofBark(1.2); // Play higher pitched happy puppy bark
+            }
+
+            // Visual pet state (Happy eyes, tongue out, tail wagging crazy)
+            eyeL.classList.add('happy-eye');
+            eyeR.classList.add('happy-eye');
+            tail.classList.add('excited');
+            dog.classList.add('excited');
+
+            setTimeout(() => {
+                eyeL.classList.remove('happy-eye');
+                eyeR.classList.remove('happy-eye');
+                tail.classList.remove('excited');
+                dog.classList.remove('excited');
+                isExcited = false;
+            }, 1800);
+        }
+
+        function playWhine() {
+            if (isChewing) return;
+            synthWhine();
+            createFloatingEmoji('🎵');
+
+            // Cute head tilt
+            head.style.transform = "rotate(-12deg) translateY(5px)";
+            setTimeout(() => {
+                head.style.transform = "rotate(0deg)";
+            }, 800);
+        }
+
+        // Speaks "Love you, Nuki!" and makes Nuki super happy
+        function sayLoveYou() {
+            if (isChewing) return;
+            initAudio();
+
+            // Speech Synthesis - Say "Love you Nuki"
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // cancel any active speech
+
+                const utterance = new SpeechSynthesisUtterance("Love you, Nuki!");
+                utterance.pitch = 1.35; // Cute, enthusiastic pitch
+                utterance.rate = 0.95;  // Expressive speed
+
+                // Try to find a pleasant female/sweet voice if available
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length > 0) {
+                    const preferredVoice = voices.find(v =>
+                        v.name.includes('Google US English') ||
+                        v.name.includes('Microsoft Zira') ||
+                        v.name.includes('Samantha') ||
+                        v.name.includes('Female')
+                    );
+                    if (preferredVoice) {
+                        utterance.voice = preferredVoice;
+                    }
+                }
+
+                if (soundEnabled) {
+                    window.speechSynthesis.speak(utterance);
+                }
+            }
+
+            // Visual reaction from Nuki!
+            isExcited = true;
+
+            // Heart eyes and happy tail
+            eyeL.classList.add('happy-eye');
+            eyeR.classList.add('happy-eye');
+            tail.classList.add('excited');
+            dog.classList.add('excited');
+
+            // Spawn cute pink hearts
+            createFloatingEmoji('💖');
+            setTimeout(() => createFloatingEmoji('💝'), 300);
+            setTimeout(() => createFloatingEmoji('❤️'), 600);
+
+            // Nuki responds with a speech bubble and a sweet whine
+            setTimeout(() => {
+                createFloatingText("Woof! (Love you too!)");
+                if (soundEnabled) {
+                    synthWhine();
+                }
+            }, 450);
+
+            // Return to normal after 2.2 seconds
+            setTimeout(() => {
+                eyeL.classList.remove('happy-eye');
+                eyeR.classList.remove('happy-eye');
+                tail.classList.remove('excited');
+                dog.classList.remove('excited');
+                isExcited = false;
+            }, 2200);
+        }
+
+        // FEEDING MECHANISM
+        function feedBone() {
+            if (activeBone || isChewing) return; // Wait until current treat is finished
+
+            isExcited = true;
+            initAudio();
+
+            // Create bone on the canvas
+            const bone = document.createElement('div');
+            bone.className = 'falling-bone';
+            bone.innerHTML = '<div class="bone-shape"></div>';
+
+            // Random horizontal start position near center
+            const canvasRect = canvas.getBoundingClientRect();
+            const startX = (canvasRect.width / 2) + (Math.random() * 80 - 40);
+
+            bone.style.left = `${startX}px`;
+            bone.style.top = `10px`;
+
+            canvas.appendChild(bone);
+            activeBone = bone;
+
+            // Animate bone falling down
+            let fallY = 10;
+            const targetY = canvasRect.height - 110; // Level of Nuki's mouth
+            const fallSpeed = 3.5;
+
+            // Set eyes to follow bone
+            const fallInterval = setInterval(() => {
+                fallY += fallSpeed;
+                bone.style.top = `${fallY}px`;
+                bone.style.transform = `rotate(${fallY * 0.8}deg)`;
+
+                // Head/eyes follow the bone
+                const boneRect = bone.getBoundingClientRect();
+                lookAt(boneRect.left + boneRect.width / 2, boneRect.top + boneRect.height / 2);
+
+                // Check collision with mouth/muzzle
+                if (fallY >= targetY) {
+                    clearInterval(fallInterval);
+                    activeBone = null;
+                    canvas.removeChild(bone);
+                    chewBone();
+                }
+            }, 16);
+        }
+
+        function chewBone() {
+            isChewing = true;
+            isExcited = false;
+
+            // Chew sounds
+            chewCrunchSound();
+
+            // Chew animations
+            head.classList.add('chewing-head');
+            jaw.classList.add('chewing-jaw');
+            eyeL.classList.add('blink');
+            eyeR.classList.add('blink');
+
+            createFloatingText("CRUNCH CRUNCH...");
+
+            // Chewing cycles
+            setTimeout(() => {
+                // Chewing done
+                head.classList.remove('chewing-head');
+                jaw.classList.remove('chewing-jaw');
+                eyeL.classList.remove('blink');
+                eyeR.classList.remove('blink');
+                isChewing = false;
+
+                // Make dog extremely happy and full!
+                triggerHappyPounce();
+            }, 1500);
+        }
+
+        function triggerHappyPounce() {
+            isExcited = true;
+            tail.classList.add('excited');
+            dog.classList.add('excited');
+
+            // Cute sparkling elements rising from head
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    createFloatingStar();
+                    if(i % 2 === 0) createFloatingEmoji('❤️');
+                }, i * 200);
+            }
+
+            // High pitch happy barks
+            synthBark(audioCtx.currentTime, 1.3);
+            setTimeout(() => synthBark(audioCtx.currentTime, 1.45), 120);
+
+            // Happy closed eyes
+            eyeL.classList.add('happy-eye');
+            eyeR.classList.add('happy-eye');
+
+            setTimeout(() => {
+                eyeL.classList.remove('happy-eye');
+                eyeR.classList.remove('happy-eye');
+                tail.classList.remove('excited');
+                dog.classList.remove('excited');
+                isExcited = false;
+            }, 2000);
+        }
+
+        // Particle creators
+        function createFloatingEmoji(emoji) {
+            const bubble = document.createElement('div');
+            bubble.className = 'feedback-bubble';
+            bubble.textContent = emoji;
+
+            // Spawn around dog head area
+            const randX = Math.random() * 100 - 50;
+            bubble.style.setProperty('--rand-x', `${randX}px`);
+            bubble.style.left = `calc(50% - 10px + ${randX/2}px)`;
+            bubble.style.top = `110px`;
+
+            canvas.appendChild(bubble);
+
+            // Clean up
+            setTimeout(() => {
+                canvas.removeChild(bubble);
+            }, 1200);
+        }
+
+        function createFloatingStar() {
+            const star = document.createElement('div');
+            star.className = 'star';
+
+            const randX = Math.random() * 120 - 60;
+            star.style.setProperty('--rand-x', `${randX}px`);
+            star.style.left = `calc(50% - 9px + ${randX/2}px)`;
+            star.style.top = `110px`;
+
+            canvas.appendChild(star);
+
+            setTimeout(() => {
+                canvas.removeChild(star);
+            }, 1000);
+        }
+
+        function createFloatingText(text) {
+            const textBubble = document.createElement('div');
+            textBubble.className = 'text-bubble';
+            textBubble.textContent = text;
+
+            // Spawn near muzzle
+            textBubble.style.left = `calc(50% + 20px)`;
+            textBubble.style.top = `110px`;
+
+            canvas.appendChild(textBubble);
+
+            // Clean up
+            setTimeout(() => {
+                canvas.removeChild(textBubble);
+            }, 1200);
+        }
+    </script>
+</body>
+</html>

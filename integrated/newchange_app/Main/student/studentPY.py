@@ -3,6 +3,7 @@ from Main.db import get_db_connection, log_system_action
 from datetime import datetime, timedelta
 import json
 import os
+import requests
 from werkzeug.utils import secure_filename
 
 user = Blueprint('user', __name__, template_folder='templates')
@@ -74,6 +75,16 @@ def dashboard():
     cursor.execute("SELECT * FROM Notifications WHERE user_id = %s ORDER BY created_at DESC", (usid,))
     notifications = cursor.fetchall()
     unread_notifs = [n for n in notifications if not n['is_read']]
+
+    # ── Integration: Fetch Voxify announcements ─────────────────────────
+    VOXIFY_URL = os.getenv('VOXIFY_URL', 'http://127.0.0.1:5001')
+    voxify_announcements = []
+    try:
+        ann_resp = requests.get(f"{VOXIFY_URL}/api/announcements", timeout=3)
+        if ann_resp.status_code == 200:
+            voxify_announcements = ann_resp.json().get('announcements', [])
+    except Exception:
+        voxify_announcements = []
     
     cursor.close()
     conn.close()
@@ -85,7 +96,9 @@ def dashboard():
                            low_attendance=low_attendance,
                            stats=overall_stats,
                            notifications=notifications,
-                           unread_count=len(unread_notifs))
+                           unread_count=len(unread_notifs),
+                           voxify_announcements=voxify_announcements,
+                           voxify_url=VOXIFY_URL)
 
 @user.route('/subject/<int:subject_id>')
 def subject_performance(subject_id):

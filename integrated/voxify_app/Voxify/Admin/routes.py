@@ -50,6 +50,34 @@ def delete_candidate_photo(photo_filename):
         except Exception as e:
             print(f"Error deleting photo: {e}")
 
+
+def save_announcement_image(file):
+    """Save uploaded announcement image and return the saved filename."""
+    if file and allowed_file(file.filename):
+        try:
+            os.makedirs(ANNOUNCEMENT_UPLOAD_FOLDER, exist_ok=True)
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            filename = f"announcement_{uuid.uuid4().hex}.{ext}"
+            filepath = os.path.join(ANNOUNCEMENT_UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            return filename
+        except Exception as e:
+            print(f"Error saving announcement image: {e}")
+            return None
+    return None
+
+
+def delete_announcement_image(image_filename):
+    """Delete uploaded announcement image file."""
+    if image_filename:
+        try:
+            filepath = os.path.join(ANNOUNCEMENT_UPLOAD_FOLDER, image_filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        except Exception as e:
+            print(f"Error deleting announcement image: {e}")
+
+
 def get_admin_college_id():
     """Get the college_id of the currently logged-in admin."""
     conn = current_app.config["get_db_connection"]()
@@ -1598,8 +1626,7 @@ def create_voter():
         conn.commit()
         email_sent = False
         if email and '@' in email:
-                                                                        
-            display_id = seq.zfill(5)
+            display_id = str(new_voter_id).zfill(5)
             email_sent = send_account_email(
                 email, 'voter', display_id, password,
                 fullname=f"{firstname} {surname}",

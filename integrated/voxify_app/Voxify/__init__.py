@@ -90,6 +90,13 @@ def create_announcements_table():
                 )
             """)
             conn.commit()
+
+            cursor.execute("SHOW COLUMNS FROM announcements LIKE 'created_by'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE announcements ADD COLUMN created_by INT NULL")
+                conn.commit()
+                print("Added created_by column to announcements table")
+
             print("Announcements table ready")
         except Error as e:
             print(f"Error creating announcements table: {e}")

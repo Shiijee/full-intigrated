@@ -2,7 +2,7 @@
 Voxify Integration API
 Exposes election data, voter status, and results for TestPoint and NewChange.
 """
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, url_for
 import requests
 from datetime import datetime
 
@@ -124,6 +124,44 @@ def get_results(election_id):
             "status": election['status'],
             "results": list(positions.values())
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@voxify_api.route('/announcements')
+def get_announcements():
+    """
+    Returns published Voxify announcements for partner modules.
+    """
+    try:
+        college_id = request.args.get('college_id', type=int)
+        conn = db()
+        cursor = conn.cursor(dictionary=True)
+        if college_id is not None:
+            cursor.execute(
+                """
+                SELECT id, title, body, type, image_url, college_id, created_by, status, created_at, updated_at
+                FROM announcements
+                WHERE status = 'published' AND (college_id = %s OR college_id IS NULL)
+                ORDER BY created_at DESC
+                """,
+                (college_id,)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT id, title, body, type, image_url, college_id, created_by, status, created_at, updated_at
+                FROM announcements
+                WHERE status = 'published'
+                ORDER BY created_at DESC
+                """
+            )
+        rows = cursor.fetchall()
+        for row in rows:
+            if row.get('image_url'):
+                row['image_url'] = request.host_url.rstrip('/') + url_for('admin.static', filename='uploads/announcements/' + row['image_url'])
+        cursor.close(); conn.close()
+        return jsonify({"announcements": [serialize(r) for r in rows], "count": len(rows)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

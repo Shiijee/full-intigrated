@@ -28,3 +28,6 @@ integrated/newchange_app/.env
 integrated/newchange_app/Main/student/__pycache__/studentPY.cpython-314.pyc
 integrated/newchange_app/Main/teacher/__pycache__/teacherPY.cpython-314.pyc
 integrated/newchange_app/Main/student/__pycache__/studentPY.cpython-314.pyc
+FILE TREE.json
+.vscode/sessions.json
+.vscode/sessions.json
