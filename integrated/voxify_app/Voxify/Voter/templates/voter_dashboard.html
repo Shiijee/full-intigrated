@@ -19,6 +19,34 @@
   </a>
 </div>
 
+<!-- Announcements -->
+{% if announcements %}
+<div class="card-panel mb-4">
+  <div class="card-panel-header">
+    <h5 class="card-panel-title"><i class="bi bi-megaphone-fill me-2"></i>Announcements</h5>
+  </div>
+  <div class="card-panel-body">
+    <div style="display:flex; flex-wrap:wrap; gap:1rem;">
+      {% for ann in announcements %}
+      <div style="flex:1 1 calc(33.333% - 1rem); min-width:220px; max-width:320px;">
+        <a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#annModal{{ ann.id }}" style="display:block; text-decoration:none; color:inherit;">
+          <div style="background:#fff; border:1px solid #e2e8f0; border-radius:18px; padding:1.25rem; min-height:150px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 8px 20px rgba(15, 23, 42, 0.08);">
+            <div>
+              <div style="font-weight:800; font-size:1rem; margin-bottom:0.35rem; color:#0f172a;">{{ ann.title }}</div>
+              <div style="font-size:0.83rem; color:#475569;">{{ ann.type|capitalize }}{% if not ann.college_id %} · All Colleges{% elif college %} · {{ college.name }}{% endif %}</div>
+            </div>
+            <div style="margin-top:1rem;">
+              <span style="background:#2563eb; color:#fff; padding:0.5rem 0.9rem; border-radius:12px; font-size:0.8rem; font-weight:700;">Show announcement</span>
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Stats Grid -->
 <div class="stats-grid">
   <div class="stat-card stat-card-blue">
@@ -142,4 +170,58 @@
 {% endif %}
 
 
+{% endblock %}
+
+{% block modals %}
+{% if announcements %}
+  {% for ann in announcements %}
+  <div class="modal fade" id="annModal{{ ann.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">{{ ann.title }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          {% if ann.image_url %}
+          <div style="text-align:center; margin-bottom:1rem;">
+            <img src="{{ url_for('admin.static', filename='uploads/announcements/' + ann.image_url) }}" alt="{{ ann.title }}" style="max-width:100%; max-height:320px; border-radius:12px; object-fit:contain;" />
+          </div>
+          {% endif %}
+          <p style="white-space:pre-wrap; color:#374151; line-height:1.75;">{{ ann.body }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Safety net: if a Bootstrap modal ever fails to fully tear down (leftover
+// backdrop, body left scroll-locked), clean it up so the page never gets
+// stuck behind a dark overlay.
+document.addEventListener('hidden.bs.modal', function () {
+  if (!document.querySelector('.modal.show')) {
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    document.querySelectorAll('.modal-backdrop').forEach(function (el) {
+      el.remove();
+    });
+  }
+});
+
+// Extra safety: Esc key always force-closes and cleans up, even if a modal
+// instance got into a bad state.
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal.show').forEach(function (m) {
+      var inst = bootstrap.Modal.getInstance(m);
+      if (inst) inst.hide();
+    });
+  }
+});
+</script>
 {% endblock %}

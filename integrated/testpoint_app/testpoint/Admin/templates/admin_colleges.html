@@ -21,6 +21,11 @@
         <button class="btn btn-dark shadow-sm tp-pill" data-toggle="modal" data-target="#addCollegeModal">
             <i class="fas fa-plus mr-2"></i> Add New College
         </button>
+        <form action="{{ url_for('admin.backfill_voxify_colleges') }}" method="POST" style="display:inline;" onsubmit="return confirm('Sync every student\'s college to Voxify? This fixes any voter accounts stuck without a college.');">
+            <button type="submit" class="btn btn-white border shadow-sm tp-pill" title="Fix voters in Voxify whose college is missing">
+                <i class="fas fa-sync-alt mr-2"></i> Sync to Voxify
+            </button>
+        </form>
         <a href="{{ url_for('admin.trashed_colleges') }}" class="btn btn-white border shadow-sm tp-pill text-danger">
             <i class="fas fa-trash-alt mr-2"></i> View Trash
         </a>

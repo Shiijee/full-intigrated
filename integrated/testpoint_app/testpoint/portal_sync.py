@@ -153,7 +153,13 @@ def mirror_user_to_modules(username: str, password: str, full_name: str,
         "attendance": _provision(ATTENDANCE_PROVISION_URL, "attendance", username, password, full_name, role, email, extra_data),
     }
     if role != "teacher":
-        results["voxify"] = _provision(VOXIFY_PROVISION_URL, "voxify", username, password, full_name, role, email)
+        # Voxify only understands "college" (it has no program/block/year
+        # concept) — pass just that through so a new voter's college_id
+        # gets set immediately instead of staying NULL.
+        voxify_extra = None
+        if extra_data and extra_data.get("college"):
+            voxify_extra = {"college": extra_data["college"]}
+        results["voxify"] = _provision(VOXIFY_PROVISION_URL, "voxify", username, password, full_name, role, email, voxify_extra)
     return results
 
 
@@ -207,6 +213,31 @@ def retry_failed_syncs() -> dict:
     cursor.close()
     conn.close()
     return {"retried": len(rows), "fixed": fixed, "still_failing": still_failing, "reasons": reasons}
+
+
+def sync_college_to_voxify(college_name: str) -> dict:
+    """
+    Upserts a college (by name, no user attached) into Voxify. Called
+    right after a college is created in TestPoint, and also used to bulk
+    -import the full list via the 'Sync to Voxify' admin action — Voxify
+    no longer creates colleges manually, TestPoint is the source of truth.
+    """
+    if not college_name:
+        return {"success": False, "reason": "no college name given"}
+    payload = {"college_name": college_name}
+    return _generic_sync(f"{VOXIFY_URL}/api/sync-college", "voxify_college_import", payload)
+
+
+def sync_student_college_to_voxify(username: str, college_name: str) -> dict:
+    """
+    Updates college_id on a user already mirrored to Voxify (e.g. one
+    created before college syncing existed, or before a block was
+    assigned). Used by the 'Backfill Voxify Colleges' admin action.
+    """
+    if not college_name:
+        return {"success": False, "reason": "no college for this student"}
+    payload = {"username": username, "college": college_name}
+    return _generic_sync(f"{VOXIFY_URL}/api/sync-user-college", "voxify_college_backfill", payload)
 
 
 def portal_role(testpoint_role: str) -> str:

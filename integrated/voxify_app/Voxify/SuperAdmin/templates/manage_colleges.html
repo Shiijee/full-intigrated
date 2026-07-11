@@ -28,12 +28,7 @@
 <div class="page-header">
   <div>
     <h2 class="page-heading">College Management</h2>
-    <p class="page-subheading">Create and manage colleges/departments in the system.</p>
-  </div>
-  <div class="page-header-actions">
-    <button class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addCollegeModal">
-      <i class="bi bi-building-add"></i> Add College
-    </button>
+    <p class="page-subheading">Colleges are imported from TestPoint (the exam system) — use TestPoint's "Sync to Voxify" action to add new ones.</p>
   </div>
 </div>
 
@@ -135,36 +130,10 @@
     <div class="empty-state">
       <i class="bi bi-building-x"></i>
       <h5>No Colleges Found</h5>
-      <p>Start by adding a college or department.</p>
-      <button class="btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addCollegeModal">
-        <i class="bi bi-building-add"></i> Add First College
-      </button>
+      <p>Colleges will appear here once imported from TestPoint (use TestPoint's "Sync to Voxify" action).</p>
     </div>
     {% endif %}
   </div>
 </div>
 
-<!-- Add College Modal -->
-<div class="modal fade" id="addCollegeModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-building-add me-2"></i>Add New College</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <form method="POST" action="{{ url_for('super_admin.create_college') }}">
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label-custom required">College Name</label>
-            <input type="text" name="name" class="form-control-custom" placeholder="e.g. College of Engineering" required/>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn-primary-custom"><i class="bi bi-building-add"></i> Create College</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 {% endblock %}

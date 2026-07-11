@@ -175,23 +175,11 @@ def manage_colleges():
 @superadmin_bp.route("/create-college", methods=["POST"])
 @superadmin_required
 def create_college():
-    name = request.form.get("name", "").strip()
-    if not name:
-        flash("College name is required.", "error")
-        return redirect(url_for('super_admin.manage_colleges'))
-
-    conn = current_app.config["get_db_connection"]()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO colleges (name) VALUES (%s)", (name,))
-        conn.commit()
-        flash("College created successfully!", "success")
-    except Exception as e:
-        conn.rollback()
-        flash(f"Error creating college: {str(e)}", "error")
-    finally:
-        cursor.close()
-        conn.close()
+    # Colleges are no longer created manually here — TestPoint (the exam
+    # system) is the source of truth. Use "Sync to Voxify" on TestPoint's
+    # Colleges page to import them instead, to avoid duplicate/mismatched
+    # college names between the two systems.
+    flash("Colleges are now managed in TestPoint (the exam system). Use TestPoint's \"Sync to Voxify\" action to import them here.", "error")
     return redirect(url_for('super_admin.manage_colleges'))
 
 

@@ -48,7 +48,7 @@
                                 <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:18px; padding:1.25rem; min-height:170px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 8px 20px rgba(15, 23, 42, 0.08); transition:transform .2s ease, border-color .2s ease;">
                                     <div>
                                         <div style="font-weight:800; font-size:1rem; margin-bottom:0.35rem; color:#0f172a;">{{ ann.title }}</div>
-                                        <div style="font-size:0.83rem; color:#475569; letter-spacing:0.01em;">{{ ann.type|capitalize }}{% if ann.college_id %} · College {{ ann.college_id }}{% endif %}</div>
+                                        <div style="font-size:0.83rem; color:#475569; letter-spacing:0.01em;">{{ ann.type|capitalize }}{% if ann.college_name %} · {{ ann.college_name }}{% elif ann.college_id %} · College {{ ann.college_id }}{% endif %}</div>
                                     </div>
                                     <div style="margin-top:1rem; display:flex; justify-content:flex-start;">
                                         <span style="background:#2563eb; color:#ffffff; padding:0.65rem 1rem; border-radius:12px; font-size:0.85rem; font-weight:700;">Show announcement</span>
