@@ -422,7 +422,7 @@ def provision_user():
 
 
 # ── Update User (called by TestPoint to sync profile modifications here) ──────
-@voxify_api.route('/update-user', methods=['POST'])
+@voxify_api.route("/update-user", methods=["POST"])
 def update_user():
     """
     Called by TestPoint right after an admin updates a user profile.
@@ -443,37 +443,26 @@ def update_user():
     changed_fields = body.get("changed_fields") or {}
 
     if not username or not changed_fields:
-        return jsonify({"success": False, "reason": "username and changed_fields are required"}), 400
+        return (
+            jsonify(
+                {"success": False, "reason": "username and changed_fields are required"}
+            ),
+            400,
+        )
 
     # Map Portal/TestPoint roles to Voxify roles.
     # Voxify does not track 'teacher' profiles, so we acknowledge and skip gracefully.
     role_map = {
         "superadmin": "superadmin",
-        "admin":      "admin",
-        "student":    "voter",
+        "admin": "admin",
+        "student": "voter",
     }
     voxify_role = role_map.get(role)
     if not voxify_role:
-        return jsonify({"success": True, "message": "Teachers are not tracked in Voxify"}), 200
-# ── Backfill college on an already-mirrored user (called by TestPoint) ────────
-@voxify_api.route('/sync-user-college', methods=['POST'])
-def sync_user_college():
-    """
-    Updates college_id on a user that was already mirrored to Voxify
-    before college syncing existed (or was created without a block
-    assigned yet). Looked up by student_id ('username' in the payload).
-
-    Request body (JSON):
-        { "username": "<string>", "college": "<string>" }
-
-    Success response (200): { "success": true, "updated": true/false }
-    """
-    body = request.get_json(silent=True) or {}
-    username = (body.get("username") or "").strip()
-    college_name = (body.get("college") or "").strip()
-
-    if not username or not college_name:
-        return jsonify({"success": False, "reason": "username and college are required"}), 400
+        return (
+            jsonify({"success": True, "message": "Teachers are not tracked in Voxify"}),
+            200,
+        )
 
     try:
         conn = db()
@@ -482,8 +471,17 @@ def sync_user_college():
         cursor.execute("SELECT id FROM users WHERE student_id = %s", (username,))
         user_record = cursor.fetchone()
         if not user_record:
-            cursor.close(); conn.close()
-            return jsonify({"success": False, "reason": f"User '{username}' not found in Voxify"}), 404
+            cursor.close()
+            conn.close()
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "reason": f"User '{username}' not found in Voxify",
+                    }
+                ),
+                404,
+            )
 
         update_clauses = []
         params = []
@@ -528,31 +526,81 @@ def sync_user_college():
                     "BSED": "Education",
                 }
                 search_term = abbr_map.get(college_name, college_name)
-                cursor.execute("SELECT id FROM colleges WHERE name LIKE %s OR name = %s", (f"%{search_term}%", college_name))
+                cursor.execute(
+                    "SELECT id FROM colleges WHERE name LIKE %s OR name = %s",
+                    (f"%{search_term}%", college_name),
+                )
                 col_row = cursor.fetchone()
                 if col_row:
                     update_clauses.append("college_id = %s")
-                    params.append(col_row['id'])
+                    params.append(col_row["id"])
                 else:
                     update_clauses.append("college_id = NULL")
             else:
                 update_clauses.append("college_id = NULL")
 
         if update_clauses:
-            query = f"UPDATE users SET {', '.join(update_clauses)} WHERE student_id = %s"
+            query = (
+                f"UPDATE users SET {', '.join(update_clauses)} WHERE student_id = %s"
+            )
             params.append(username)
             cursor.execute(query, tuple(params))
             conn.commit()
 
-        cursor.close(); conn.close()
+        cursor.close()
+        conn.close()
         return jsonify({"success": True}), 200
-        cursor.execute("SELECT id, college_id FROM users WHERE student_id = %s", (username,))
+
+    except Exception as e:
+        return jsonify({"success": False, "reason": str(e)}), 500
+
+# ── Backfill college on an already-mirrored user (called by TestPoint) ────────
+@voxify_api.route("/sync-user-college", methods=["POST"])
+def sync_user_college():
+    """
+    Updates college_id on a user that was already mirrored to Voxify
+    before college syncing existed (or was created without a block
+    assigned yet). Looked up by student_id ('username' in the payload).
+
+    Request body (JSON):
+        { "username": "<string>", "college": "<string>" }
+
+    Success response (200): { "success": true, "updated": true/false }
+    """
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    college_name = (body.get("college") or "").strip()
+
+    if not username or not college_name:
+        return (
+            jsonify({"success": False, "reason": "username and college are required"}),
+            400,
+        )
+
+    try:
+        conn = db()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            "SELECT id, college_id FROM users WHERE student_id = %s", (username,)
+        )
         user = cursor.fetchone()
         if not user:
-            cursor.close(); conn.close()
-            return jsonify({"success": False, "reason": f"'{username}' not found in Voxify users"}), 404
+            cursor.close()
+            conn.close()
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "reason": f"'{username}' not found in Voxify users",
+                    }
+                ),
+                404,
+            )
 
-        cursor.execute("SELECT id FROM colleges WHERE LOWER(name) = LOWER(%s)", (college_name,))
+        cursor.execute(
+            "SELECT id FROM colleges WHERE LOWER(name) = LOWER(%s)", (college_name,)
+        )
         existing = cursor.fetchone()
         if existing:
             college_id = existing["id"]
@@ -562,10 +610,14 @@ def sync_user_college():
 
         updated = user["college_id"] != college_id
         if updated:
-            cursor.execute("UPDATE users SET college_id = %s WHERE id = %s", (college_id, user["id"]))
+            cursor.execute(
+                "UPDATE users SET college_id = %s WHERE id = %s",
+                (college_id, user["id"]),
+            )
             conn.commit()
 
-        cursor.close(); conn.close()
+        cursor.close()
+        conn.close()
         return jsonify({"success": True, "updated": updated}), 200
 
     except Exception as e:
