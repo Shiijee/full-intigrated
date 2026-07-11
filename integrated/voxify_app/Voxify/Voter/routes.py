@@ -74,7 +74,16 @@ def dashboard():
     if college_id:
         cursor.execute("SELECT name FROM colleges WHERE id=%s", (college_id,))
         college = cursor.fetchone()
-    
+
+    cursor.execute("""
+        SELECT id, title, body, type, image_url, college_id, created_at
+        FROM announcements
+        WHERE status = 'published' AND (college_id = %s OR college_id IS NULL)
+        ORDER BY is_pinned DESC, created_at DESC
+        LIMIT 6
+    """, (college_id,))
+    announcements = cursor.fetchall()
+
     cursor.close()
     conn.close()
     
@@ -84,7 +93,8 @@ def dashboard():
                          past_elections=past_elections,
                          recent_votes=recent_votes,
                          total_votes_cast=total_votes_cast,
-                         college=college)
+                         college=college,
+                         announcements=announcements)
 
 @voter_bp.route("/elections")
 @voter_required

@@ -640,7 +640,13 @@ def manage_colleges():
         desc = request.form.get('description')
         cursor.execute("INSERT INTO colleges (college_name, description) VALUES (%s, %s)", (name, desc))
         connection.commit()
-        flash(f"College '{name}' added successfully.", "success")
+
+        from testpoint.portal_sync import sync_college_to_voxify
+        sync_result = sync_college_to_voxify(name)
+        if sync_result.get('success'):
+            flash(f"College '{name}' added successfully and synced to Voxify.", "success")
+        else:
+            flash(f"College '{name}' added, but failed to sync to Voxify: {sync_result.get('reason')}. Use 'Sync to Voxify' to retry.", "warning")
         return redirect(url_for('admin.manage_colleges'))
 
     cursor.execute("SELECT * FROM colleges WHERE is_active = 1 ORDER BY college_name")
@@ -669,6 +675,66 @@ def archive_college(college_id):
         flash('College moved to trash.', 'warning')
         return redirect(url_for('admin.manage_colleges'))
     return redirect(url_for('auth.login'))
+
+@admin.route('/backfill_voxify_colleges', methods=['POST'])
+def backfill_voxify_colleges():
+    """
+    One-click fix that:
+      1. Imports every active college in TestPoint into Voxify (so the
+         SuperAdmin's college dropdown is fully populated, even for
+         colleges with no students yet — Voxify no longer creates
+         colleges manually, this import is the only path).
+      2. Backfills college_id on any student already mirrored to Voxify
+         with college_id = NULL (created before this syncing existed, or
+         before they had a block assigned).
+    """
+    if not admin_logged_in(): return redirect(url_for('auth.login'))
+    from testpoint.portal_sync import sync_college_to_voxify, sync_student_college_to_voxify
+
+    connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
+
+    # 1. Import the full college list
+    cursor.execute("SELECT college_name FROM colleges WHERE is_active = 1")
+    all_colleges = cursor.fetchall()
+    colleges_synced, colleges_failed = 0, []
+    for row in all_colleges:
+        result = sync_college_to_voxify(row['college_name'])
+        if result.get('success'):
+            colleges_synced += 1
+        else:
+            colleges_failed.append(f"{row['college_name']}: {result.get('reason')}")
+
+    # 2. Backfill students whose college wasn't set at creation time
+    cursor.execute("""
+        SELECT s.student_id, c.college_name
+        FROM students s
+        JOIN blocks b ON s.block_id = b.block_id
+        JOIN programs p ON b.program_id = p.program_id
+        JOIN colleges c ON p.college_id = c.college_id
+        WHERE c.college_name IS NOT NULL
+    """)
+    rows = cursor.fetchall()
+    cursor.close(); connection.close()
+
+    students_fixed, students_failed = 0, []
+    for row in rows:
+        result = sync_student_college_to_voxify(row['student_id'], row['college_name'])
+        if result.get('success'):
+            students_fixed += 1
+        else:
+            students_failed.append(f"{row['student_id']}: {result.get('reason')}")
+
+    all_failed = colleges_failed + students_failed
+    if all_failed:
+        flash(
+            f"Synced {colleges_synced} college(s) and {students_fixed} student(s) to Voxify. "
+            f"{len(all_failed)} failed: {'; '.join(all_failed[:3])}",
+            'warning'
+        )
+    else:
+        flash(f"Synced {colleges_synced} college(s) and {students_fixed} student(s) to Voxify.", 'success')
+
+    return redirect(url_for('admin.manage_colleges'))
 
 #! 2. MANAGE PROGRAMS (Updated for Colleges)
 @admin.route('/manage_programs', methods=['GET', 'POST'])

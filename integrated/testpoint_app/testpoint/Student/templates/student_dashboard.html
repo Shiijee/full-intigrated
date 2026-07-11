@@ -53,7 +53,7 @@
                             <div class="p-3 rounded h-100" style="background:#ffffff; border:1px solid #dbeafe; display:flex; flex-direction:column; justify-content:space-between;">
                                 <div>
                                     <div class="font-weight-bold text-dark mb-1" style="font-size:0.95rem;">{{ ann.title }}</div>
-                                    <div class="text-xs text-muted" style="margin-bottom:0.75rem;">{{ ann.type|capitalize }}{% if ann.college_id %} · College {{ ann.college_id }}{% endif %}</div>
+                                    <div class="text-xs text-muted" style="margin-bottom:0.75rem;">{{ ann.type|capitalize }}{% if ann.college_name %} · {{ ann.college_name }}{% elif ann.college_id %} · College {{ ann.college_id }}{% endif %}</div>
                                 </div>
                                 <div>
                                     <span class="badge badge-primary" style="padding:0.5rem 0.8rem; font-size:0.75rem;">Show announcement</span>

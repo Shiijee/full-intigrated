@@ -245,7 +245,10 @@ def student_dashboard():
             voting_status = None  # Voxify offline — degrade gracefully
 
         try:
-            ann_resp = _req.get(f"{VOXIFY_URL}/api/announcements", timeout=3)
+            ann_params = {}
+            if voting_status and voting_status.get('college_id'):
+                ann_params['college_id'] = voting_status['college_id']
+            ann_resp = _req.get(f"{VOXIFY_URL}/api/announcements", params=ann_params, timeout=3)
             if ann_resp.status_code == 200:
                 voxify_announcements = ann_resp.json().get('announcements', [])
         except Exception:

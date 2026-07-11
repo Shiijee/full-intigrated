@@ -140,20 +140,26 @@ def get_announcements():
         if college_id is not None:
             cursor.execute(
                 """
-                SELECT id, title, body, type, image_url, college_id, created_by, status, created_at, updated_at
-                FROM announcements
-                WHERE status = 'published' AND (college_id = %s OR college_id IS NULL)
-                ORDER BY created_at DESC
+                SELECT a.id, a.title, a.body, a.type, a.image_url, a.college_id,
+                       c.name AS college_name,
+                       a.created_by, a.status, a.created_at, a.updated_at
+                FROM announcements a
+                LEFT JOIN colleges c ON c.id = a.college_id
+                WHERE a.status = 'published' AND (a.college_id = %s OR a.college_id IS NULL)
+                ORDER BY a.created_at DESC
                 """,
                 (college_id,)
             )
         else:
             cursor.execute(
                 """
-                SELECT id, title, body, type, image_url, college_id, created_by, status, created_at, updated_at
-                FROM announcements
-                WHERE status = 'published'
-                ORDER BY created_at DESC
+                SELECT a.id, a.title, a.body, a.type, a.image_url, a.college_id,
+                       c.name AS college_name,
+                       a.created_by, a.status, a.created_at, a.updated_at
+                FROM announcements a
+                LEFT JOIN colleges c ON c.id = a.college_id
+                WHERE a.status = 'published'
+                ORDER BY a.created_at DESC
                 """
             )
         rows = cursor.fetchall()
@@ -195,6 +201,7 @@ def voter_status(student_id):
                 "student_id": student_id,
                 "is_registered_voter": False,
                 "has_voted": False,
+                "college_id": None,
                 "election_id": None,
                 "election_title": None
             })
@@ -215,6 +222,7 @@ def voter_status(student_id):
             "student_id": student_id,
             "is_registered_voter": bool(voter['is_approved']),
             "has_voted": bool(voter['has_voted']),
+            "college_id": voter['college_id'],
             "election_id": election['id'] if election else None,
             "election_title": election['title'] if election else None
         })
@@ -323,7 +331,11 @@ def provision_user():
 
     Voxify's 'voter' is equivalent to Portal's 'student'; 'teacher' is also
     mapped to 'voter' since Voxify has no teacher concept.
-    college_id is left NULL for mirrored accounts (no college context available).
+
+    college_id is resolved from an optional "college" name in the request
+    body (matched case-insensitively against Voxify's colleges table; a
+    new college row is created if no match exists). If no "college" is
+    given, college_id is left NULL as before.
 
     Request body (JSON):
         {
@@ -332,6 +344,7 @@ def provision_user():
             "full_name": "<string>",   required — split into first/middle/last
             "role":      "<string>",   required — superadmin|admin|teacher|student
             "email":     "<string>",   optional
+            "college":   "<string>",   optional — college name from the source module
         }
 
     Success response (201):  { "success": true }
@@ -346,6 +359,7 @@ def provision_user():
     full_name = (body.get("full_name") or "").strip()
     role      = (body.get("role") or "").strip()
     email     = body.get("email") or f"{username}@placeholder.local"
+    college_name = (body.get("college") or "").strip()
 
     if not username or not password or not full_name:
         return jsonify({"success": False, "reason": "username, password, full_name are required"}), 400
@@ -381,13 +395,23 @@ def provision_user():
             cursor.close(); conn.close()
             return jsonify({"success": False, "reason": f"'{username}' already exists in Voxify users"}), 409
 
+        college_id = None
+        if college_name:
+            cursor.execute("SELECT id FROM colleges WHERE LOWER(name) = LOWER(%s)", (college_name,))
+            existing = cursor.fetchone()
+            if existing:
+                college_id = existing["id"]
+            else:
+                cursor.execute("INSERT INTO colleges (name) VALUES (%s)", (college_name,))
+                college_id = cursor.lastrowid
+
         cursor.execute(
             """INSERT INTO users
                (student_id, firstname, middlename, surname, email, password,
                 role, college_id, is_approved, is_active, is_archived)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, 1, 1, 0)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, 1, 0)""",
             (username, firstname, middlename, surname, email,
-             hashed_password, voxify_role),
+             hashed_password, voxify_role, college_id),
         )
         conn.commit()
         cursor.close(); conn.close()
@@ -431,6 +455,25 @@ def update_user():
     voxify_role = role_map.get(role)
     if not voxify_role:
         return jsonify({"success": True, "message": "Teachers are not tracked in Voxify"}), 200
+# ── Backfill college on an already-mirrored user (called by TestPoint) ────────
+@voxify_api.route('/sync-user-college', methods=['POST'])
+def sync_user_college():
+    """
+    Updates college_id on a user that was already mirrored to Voxify
+    before college syncing existed (or was created without a block
+    assigned yet). Looked up by student_id ('username' in the payload).
+
+    Request body (JSON):
+        { "username": "<string>", "college": "<string>" }
+
+    Success response (200): { "success": true, "updated": true/false }
+    """
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    college_name = (body.get("college") or "").strip()
+
+    if not username or not college_name:
+        return jsonify({"success": False, "reason": "username and college are required"}), 400
 
     try:
         conn = db()
@@ -503,8 +546,65 @@ def update_user():
 
         cursor.close(); conn.close()
         return jsonify({"success": True}), 200
+        cursor.execute("SELECT id, college_id FROM users WHERE student_id = %s", (username,))
+        user = cursor.fetchone()
+        if not user:
+            cursor.close(); conn.close()
+            return jsonify({"success": False, "reason": f"'{username}' not found in Voxify users"}), 404
+
+        cursor.execute("SELECT id FROM colleges WHERE LOWER(name) = LOWER(%s)", (college_name,))
+        existing = cursor.fetchone()
+        if existing:
+            college_id = existing["id"]
+        else:
+            cursor.execute("INSERT INTO colleges (name) VALUES (%s)", (college_name,))
+            college_id = cursor.lastrowid
+
+        updated = user["college_id"] != college_id
+        if updated:
+            cursor.execute("UPDATE users SET college_id = %s WHERE id = %s", (college_id, user["id"]))
+            conn.commit()
+
+        cursor.close(); conn.close()
+        return jsonify({"success": True, "updated": updated}), 200
 
     except Exception as e:
         return jsonify({"success": False, "reason": str(e)}), 500
 
 
+# ── Sync a single college (called by TestPoint, no user attached) ─────────────
+@voxify_api.route('/sync-college', methods=['POST'])
+def sync_college():
+    """
+    Upserts a college by name — used to import TestPoint's college list
+    into Voxify wholesale (so the SuperAdmin's college dropdown is
+    populated even before any student from that college exists yet).
+    Colleges are no longer created manually in Voxify — TestPoint is the
+    source of truth; this is the only way a new one should appear here.
+
+    Request body (JSON): { "college_name": "<string>" }
+    Success response (201, whether newly created or already existed): { "success": true, "college_id": <int> }
+    """
+    body = request.get_json(silent=True) or {}
+    college_name = (body.get("college_name") or "").strip()
+    if not college_name:
+        return jsonify({"success": False, "reason": "college_name is required"}), 400
+
+    try:
+        conn = db()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT id FROM colleges WHERE LOWER(name) = LOWER(%s)", (college_name,))
+        existing = cursor.fetchone()
+        if existing:
+            cursor.close(); conn.close()
+            return jsonify({"success": True, "college_id": existing["id"]}), 201
+
+        cursor.execute("INSERT INTO colleges (name) VALUES (%s)", (college_name,))
+        conn.commit()
+        college_id = cursor.lastrowid
+        cursor.close(); conn.close()
+        return jsonify({"success": True, "college_id": college_id}), 201
+
+    except Exception as e:
+        return jsonify({"success": False, "reason": str(e)}), 500
