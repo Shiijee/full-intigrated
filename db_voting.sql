@@ -1,11 +1,11 @@
 -- phpMyAdmin SQL Dump
--- version 5.2.3
+-- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- Host: localhost:3306
--- Generation Time: Jul 09, 2026 at 02:09 PM
--- Server version: 8.0.43
--- PHP Version: 8.3.30
+-- Host: 127.0.0.1
+-- Generation Time: Jul 11, 2026 at 03:12 PM
+-- Server version: 10.4.32-MariaDB
+-- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -24,135 +24,29 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
--- Table structure for table `admins`
+-- Table structure for table `announcements`
 --
 
-CREATE TABLE `admins` (
-  `admin_id` int NOT NULL,
-  `username` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `password_hash` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `failed_attempts` int DEFAULT '0',
-  `lockout_time` datetime DEFAULT NULL
+CREATE TABLE `announcements` (
+  `id` int(11) NOT NULL,
+  `college_id` int(11) DEFAULT NULL,
+  `title` varchar(200) NOT NULL,
+  `body` text NOT NULL,
+  `type` enum('general','election','winner','reminder') NOT NULL DEFAULT 'general',
+  `status` enum('draft','published') NOT NULL DEFAULT 'draft',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `image_url` varchar(300) DEFAULT NULL,
+  `is_pinned` tinyint(1) NOT NULL DEFAULT 0,
+  `created_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `admins`
+-- Dumping data for table `announcements`
 --
 
-INSERT INTO `admins` (`admin_id`, `username`, `password_hash`, `email`, `failed_attempts`, `lockout_time`) VALUES
-(1, 'admin1', 'scrypt:32768:8:1$wVEAW1BuBHzh09uC$3a9eaeeb098e499af5880e109f80562d1e30045326808c9e0aa338499c4180be265dbd16d7e65e01316fb5d362ee6f2a764eb6d7b4c95fd7620ccd69e9ad7266', 'admin@atendeez.com', 0, NULL);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `attendance`
---
-
-CREATE TABLE `attendance` (
-  `attendance_id` int NOT NULL,
-  `session_id` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `uSID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `scan_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Present',
-  `remarks` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `is_valid` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'Valid',
-  `student_lat` decimal(10,8) DEFAULT NULL,
-  `student_lon` decimal(11,8) DEFAULT NULL,
-  `distance_meters` decimal(10,2) DEFAULT NULL,
-  `behavior_flags` text COLLATE utf8mb4_general_ci
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Triggers `attendance`
---
-DELIMITER $$
-CREATE TRIGGER `trg_check_absences_limit_insert` AFTER INSERT ON `attendance` FOR EACH ROW BEGIN
-    DECLARE absence_count INT;
-    DECLARE v_subject_id INT;
-    DECLARE v_subject_name VARCHAR(100);
-
-    IF NEW.status = 'Absent' THEN
-        SELECT subject_id INTO v_subject_id FROM Sessions WHERE session_id = NEW.session_id;
-        SELECT subject_name INTO v_subject_name FROM Subjects WHERE subject_id = v_subject_id;
-        SELECT COUNT(*) INTO absence_count
-        FROM Attendance a
-        JOIN Sessions s ON a.session_id = s.session_id
-        WHERE a.uSID = NEW.uSID AND s.subject_id = v_subject_id AND a.status = 'Absent';
-
-        IF absence_count >= 3 THEN
-            INSERT INTO Notifications (uSID, message, type)
-            VALUES (NEW.uSID, CONCAT('You have accumulated ', absence_count, ' absences in ', v_subject_name, '. Please contact your instructor.'), 'Alert');
-        END IF;
-    END IF;
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `trg_check_absences_limit_update` AFTER UPDATE ON `attendance` FOR EACH ROW BEGIN
-    DECLARE absence_count INT;
-    DECLARE v_subject_id INT;
-    DECLARE v_subject_name VARCHAR(100);
-
-    IF NEW.status = 'Absent' THEN
-        SELECT subject_id INTO v_subject_id FROM Sessions WHERE session_id = NEW.session_id;
-        SELECT subject_name INTO v_subject_name FROM Subjects WHERE subject_id = v_subject_id;
-        SELECT COUNT(*) INTO absence_count
-        FROM Attendance a
-        JOIN Sessions s ON a.session_id = s.session_id
-        WHERE a.uSID = NEW.uSID AND s.subject_id = v_subject_id AND a.status = 'Absent';
-
-        IF absence_count >= 3 THEN
-            INSERT INTO Notifications (uSID, message, type)
-            VALUES (NEW.uSID, CONCAT('You have accumulated ', absence_count, ' absences in ', v_subject_name, '. Please contact your instructor.'), 'Alert');
-        END IF;
-    END IF;
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `trg_log_attendance_delete` AFTER DELETE ON `attendance` FOR EACH ROW BEGIN
-    INSERT INTO Attendance_Audit_Log (attendance_id, action, old_status, new_status, changed_by_user_id, changed_by_role)
-    VALUES (OLD.attendance_id, 'Delete', OLD.status, NULL, 'SYSTEM_TRIGGER', 'System');
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `trg_log_attendance_update` AFTER UPDATE ON `attendance` FOR EACH ROW BEGIN
-    INSERT INTO Attendance_Audit_Log (attendance_id, action, old_status, new_status, changed_by_user_id, changed_by_role)
-    VALUES (OLD.attendance_id, 'Update', OLD.status, NEW.status, 'SYSTEM_TRIGGER', 'System');
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `trg_notify_attendance_recorded` AFTER INSERT ON `attendance` FOR EACH ROW BEGIN
-    IF NEW.status = 'Present' THEN
-        INSERT INTO Notifications (uSID, message, type)
-        VALUES (NEW.uSID, CONCAT('Your attendance for today (', DATE_FORMAT(CURDATE(), '%m-%d-%y'), ') has been successfully marked as Present.'), 'Info');
-    ELSEIF NEW.status = 'Flagged' THEN
-        INSERT INTO Notifications (uSID, message, type)
-        VALUES (NEW.uSID, CONCAT('Your attendance for today (', DATE_FORMAT(CURDATE(), '%m-%d-%y'), ') has been flagged for review.'), 'Alert');
-    END IF;
-END
-$$
-DELIMITER ;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `attendance_audit_log`
---
-
-CREATE TABLE `attendance_audit_log` (
-  `log_id` int NOT NULL,
-  `attendance_id` int DEFAULT NULL,
-  `action` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `old_status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `new_status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `changed_by_user_id` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `changed_by_role` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `timestamp` datetime DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO `announcements` (`id`, `college_id`, `title`, `body`, `type`, `status`, `created_at`, `updated_at`, `image_url`, `is_pinned`, `created_by`) VALUES
+(1, 5, 'asda', 'adasdadadadas', 'general', 'published', '2026-06-28 13:44:38', '2026-06-28 13:44:38', NULL, 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -161,13 +55,13 @@ CREATE TABLE `attendance_audit_log` (
 --
 
 CREATE TABLE `audit_logs` (
-  `id` int NOT NULL,
-  `user_id` int DEFAULT NULL,
-  `action` text COLLATE utf8mb4_general_ci,
-  `details` text COLLATE utf8mb4_general_ci,
-  `target_type` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `target_id` int DEFAULT NULL,
-  `timestamp` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `id` int(11) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `action` text DEFAULT NULL,
+  `details` text DEFAULT NULL,
+  `target_type` varchar(50) DEFAULT NULL,
+  `target_id` int(11) DEFAULT NULL,
+  `timestamp` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -204,7 +98,10 @@ INSERT INTO `audit_logs` (`id`, `user_id`, `action`, `details`, `target_type`, `
 (27, 48, 'CREATE_CANDIDATE', 'Added candidate: sdsfs sdfs (Position ID: 39)', 'Candidate', 44, '2026-05-07 06:53:06'),
 (28, 48, 'CREATE_CANDIDATE', 'Added candidate: sdf seeew (Position ID: 39)', 'Candidate', 45, '2026-05-07 06:53:14'),
 (29, 48, 'DELETE_VOTER', 'Permanently deleted voter ID: 50', 'Voter', 50, '2026-05-07 07:01:15'),
-(33, 46, 'CREATE_VOTER', 'Created voter: Cj Han Matienzo (ID: 241-5-0345)', 'Voter', 54, '2026-06-30 08:44:34');
+(30, 46, 'CREATE_ELECTION', 'Created election: es', 'Election', 36, '2026-07-02 09:18:34'),
+(31, 46, 'CREATE_POSITION', 'Created position: Vice President (Election ID: 36)', 'Position', 40, '2026-07-02 09:18:50'),
+(32, 46, 'CREATE_CANDIDATE', 'Added candidate: dadad adad (Position ID: 40)', 'Candidate', 46, '2026-07-02 09:19:20'),
+(33, 46, 'ACTIVATE_ELECTION', 'Election set to status: active (ID: 36)', 'Election', 36, '2026-07-02 09:19:30');
 
 -- --------------------------------------------------------
 
@@ -213,18 +110,18 @@ INSERT INTO `audit_logs` (`id`, `user_id`, `action`, `details`, `target_type`, `
 --
 
 CREATE TABLE `candidates` (
-  `id` int NOT NULL,
-  `position_id` int NOT NULL,
-  `student_id` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `firstname` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `middlename` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `surname` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `platform` text COLLATE utf8mb4_general_ci,
-  `partylist` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `photo` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `status` enum('pending','approved','rejected') COLLATE utf8mb4_general_ci DEFAULT 'pending',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `college_id` int DEFAULT NULL
+  `id` int(11) NOT NULL,
+  `position_id` int(11) NOT NULL,
+  `student_id` varchar(50) NOT NULL,
+  `firstname` varchar(50) NOT NULL,
+  `middlename` varchar(50) DEFAULT NULL,
+  `surname` varchar(50) NOT NULL,
+  `platform` text DEFAULT NULL,
+  `partylist` varchar(100) DEFAULT NULL,
+  `photo` varchar(255) DEFAULT NULL,
+  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `college_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -233,7 +130,8 @@ CREATE TABLE `candidates` (
 
 INSERT INTO `candidates` (`id`, `position_id`, `student_id`, `firstname`, `middlename`, `surname`, `platform`, `partylist`, `photo`, `status`, `created_at`, `college_id`) VALUES
 (44, 39, 'voter3(1)', 'sdsfs', '', 'sdfs', '', '', NULL, 'approved', '2026-05-07 06:53:06', 3),
-(45, 39, 'voter3(2)', 'sdf', '', 'seeew', '', '', NULL, 'approved', '2026-05-07 06:53:14', 3);
+(45, 39, 'voter3(2)', 'sdf', '', 'seeew', '', '', NULL, 'approved', '2026-05-07 06:53:14', 3),
+(46, 40, 'voter5(1)', 'dadad', 'ada', 'adad', 'adsadsad', 'sadas', NULL, 'approved', '2026-07-02 09:19:20', 5);
 
 -- --------------------------------------------------------
 
@@ -242,9 +140,9 @@ INSERT INTO `candidates` (`id`, `position_id`, `student_id`, `firstname`, `middl
 --
 
 CREATE TABLE `colleges` (
-  `id` int NOT NULL,
-  `name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `id` int(11) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -262,66 +160,20 @@ INSERT INTO `colleges` (`id`, `name`, `created_at`) VALUES
 -- --------------------------------------------------------
 
 --
--- Table structure for table `drop_requests`
---
-
-CREATE TABLE `drop_requests` (
-  `request_id` int NOT NULL,
-  `uTID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `uSID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `subject_id` int DEFAULT NULL,
-  `reason` text COLLATE utf8mb4_general_ci,
-  `status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Pending',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Triggers `drop_requests`
---
-DELIMITER $$
-CREATE TRIGGER `trg_notify_drop_request_insert` AFTER INSERT ON `drop_requests` FOR EACH ROW BEGIN
-    DECLARE v_subject_name VARCHAR(100);
-    SELECT subject_name INTO v_subject_name FROM Subjects WHERE subject_id = NEW.subject_id;
-    INSERT INTO Notifications (uSID, message, type)
-    VALUES (NEW.uSID, CONCAT('A drop request has been initiated for you in ', v_subject_name), 'Warning');
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `trg_notify_drop_request_update` AFTER UPDATE ON `drop_requests` FOR EACH ROW BEGIN
-    DECLARE v_subject_name VARCHAR(100);
-    DECLARE v_type VARCHAR(20);
-    IF OLD.status != NEW.status THEN
-        SELECT subject_name INTO v_subject_name FROM Subjects WHERE subject_id = NEW.subject_id;
-        IF NEW.status = 'Approved' THEN
-            SET v_type = 'Info';
-        ELSE
-            SET v_type = 'Alert';
-        END IF;
-        INSERT INTO Notifications (uSID, message, type)
-        VALUES (NEW.uSID, CONCAT('Your drop request status for ', v_subject_name, ' has been updated to: ', NEW.status), v_type);
-    END IF;
-END
-$$
-DELIMITER ;
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `elections`
 --
 
 CREATE TABLE `elections` (
-  `id` int NOT NULL,
-  `title` varchar(200) COLLATE utf8mb4_general_ci NOT NULL,
-  `description` text COLLATE utf8mb4_general_ci,
+  `id` int(11) NOT NULL,
+  `title` varchar(200) NOT NULL,
+  `description` text DEFAULT NULL,
   `start_date` datetime NOT NULL,
   `end_date` datetime NOT NULL,
-  `status` enum('upcoming','active','paused','completed','cancelled','draft') COLLATE utf8mb4_general_ci DEFAULT 'upcoming',
-  `created_by` int DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `college_id` int DEFAULT NULL,
-  `previous_status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL
+  `status` enum('upcoming','active','paused','completed','cancelled','draft') DEFAULT 'upcoming',
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `college_id` int(11) DEFAULT NULL,
+  `previous_status` varchar(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -330,131 +182,8 @@ CREATE TABLE `elections` (
 
 INSERT INTO `elections` (`id`, `title`, `description`, `start_date`, `end_date`, `status`, `created_by`, `created_at`, `college_id`, `previous_status`) VALUES
 (32, 'BSTEST ELECTION', 'TESTING123', '2026-05-08 13:32:00', '2026-05-09 13:32:00', 'completed', 48, '2026-05-07 05:32:44', 3, NULL),
-(35, 'ELEction', '', '2026-05-07 14:53:00', '2026-05-07 14:57:00', 'completed', 48, '2026-05-07 06:52:20', 3, NULL);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `enrollments`
---
-
-CREATE TABLE `enrollments` (
-  `enrollment_id` int NOT NULL,
-  `uSID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `assignment_id` int DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Triggers `enrollments`
---
-DELIMITER $$
-CREATE TRIGGER `trg_prevent_duplicate_enrollments` BEFORE INSERT ON `enrollments` FOR EACH ROW BEGIN
-    DECLARE v_subject_id INT;
-    DECLARE v_uTID VARCHAR(20);
-    DECLARE v_subject_name VARCHAR(100);
-    DECLARE v_teacher_name VARCHAR(150);
-
-    SELECT ta.subject_id, ta.uTID, s.subject_name, CONCAT(t.first_name, ' ', t.last_name)
-    INTO v_subject_id, v_uTID, v_subject_name, v_teacher_name
-    FROM Teacher_Assignments ta
-    JOIN Subjects s ON ta.subject_id = s.subject_id
-    JOIN Teachers t ON ta.uTID = t.uTID
-    WHERE ta.assignment_id = NEW.assignment_id;
-
-    -- Check duplicate subject
-    IF EXISTS (
-        SELECT 1 FROM Enrollments e
-        JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
-        WHERE e.uSID = NEW.uSID AND ta.subject_id = v_subject_id
-    ) THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Student is already enrolled in this subject. Duplicate subject enrollment is not allowed.';
-    END IF;
-
-    -- Check duplicate teacher
-    IF EXISTS (
-        SELECT 1 FROM Enrollments e
-        JOIN Teacher_Assignments ta ON e.assignment_id = ta.assignment_id
-        WHERE e.uSID = NEW.uSID AND ta.uTID = v_uTID
-    ) THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Student is already handled by this teacher. Each subject must have a unique teacher.';
-    END IF;
-END
-$$
-DELIMITER ;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `excuse_letters`
---
-
-CREATE TABLE `excuse_letters` (
-  `letter_id` int NOT NULL,
-  `uSID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `uTID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `subject_id` int DEFAULT NULL,
-  `message` text COLLATE utf8mb4_general_ci NOT NULL,
-  `file_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Pending',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Triggers `excuse_letters`
---
-DELIMITER $$
-CREATE TRIGGER `trg_notify_excuse_letter` AFTER UPDATE ON `excuse_letters` FOR EACH ROW BEGIN
-    DECLARE v_type VARCHAR(20);
-    IF OLD.status != NEW.status THEN
-        IF NEW.status = 'Approved' THEN
-            SET v_type = 'Info';
-        ELSE
-            SET v_type = 'Alert';
-        END IF;
-        INSERT INTO Notifications (uSID, message, type)
-        VALUES (NEW.uSID, CONCAT('Your excuse letter status has been updated to: ', NEW.status), v_type);
-    END IF;
-END
-$$
-DELIMITER ;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `login_logs`
---
-
-CREATE TABLE `login_logs` (
-  `log_id` int NOT NULL,
-  `user_id` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `role` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `login_time` datetime DEFAULT CURRENT_TIMESTAMP,
-  `logout_time` datetime DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `login_logs`
---
-
-INSERT INTO `login_logs` (`log_id`, `user_id`, `role`, `login_time`, `logout_time`) VALUES
-(1, '1', 'Admin', '2026-06-28 01:18:26', NULL);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `notifications`
---
-
-CREATE TABLE `notifications` (
-  `notification_id` int NOT NULL,
-  `uSID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `message` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `type` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Info',
-  `is_read` tinyint(1) DEFAULT '0',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+(35, 'ELEction', '', '2026-05-07 14:53:00', '2026-05-07 14:57:00', 'completed', 48, '2026-05-07 06:52:20', 3, NULL),
+(36, 'es', 'efsef', '2026-07-11 17:18:00', '2026-07-23 17:18:00', 'active', 46, '2026-07-02 09:18:34', 5, NULL);
 
 -- --------------------------------------------------------
 
@@ -463,11 +192,11 @@ CREATE TABLE `notifications` (
 --
 
 CREATE TABLE `otp_codes` (
-  `id` int NOT NULL,
-  `user_id` int DEFAULT NULL,
-  `otp` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `id` int(11) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `otp` varchar(100) DEFAULT NULL,
   `expires_at` datetime DEFAULT NULL,
-  `used` tinyint(1) DEFAULT '0'
+  `used` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -490,18 +219,10 @@ INSERT INTO `otp_codes` (`id`, `user_id`, `otp`, `expires_at`, `used`) VALUES
 (13, 47, '6b3968e1427f8646af5e7f5e682cc0c0624f0e9401947a4e19cd3764e2013e3a', '2026-05-07 13:01:53', 1),
 (14, 48, '82bfd9b51e160512845fadd7496d7a7f5d9a27905354a0fb63d07796c2f1d282', '2026-05-07 13:34:28', 1),
 (16, 49, '42e09a57cb7fcfce282af54cf7bb5a27d25e0b245c67df7cfb85ffc6c45b2b2a', '2026-05-07 13:40:39', 1),
-(17, 46, '36c50cd2625457c5562df4ab1a8ab6af5a8bdf2d17c6dddb14f5ada1918e7b8c', '2026-06-29 21:49:47', 0);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `otp_lockouts`
---
-
-CREATE TABLE `otp_lockouts` (
-  `email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `lockout_until` datetime NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+(17, 46, '9d0a7e8c29b43981857cba23a8bae5b8558a9becbf34fcd53b33dd0fb36a401e', '2026-06-27 23:49:55', 1),
+(18, 46, 'ded488d7289ebafdd2f2d11f7cc8d8a0d929107567fabcd3c7550f50b8cc1bd4', '2026-06-28 21:20:44', 1),
+(19, 49, '0476db65ef5927f8e9dd5721c053cadeadfa049060d326444121837bef806186', '2026-06-28 21:24:51', 1),
+(20, 49, '2fbb8b4a8110fbfb6473136ce76d9fb4a0aeed3e5c009e71d13034c564f607a1', '2026-06-28 21:25:49', 1);
 
 -- --------------------------------------------------------
 
@@ -510,13 +231,13 @@ CREATE TABLE `otp_lockouts` (
 --
 
 CREATE TABLE `positions` (
-  `id` int NOT NULL,
-  `election_id` int NOT NULL,
-  `title` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `description` text COLLATE utf8mb4_general_ci,
-  `max_votes` int DEFAULT '1',
-  `display_order` int DEFAULT '0',
-  `college_id` int DEFAULT NULL
+  `id` int(11) NOT NULL,
+  `election_id` int(11) NOT NULL,
+  `title` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `max_votes` int(11) DEFAULT 1,
+  `display_order` int(11) DEFAULT 0,
+  `college_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -526,121 +247,8 @@ CREATE TABLE `positions` (
 INSERT INTO `positions` (`id`, `election_id`, `title`, `description`, `max_votes`, `display_order`, `college_id`) VALUES
 (35, 32, 'President', 'Leads the Student Council and represents the student body.', 1, 1, 3),
 (36, 32, 'Vice President', 'Assists the President and presides in their absence.', 1, 2, 3),
-(39, 35, 'President', 'Leads the Student Council and represents the student body.', 1, 1, 3);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `schedule`
---
-
-CREATE TABLE `schedule` (
-  `schedule_id` int NOT NULL,
-  `subject_id` int DEFAULT NULL,
-  `uTID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `section` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `day_of_week` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `start_time` time DEFAULT NULL,
-  `end_time` time DEFAULT NULL,
-  `room` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `sessions`
---
-
-CREATE TABLE `sessions` (
-  `session_id` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `uTID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `subject_id` int DEFAULT NULL,
-  `section` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `random_token` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `start_time` datetime NOT NULL,
-  `expires_at` datetime NOT NULL,
-  `latitude` decimal(10,8) DEFAULT NULL,
-  `longitude` decimal(11,8) DEFAULT NULL,
-  `status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Active',
-  `is_finalized` tinyint(1) DEFAULT '0'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `students`
---
-
-CREATE TABLE `students` (
-  `uSID` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `first_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `middle_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `last_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `password_hash` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `course` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `level` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `section` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Active',
-  `failed_attempts` int DEFAULT '0',
-  `lockout_time` datetime DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `subjects`
---
-
-CREATE TABLE `subjects` (
-  `subject_id` int NOT NULL,
-  `subject_code` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `subject_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `subjects`
---
-
-INSERT INTO `subjects` (`subject_id`, `subject_code`, `subject_name`) VALUES
-(1, 'IT101', 'Introduction to Computing'),
-(2, 'IT102', 'Programming 1'),
-(3, 'IT103', 'Database Management Systems');
-
--- --------------------------------------------------------
-
---
--- Table structure for table `submitted_reports`
---
-
-CREATE TABLE `submitted_reports` (
-  `report_id` int NOT NULL,
-  `uTID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `subject_id` int DEFAULT NULL,
-  `section` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `submission_date` datetime DEFAULT CURRENT_TIMESTAMP,
-  `summary_json` text COLLATE utf8mb4_general_ci,
-  `teacher_message` text COLLATE utf8mb4_general_ci,
-  `status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Submitted',
-  `is_archived` tinyint(1) DEFAULT '0'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `system_audit_log`
---
-
-CREATE TABLE `system_audit_log` (
-  `log_id` int NOT NULL,
-  `table_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `entity_id` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `action` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `performed_by_id` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `performed_by_role` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `details` text COLLATE utf8mb4_general_ci,
-  `timestamp` datetime DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+(39, 35, 'President', 'Leads the Student Council and represents the student body.', 1, 1, 3),
+(40, 36, 'Vice President', 'Assists the President and presides in their absence.', 1, 0, 5);
 
 -- --------------------------------------------------------
 
@@ -649,11 +257,11 @@ CREATE TABLE `system_audit_log` (
 --
 
 CREATE TABLE `system_logs` (
-  `id` int NOT NULL,
-  `user_id` int DEFAULT NULL,
-  `action` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `details` text COLLATE utf8mb4_general_ci,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `id` int(11) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `action` varchar(100) DEFAULT NULL,
+  `details` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -888,39 +496,21 @@ INSERT INTO `system_logs` (`id`, `user_id`, `action`, `details`, `created_at`) V
 (227, 47, 'logout', 'User logged out', '2026-05-07 06:53:51'),
 (228, NULL, 'login', 'User logged in (trusted device) — 241-3-3333', '2026-05-07 06:54:01'),
 (229, NULL, 'logout', 'User logged out', '2026-05-07 07:00:44'),
-(230, 48, 'login', 'User logged in (trusted device) — admin-0003', '2026-05-07 07:00:58');
-
--- --------------------------------------------------------
-
---
--- Table structure for table `teachers`
---
-
-CREATE TABLE `teachers` (
-  `uTID` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
-  `first_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `middle_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `last_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `department` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `email` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `password_hash` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'Active',
-  `failed_attempts` int DEFAULT '0',
-  `lockout_time` datetime DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `teacher_assignments`
---
-
-CREATE TABLE `teacher_assignments` (
-  `assignment_id` int NOT NULL,
-  `uTID` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `subject_id` int DEFAULT NULL,
-  `section` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+(230, 48, 'login', 'User logged in (trusted device) — admin-0003', '2026-05-07 07:00:58'),
+(231, 46, 'login', 'User logged in — admin-0002', '2026-06-27 15:45:22'),
+(232, 46, 'logout', 'User logged out', '2026-06-27 15:49:11'),
+(233, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-06-27 16:07:33'),
+(234, 46, 'login', 'User logged in — admin-0002', '2026-06-28 13:16:19'),
+(235, 49, 'login', 'User logged in — 241-5-2222', '2026-06-28 13:21:08'),
+(236, 46, 'logout', 'User logged out', '2026-06-28 14:03:57'),
+(237, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-06-28 14:04:10'),
+(238, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-07-02 09:02:12'),
+(239, 49, 'login', 'User logged in (trusted device) — 241-5-2222', '2026-07-02 09:20:14'),
+(240, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-07-02 13:03:47'),
+(241, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-07-02 17:38:14'),
+(242, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-07-02 18:46:12'),
+(243, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-07-03 12:20:05'),
+(244, 46, 'login', 'User logged in (trusted device) — admin-0002', '2026-07-03 13:24:20');
 
 -- --------------------------------------------------------
 
@@ -929,10 +519,10 @@ CREATE TABLE `teacher_assignments` (
 --
 
 CREATE TABLE `trusted_devices` (
-  `user_id` int NOT NULL,
-  `token` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `token` varchar(255) NOT NULL,
   `expiry` datetime NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -954,10 +544,10 @@ INSERT INTO `trusted_devices` (`user_id`, `token`, `expiry`, `created_at`) VALUE
 (42, '-I3sEmcIdwmTqNkHp2tSY_EZCfdo_cLiEbeJkLfti-k', '2026-06-05 23:11:45', '2026-05-06 14:38:22'),
 (43, '-S4T7jTdC41q11pkBGD8F2mGsRF62FD5RGimW-md4u4', '2026-06-05 23:55:39', '2026-05-06 15:55:39'),
 (44, 'JNUH2eLlh_XtpKwrlrW_bChdK0Qsram_gIgqZ722R54', '2026-06-05 23:59:03', '2026-05-06 15:59:03'),
-(46, 'DMXLzl50v-XCe99NbYjPCbSlnzsUljWMJZpGLkBpiu4', '2026-06-06 12:45:50', '2026-05-06 17:57:07'),
+(46, '7FoavbgfwTiUFJEJzmqcP8_Kwne2ZhZJAmfjvANxxzI', '2026-07-28 21:16:19', '2026-05-06 17:57:07'),
 (47, 'GaszsS_w4zE-mcQSgF8ei3wcK_IszMJ-6CgvmY3nAgE', '2026-06-06 12:57:15', '2026-05-07 04:57:15'),
 (48, 'Z-Hu2SpG3odEBYb1bripykuwR0ljs_Pxrvx1alxnXno', '2026-06-06 13:29:57', '2026-05-07 05:29:57'),
-(49, 'EK0atde9yteBII7r-G_5kx_itPHbNnJ6-4kFDgIFy8I', '2026-06-06 13:36:08', '2026-05-07 05:36:08'),
+(49, 'SFA3YAjJkNh35Y_M5nT0TN-0fb1zLWOGExQGeh8VsL8', '2026-07-28 21:21:08', '2026-05-07 05:36:08'),
 (50, 'FARi4AJXzzZlmEg-AGNrNkDPBlXbqY5KMZC5U2X8R6Y', '2026-06-06 13:33:56', '2026-05-07 05:33:56');
 
 -- --------------------------------------------------------
@@ -967,20 +557,20 @@ INSERT INTO `trusted_devices` (`user_id`, `token`, `expiry`, `created_at`) VALUE
 --
 
 CREATE TABLE `users` (
-  `id` int NOT NULL,
-  `student_id` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `firstname` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `middlename` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `surname` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `email` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `password` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
-  `role` enum('superadmin','admin','voter') COLLATE utf8mb4_general_ci NOT NULL,
-  `has_voted` tinyint(1) DEFAULT '0',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `is_approved` tinyint(1) DEFAULT '0',
-  `college_id` int DEFAULT NULL,
-  `is_active` tinyint(1) DEFAULT '1',
-  `is_archived` tinyint(1) NOT NULL DEFAULT '0'
+  `id` int(11) NOT NULL,
+  `student_id` varchar(20) DEFAULT NULL,
+  `firstname` varchar(50) NOT NULL,
+  `middlename` varchar(50) DEFAULT NULL,
+  `surname` varchar(50) NOT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `password` varchar(255) NOT NULL,
+  `role` enum('superadmin','admin','voter') NOT NULL,
+  `has_voted` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `is_approved` tinyint(1) DEFAULT 0,
+  `college_id` int(11) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `is_archived` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -989,13 +579,22 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `student_id`, `firstname`, `middlename`, `surname`, `email`, `password`, `role`, `has_voted`, `created_at`, `is_approved`, `college_id`, `is_active`, `is_archived`) VALUES
 (18, 'SUPER001', 'Super', 'Nomo', 'Admin', 'jamesmatthewalmonte45@gmail.com', 'scrypt:32768:8:1$9BgRmmpAg8ejyM4A$d221896d3e644d6721b01c6ddb3aa838d92e00dd9e81e4e183c98839c1a737fdadb8534b8c91575ab5cadb481aa974e87f71b679bc56a8d8a122193663fde670', 'superadmin', 0, '2026-03-29 09:48:11', 1, NULL, 1, 0),
-(46, 'admin-0002', 'Cyrus James', 'Nomo', 'Matienzo', 'jamesmatthewalmonte50@gmail.com', 'scrypt:32768:8:1$J3NeT1A2dleQQMsa$844b88020744d1c691767628fc3684295f89563b14467dbabd458973d407a372aa908a83ae7add0607373d6ac802a9b6619d851ba47e2df8f4f058df3b7c3871', 'admin', 0, '2026-05-06 17:34:40', 1, 5, 1, 0),
+(46, 'admin-0002', 'Cyrus James', 'Nomo', 'Matienzo', 'cjmatienzo2@gmail.com', 'scrypt:32768:8:1$J3NeT1A2dleQQMsa$844b88020744d1c691767628fc3684295f89563b14467dbabd458973d407a372aa908a83ae7add0607373d6ac802a9b6619d851ba47e2df8f4f058df3b7c3871', 'admin', 0, '2026-05-06 17:34:40', 1, 5, 1, 0),
 (47, '241-5-1111', 'James Matthew', 'Montenegro', 'Almonte', 'remremremremrem125@gmail.com', 'scrypt:32768:8:1$WxBfGAWc7pBfsD1M$13ea3e99cab75e2f60c95fd0629f86f0ad99204156b573bf756b75b58f8a26ecf9ddd32ca81d238490e1ba011f13022e4a2c49e2d7561fad12046236f8a23add', 'voter', 0, '2026-05-07 04:56:10', 1, 5, 1, 0),
 (48, 'admin-0003', 'James Matthew', 'Montenegro', 'Almonte', 'rarararadrem@gmail.com', 'scrypt:32768:8:1$M7srGC8qiKi4Z5RH$02237d5519d7de59b41ddc27f854d4f85dc43336f59e277f5404b075a1a38cb0764186148bb30537dffc51298cdf4b22631d3f6d238e49f70d01f9668b0c3595', 'admin', 0, '2026-05-07 05:01:06', 1, 3, 1, 0),
-(49, '241-5-2222', 'Justin', 'Dion', 'Salaveria', 'cjhanmatienzo@gmail.com', 'scrypt:32768:8:1$5HX4uVoZ3D7Dw9zV$9e8146f84dbdaf1f578cf0190be8093f96b89b54409ea4cbfd1f5bea30487097f87d833ca51aa77b32230b7afedc50a341e3a16bba5307df1a0ffd5f4e171015', 'voter', 0, '2026-05-07 05:28:01', 1, 5, 1, 0),
-(54, '241-5-0345', 'Cj Han', 'Nomo', 'Matienzo', 'cjoymatienzo@gmail.com', 'scrypt:32768:8:1$XrAfiNeTJwdBgBv1$8346c8d82422cefdb8f4badfd7cc374098555bb3765fd48b84c770a8ad45a598bdc6a4f9356d760d576f43763692dadbdaea36a1178beeecb7c5e18ced9316fd', 'voter', 0, '2026-06-30 08:44:34', 1, 5, 1, 0),
-(55, 'S26-0001', 'Justin', 'Dion Bibon', 'Salaveria', 'ninio123@gmail.com', 'scrypt:32768:8:1$wxD5TE8uiyf74pZr$801258f632db59f56acc7c2b5b59b5088a0dd89f3c5ccaed5e789987d638232f634b98222e218a8f4b076a9591a9a5cf7adeaaadde4afa515ee777d9fdd934c7', 'voter', 0, '2026-07-07 13:46:21', 1, NULL, 1, 0),
-(56, 'S26-0002', 'James', 'Montenegro', 'Almonte', 'jinggoy123@gmail.com', 'scrypt:32768:8:1$hn6jnQ9MNMsUoxa8$43c04e24d4ecd1db664869a25266a8ff497dbe3a126acd65eb4595d0f6067b495e9d1eb751915d4764b84b406f7e148faf373e8fb8d81fcac5d1eb7d8279d416', 'voter', 0, '2026-07-08 15:24:32', 1, NULL, 1, 0);
+(49, '241-5-2222', 'Justin', 'Dion', 'Salaveria', 'cjhanmatienzo@gmail.com', 'scrypt:32768:8:1$gzSARPYDQ40Ikapa$6929b2863b299cf6966b1da4d3299c9c61e439175274cf0024e4dc5bdcf518ec8edb51ef3c21163c8ef72e5e1dcfbda8f2c484bf420267d82869a6c5cbedfd38', 'voter', 0, '2026-05-07 05:28:01', 1, 5, 1, 0),
+(51, 'A26-0000', 'Justin Dion', 'Bibon', 'Salaveria', 'justindion180@gmail.com', 'scrypt:32768:8:1$U6dSaNNxSJAP6jNi$9af5ecf8f5d6c73f8a6f923e3036ab9d7515f6f4f13246f7085402b3d56d83eca2a3f9171e15154030381b2cbc8292d90b1d94444dbd8a05ba6e3739fe0c38d7', 'superadmin', 0, '2026-07-08 12:27:15', 1, NULL, 1, 0),
+(52, 'A26-0002', 'Asia', 'Pas', 'Asis', 'cjmatienzo@gmail.com', 'scrypt:32768:8:1$RYL1pIVUdp3rZaCA$a359dc24553d7fe78a9d10cd8e4059a3d487db04b3861b14fa35f4aeb294bec062fa11a73db3af5cbeb787ee6df8b767dd411bf543689201eb87625c92432fe8', 'admin', 0, '2026-07-08 12:28:54', 1, 4, 1, 0),
+(53, 'S26-0001', 'Cj', 'Han Nomo', 'Matienzo', 'arnzo@gmail.com', 'scrypt:32768:8:1$dFITogN0T6hF8SP3$e306c733c20cbb45a0c5543945c3d6296d0d691feee5e8ad3fb9c4e834ba1238880607dae031965aae53c58b8d3326a2eb99a8c2929639885757c04d647a23c1', 'voter', 0, '2026-07-09 14:03:58', 1, NULL, 1, 0),
+(54, 'S26-0002', 'sda', 'adas', 'adas', 'adaa@gmail.com', 'scrypt:32768:8:1$1dIUasmRm8tLmqXk$4702f83006c70d1ead1a2da794c29ff5587135f3840e9724908a60a891d7e3a666711bd31ae08a4f5657d2b1aecaa8cde80269e31e94d580a394b1d8a8768822', 'voter', 0, '2026-07-09 14:07:41', 1, NULL, 1, 0),
+(55, 'A26-0003', 'Cj', 'No', 'Ma', 'ahahazo@gmail.com', 'scrypt:32768:8:1$TwOPc1EbmLtEtFyr$23a65834cc02c0e65746b24dc8091dbe97e6a0b9309d9b7f346da22be34ad3a1254f3a7960d06a2e000d4c945f097be0615c842bf48254af31bb3c2b8753b437', 'admin', 0, '2026-07-10 04:11:07', 1, NULL, 1, 0),
+(56, 'A26-0004', 'Cj', 'Nio', 'Matien', 'cjhanmao@gmail.com', 'scrypt:32768:8:1$43InwXqQdiq1VlFA$c4d8fa49ad302e7354c96e8f4949db0469ecddc84ff1172860b26801183daf4a8625604ff66f4a49098298236db02279c919f5cef77261fea1d8a8f602f49194', 'admin', 0, '2026-07-10 08:02:12', 1, NULL, 1, 0),
+(57, 'A26-0005', 'Sd', 'Dada', 'Dasdd', 'asdadaf@gmail.com', 'scrypt:32768:8:1$0LHR5qhRHQgCsRVN$6aa0fa32468127600fb7ca9214b2b15c35c52654b37a8a82b95700d98ae47211277bf7397d399ddb2da82b4462e240489a4cd820707c4428721864e49661a319', 'admin', 0, '2026-07-10 13:50:30', 1, 5, 1, 0),
+(58, 'A26-0006', 'Asdad', 'Adada', 'Adadada', 'ahdiabdibavd@gmail.com', 'scrypt:32768:8:1$nl7Ng3VedtiYNSBX$205f1b97fea21943edea2f4a9bf4ae741051503632185a5cc86e626c95bf3494fe15f20ef6a65ae0d89c4de525a429337a50954287b840dc82f63a6c6b720a13', 'admin', 0, '2026-07-10 13:51:23', 1, 3, 1, 0),
+(59, 'S26-0003', 'Joan', 'Sidamon', 'Gutiza', 'jgutiza30@gmail.com', 'scrypt:32768:8:1$c7uMHbdeylLtU4Og$38217c4f39bcc2f413c6968c354831350c560c14ed1f06ecbd38f41ab6353f9c3788b4fc27b2ebe38ff339ed0efce2ba512410f54046dc886e9e075e0cfae488', 'voter', 0, '2026-07-10 18:51:22', 1, NULL, 1, 0),
+(60, 'S26-0004', 'Onin', '', 'Napiza', 'oninnapiza4@gmail.com', 'scrypt:32768:8:1$gnYSCcdMvUI2eKfF$6c983d9c32b8ea503d91cca1b56fb9db5c2e120fbee8caac7012bdc9fde2df25763bf35f21feaa6f25b951d454c829847978f5d11a4cda9eeb122adfdf550a0f', 'voter', 0, '2026-07-10 20:13:46', 1, NULL, 1, 0),
+(61, 'S26-0005', 'Xzon', '', 'Guinto', 'gutizaaudie1@gmail.com', 'scrypt:32768:8:1$ahrMDxBn8JYxwd6O$33e2b3a7547d7601792dc9e5317263223f47ff1e19d9407ae7aa596d3d5ed6381fe51141699a2b0f77466ee9c4c968503e1f51bc1c2c255b0848e6557e86c437', 'voter', 0, '2026-07-10 20:31:33', 1, NULL, 1, 0),
+(62, 'S26-0006', 'Xzone', 'Nazarene', 'Ginto', 'xzoneginto@gmail.com', 'scrypt:32768:8:1$AU0FoDxgRnALZlsu$60ee7a7bfa73cfa4987548b0f46498d6f38b581f1724e58471b4b1a276f1effea4bcaa64b7b9c3020830846efb932c2333cafaab2b3981504fda451b50ceedd9', 'voter', 0, '2026-07-11 04:18:41', 1, NULL, 1, 0);
 
 -- --------------------------------------------------------
 
@@ -1004,12 +603,12 @@ INSERT INTO `users` (`id`, `student_id`, `firstname`, `middlename`, `surname`, `
 --
 
 CREATE TABLE `votes` (
-  `id` int NOT NULL,
-  `voter_id` int NOT NULL,
-  `election_id` int NOT NULL,
-  `position_id` int NOT NULL,
-  `candidate_id` int NOT NULL,
-  `cast_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `id` int(11) NOT NULL,
+  `voter_id` int(11) NOT NULL,
+  `election_id` int(11) NOT NULL,
+  `position_id` int(11) NOT NULL,
+  `candidate_id` int(11) NOT NULL,
+  `cast_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -1017,26 +616,11 @@ CREATE TABLE `votes` (
 --
 
 --
--- Indexes for table `admins`
+-- Indexes for table `announcements`
 --
-ALTER TABLE `admins`
-  ADD PRIMARY KEY (`admin_id`),
-  ADD UNIQUE KEY `username` (`username`),
-  ADD UNIQUE KEY `email` (`email`);
-
---
--- Indexes for table `attendance`
---
-ALTER TABLE `attendance`
-  ADD PRIMARY KEY (`attendance_id`),
-  ADD UNIQUE KEY `uq_attendance` (`session_id`,`uSID`),
-  ADD KEY `uSID` (`uSID`);
-
---
--- Indexes for table `attendance_audit_log`
---
-ALTER TABLE `attendance_audit_log`
-  ADD PRIMARY KEY (`log_id`);
+ALTER TABLE `announcements`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `college_id` (`college_id`);
 
 --
 -- Indexes for table `audit_logs`
@@ -1060,15 +644,6 @@ ALTER TABLE `colleges`
   ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `drop_requests`
---
-ALTER TABLE `drop_requests`
-  ADD PRIMARY KEY (`request_id`),
-  ADD KEY `uTID` (`uTID`),
-  ADD KEY `uSID` (`uSID`),
-  ADD KEY `subject_id` (`subject_id`);
-
---
 -- Indexes for table `elections`
 --
 ALTER TABLE `elections`
@@ -1077,47 +652,11 @@ ALTER TABLE `elections`
   ADD KEY `elections_college_fk` (`college_id`);
 
 --
--- Indexes for table `enrollments`
---
-ALTER TABLE `enrollments`
-  ADD PRIMARY KEY (`enrollment_id`),
-  ADD UNIQUE KEY `uq_enrollment` (`uSID`,`assignment_id`),
-  ADD KEY `assignment_id` (`assignment_id`);
-
---
--- Indexes for table `excuse_letters`
---
-ALTER TABLE `excuse_letters`
-  ADD PRIMARY KEY (`letter_id`),
-  ADD KEY `uSID` (`uSID`),
-  ADD KEY `uTID` (`uTID`),
-  ADD KEY `subject_id` (`subject_id`);
-
---
--- Indexes for table `login_logs`
---
-ALTER TABLE `login_logs`
-  ADD PRIMARY KEY (`log_id`);
-
---
--- Indexes for table `notifications`
---
-ALTER TABLE `notifications`
-  ADD PRIMARY KEY (`notification_id`),
-  ADD KEY `uSID` (`uSID`);
-
---
 -- Indexes for table `otp_codes`
 --
 ALTER TABLE `otp_codes`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`);
-
---
--- Indexes for table `otp_lockouts`
---
-ALTER TABLE `otp_lockouts`
-  ADD PRIMARY KEY (`email`);
 
 --
 -- Indexes for table `positions`
@@ -1128,70 +667,11 @@ ALTER TABLE `positions`
   ADD KEY `positions_college_fk` (`college_id`);
 
 --
--- Indexes for table `schedule`
---
-ALTER TABLE `schedule`
-  ADD PRIMARY KEY (`schedule_id`),
-  ADD KEY `subject_id` (`subject_id`),
-  ADD KEY `uTID` (`uTID`);
-
---
--- Indexes for table `sessions`
---
-ALTER TABLE `sessions`
-  ADD PRIMARY KEY (`session_id`),
-  ADD KEY `uTID` (`uTID`),
-  ADD KEY `subject_id` (`subject_id`);
-
---
--- Indexes for table `students`
---
-ALTER TABLE `students`
-  ADD PRIMARY KEY (`uSID`),
-  ADD UNIQUE KEY `email` (`email`);
-
---
--- Indexes for table `subjects`
---
-ALTER TABLE `subjects`
-  ADD PRIMARY KEY (`subject_id`),
-  ADD UNIQUE KEY `subject_code` (`subject_code`);
-
---
--- Indexes for table `submitted_reports`
---
-ALTER TABLE `submitted_reports`
-  ADD PRIMARY KEY (`report_id`),
-  ADD KEY `uTID` (`uTID`),
-  ADD KEY `subject_id` (`subject_id`);
-
---
--- Indexes for table `system_audit_log`
---
-ALTER TABLE `system_audit_log`
-  ADD PRIMARY KEY (`log_id`);
-
---
 -- Indexes for table `system_logs`
 --
 ALTER TABLE `system_logs`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`);
-
---
--- Indexes for table `teachers`
---
-ALTER TABLE `teachers`
-  ADD PRIMARY KEY (`uTID`),
-  ADD UNIQUE KEY `email` (`email`);
-
---
--- Indexes for table `teacher_assignments`
---
-ALTER TABLE `teacher_assignments`
-  ADD PRIMARY KEY (`assignment_id`),
-  ADD UNIQUE KEY `uq_teacher_assign` (`uTID`,`subject_id`,`section`),
-  ADD KEY `subject_id` (`subject_id`);
 
 --
 -- Indexes for table `trusted_devices`
@@ -1224,147 +704,74 @@ ALTER TABLE `votes`
 --
 
 --
--- AUTO_INCREMENT for table `admins`
+-- AUTO_INCREMENT for table `announcements`
 --
-ALTER TABLE `admins`
-  MODIFY `admin_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
-
---
--- AUTO_INCREMENT for table `attendance`
---
-ALTER TABLE `attendance`
-  MODIFY `attendance_id` int NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `attendance_audit_log`
---
-ALTER TABLE `attendance_audit_log`
-  MODIFY `log_id` int NOT NULL AUTO_INCREMENT;
+ALTER TABLE `announcements`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `audit_logs`
 --
 ALTER TABLE `audit_logs`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
 
 --
 -- AUTO_INCREMENT for table `candidates`
 --
 ALTER TABLE `candidates`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=46;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=47;
 
 --
 -- AUTO_INCREMENT for table `colleges`
 --
 ALTER TABLE `colleges`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
-
---
--- AUTO_INCREMENT for table `drop_requests`
---
-ALTER TABLE `drop_requests`
-  MODIFY `request_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `elections`
 --
 ALTER TABLE `elections`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
-
---
--- AUTO_INCREMENT for table `enrollments`
---
-ALTER TABLE `enrollments`
-  MODIFY `enrollment_id` int NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `excuse_letters`
---
-ALTER TABLE `excuse_letters`
-  MODIFY `letter_id` int NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `login_logs`
---
-ALTER TABLE `login_logs`
-  MODIFY `log_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
---
--- AUTO_INCREMENT for table `notifications`
---
-ALTER TABLE `notifications`
-  MODIFY `notification_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT for table `otp_codes`
 --
 ALTER TABLE `otp_codes`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `positions`
 --
 ALTER TABLE `positions`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
-
---
--- AUTO_INCREMENT for table `schedule`
---
-ALTER TABLE `schedule`
-  MODIFY `schedule_id` int NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `subjects`
---
-ALTER TABLE `subjects`
-  MODIFY `subject_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
-
---
--- AUTO_INCREMENT for table `submitted_reports`
---
-ALTER TABLE `submitted_reports`
-  MODIFY `report_id` int NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `system_audit_log`
---
-ALTER TABLE `system_audit_log`
-  MODIFY `log_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT for table `system_logs`
 --
 ALTER TABLE `system_logs`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=231;
-
---
--- AUTO_INCREMENT for table `teacher_assignments`
---
-ALTER TABLE `teacher_assignments`
-  MODIFY `assignment_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=245;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=57;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63;
 
 --
 -- AUTO_INCREMENT for table `votes`
 --
 ALTER TABLE `votes`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- Constraints for dumped tables
 --
 
 --
--- Constraints for table `attendance`
+-- Constraints for table `announcements`
 --
-ALTER TABLE `attendance`
-  ADD CONSTRAINT `attendance_ibfk_1` FOREIGN KEY (`session_id`) REFERENCES `sessions` (`session_id`),
-  ADD CONSTRAINT `attendance_ibfk_2` FOREIGN KEY (`uSID`) REFERENCES `students` (`uSID`);
+ALTER TABLE `announcements`
+  ADD CONSTRAINT `fk_ann_college` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `audit_logs`
@@ -1380,40 +787,11 @@ ALTER TABLE `candidates`
   ADD CONSTRAINT `candidates_ibfk_1` FOREIGN KEY (`position_id`) REFERENCES `positions` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `drop_requests`
---
-ALTER TABLE `drop_requests`
-  ADD CONSTRAINT `drop_requests_ibfk_1` FOREIGN KEY (`uTID`) REFERENCES `teachers` (`uTID`),
-  ADD CONSTRAINT `drop_requests_ibfk_2` FOREIGN KEY (`uSID`) REFERENCES `students` (`uSID`),
-  ADD CONSTRAINT `drop_requests_ibfk_3` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`subject_id`);
-
---
 -- Constraints for table `elections`
 --
 ALTER TABLE `elections`
   ADD CONSTRAINT `elections_college_fk` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `elections_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL;
-
---
--- Constraints for table `enrollments`
---
-ALTER TABLE `enrollments`
-  ADD CONSTRAINT `enrollments_ibfk_1` FOREIGN KEY (`uSID`) REFERENCES `students` (`uSID`) ON DELETE CASCADE,
-  ADD CONSTRAINT `enrollments_ibfk_2` FOREIGN KEY (`assignment_id`) REFERENCES `teacher_assignments` (`assignment_id`) ON DELETE CASCADE;
-
---
--- Constraints for table `excuse_letters`
---
-ALTER TABLE `excuse_letters`
-  ADD CONSTRAINT `excuse_letters_ibfk_1` FOREIGN KEY (`uSID`) REFERENCES `students` (`uSID`),
-  ADD CONSTRAINT `excuse_letters_ibfk_2` FOREIGN KEY (`uTID`) REFERENCES `teachers` (`uTID`),
-  ADD CONSTRAINT `excuse_letters_ibfk_3` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`subject_id`);
-
---
--- Constraints for table `notifications`
---
-ALTER TABLE `notifications`
-  ADD CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`uSID`) REFERENCES `students` (`uSID`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `otp_codes`
@@ -1429,38 +807,10 @@ ALTER TABLE `positions`
   ADD CONSTRAINT `positions_ibfk_1` FOREIGN KEY (`election_id`) REFERENCES `elections` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `schedule`
---
-ALTER TABLE `schedule`
-  ADD CONSTRAINT `schedule_ibfk_1` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`subject_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `schedule_ibfk_2` FOREIGN KEY (`uTID`) REFERENCES `teachers` (`uTID`) ON DELETE CASCADE;
-
---
--- Constraints for table `sessions`
---
-ALTER TABLE `sessions`
-  ADD CONSTRAINT `sessions_ibfk_1` FOREIGN KEY (`uTID`) REFERENCES `teachers` (`uTID`),
-  ADD CONSTRAINT `sessions_ibfk_2` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`subject_id`);
-
---
--- Constraints for table `submitted_reports`
---
-ALTER TABLE `submitted_reports`
-  ADD CONSTRAINT `submitted_reports_ibfk_1` FOREIGN KEY (`uTID`) REFERENCES `teachers` (`uTID`),
-  ADD CONSTRAINT `submitted_reports_ibfk_2` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`subject_id`);
-
---
 -- Constraints for table `system_logs`
 --
 ALTER TABLE `system_logs`
   ADD CONSTRAINT `system_logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL;
-
---
--- Constraints for table `teacher_assignments`
---
-ALTER TABLE `teacher_assignments`
-  ADD CONSTRAINT `teacher_assignments_ibfk_1` FOREIGN KEY (`uTID`) REFERENCES `teachers` (`uTID`) ON DELETE CASCADE,
-  ADD CONSTRAINT `teacher_assignments_ibfk_2` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`subject_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `users`

@@ -1,11 +1,11 @@
 -- phpMyAdmin SQL Dump
--- version 5.2.3
+-- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- Host: localhost:3306
--- Generation Time: Jul 09, 2026 at 02:08 PM
--- Server version: 8.0.43
--- PHP Version: 8.3.30
+-- Host: 127.0.0.1
+-- Generation Time: Jul 11, 2026 at 03:11 PM
+-- Server version: 10.4.32-MariaDB
+-- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -28,12 +28,12 @@ SET time_zone = "+00:00";
 --
 
 CREATE TABLE `admins` (
-  `admin_id` int NOT NULL,
-  `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `deletion_pin_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `failed_attempts` int DEFAULT '0',
+  `admin_id` int(11) NOT NULL,
+  `username` varchar(50) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `deletion_pin_hash` varchar(255) DEFAULT NULL,
+  `failed_attempts` int(11) DEFAULT 0,
   `lockout_time` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -42,7 +42,11 @@ CREATE TABLE `admins` (
 --
 
 INSERT INTO `admins` (`admin_id`, `username`, `password_hash`, `email`, `deletion_pin_hash`, `failed_attempts`, `lockout_time`) VALUES
-(3, 'A26-0001', 'scrypt:32768:8:1$fbAbd1aYD75fW9TF$602377bb116e872b167a1938ec27d2b97668d1fb6ea51fd13dd8f064c2e923cb6d51c249b4688af9e881d4984c33b0090203592ca5998bf9d5ac109c2abf66ac', 'adminattendeez0218@gmail.com', '021806', 0, NULL);
+(3, 'admin1', 'scrypt:32768:8:1$fbAbd1aYD75fW9TF$602377bb116e872b167a1938ec27d2b97668d1fb6ea51fd13dd8f064c2e923cb6d51c249b4688af9e881d4984c33b0090203592ca5998bf9d5ac109c2abf66ac', 'adminattendeez0218@gmail.com', '021806', 0, NULL),
+(4, 'A26-0003', 'scrypt:32768:8:1$59h7uJ3ECXmixJd3$c4a74e2d1e0785a91dca8eef3fd9b5259cb4431500d464e9e73a26c79352e7e5aca70de1875d4586db89308d9f13aa3b1d1cfec94f2befb1a14ae4d2bdf683a1', 'ahahazo@gmail.com', NULL, 0, NULL),
+(5, 'A26-0004', 'scrypt:32768:8:1$UgzX0eY0PF8Bbb4H$0aaabb548cf21bd6c47314804a03363414a0e109bfd7c05dd835fc8bfad1193d07525a02dbe5a9532c5df38e3b936c66eb26f4e31eb599f368aee07f7862c128', 'cjhanmao@gmail.com', NULL, 0, NULL),
+(6, 'A26-0005', 'scrypt:32768:8:1$E5aOluEapXXRzTAQ$c5588858827f1a98999ddb0c489c30c35cddb21da1718dd73e19548142e16d3e025b120f9d89e6db69c0a84fae5895e8be0dce77ef7a614eece07b00dd050efb', 'asdadaf@gmail.com', NULL, 0, NULL),
+(7, 'A26-0006', 'scrypt:32768:8:1$FyXvkXz6SYpUE893$6b3827d04da29a195c44e36a00f0f3fa0f627f7a42a41f63324c0d5c49fca71e2600a52ac25d15d62ed4f6cb5d1824751ff8773d8ff269bf1c25022378c22c9b', 'ahdiabdibavd@gmail.com', NULL, 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -51,18 +55,18 @@ INSERT INTO `admins` (`admin_id`, `username`, `password_hash`, `email`, `deletio
 --
 
 CREATE TABLE `attendance` (
-  `attendance_id` int NOT NULL,
-  `session_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `user_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `scan_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Present',
-  `remarks` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `is_valid` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Valid',
+  `attendance_id` int(11) NOT NULL,
+  `session_id` varchar(50) NOT NULL,
+  `user_id` varchar(20) NOT NULL,
+  `scan_time` datetime NOT NULL DEFAULT current_timestamp(),
+  `status` varchar(20) DEFAULT 'Present',
+  `remarks` varchar(255) DEFAULT NULL,
+  `is_valid` varchar(10) DEFAULT 'Valid',
   `student_lat` decimal(10,8) DEFAULT NULL,
   `student_lon` decimal(11,8) DEFAULT NULL,
   `distance_meters` decimal(10,2) DEFAULT NULL,
-  `behavior_flags` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `flag_resolution` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'pending, accepted, declined - only for Flagged status'
+  `behavior_flags` text DEFAULT NULL,
+  `flag_resolution` varchar(20) DEFAULT NULL COMMENT 'pending, accepted, declined - only for Flagged status'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -70,9 +74,26 @@ CREATE TABLE `attendance` (
 --
 
 INSERT INTO `attendance` (`attendance_id`, `session_id`, `user_id`, `scan_time`, `status`, `remarks`, `is_valid`, `student_lat`, `student_lon`, `distance_meters`, `behavior_flags`, `flag_resolution`) VALUES
-(1, 'session_c1d0518f', 'S26-0001', '2026-07-05 11:22:30', 'Flagged', 'Distance: 396m', 'Invalid', 14.23342390, 121.36284880, 395.85, '[\"Far Location: 396m\"]', NULL),
-(2, 'session_c1490a63', 'S26-0001', '2026-07-05 12:17:49', 'Present', 'Flagged attendance accepted by teacher', 'Invalid', 14.23342200, 121.36284430, 391.29, '[\"Far Location: 391m\"]', 'accepted'),
-(3, 'session_3cb800d8', 'S26-0001', '2026-07-06 14:20:29', 'Present', 'Distance: 51m', 'Valid', 14.25498330, 121.40762400, 50.67, '[]', NULL);
+(4, 'MANUAL-3d382e3b', 'S26-0006', '2026-07-11 15:02:00', 'Present', 'Manual attendance by teacher', 'Valid', NULL, NULL, NULL, NULL, NULL);
+
+--
+-- Triggers `attendance`
+--
+DELIMITER $$
+CREATE TRIGGER `after_attendance_insert` AFTER INSERT ON `attendance` FOR EACH ROW BEGIN
+    DECLARE subj_code VARCHAR(50);
+    
+    
+    SELECT s.subject_code INTO subj_code
+    FROM sessions ses
+    JOIN Subjects s ON ses.subject_id = s.subject_id
+    WHERE ses.session_id = NEW.session_id LIMIT 1;
+    
+    INSERT INTO Notifications (user_id, message, type)
+    VALUES (NEW.user_id, CONCAT('Your attendance for ', IFNULL(subj_code, 'a class'), ' has been recorded as ', NEW.status, '.'), 'Info');
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -81,14 +102,14 @@ INSERT INTO `attendance` (`attendance_id`, `session_id`, `user_id`, `scan_time`,
 --
 
 CREATE TABLE `attendance_audit_log` (
-  `log_id` int NOT NULL,
-  `attendance_id` int DEFAULT NULL,
-  `action` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `old_status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `new_status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `changed_by_user_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `changed_by_role` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `timestamp` datetime DEFAULT CURRENT_TIMESTAMP
+  `log_id` int(11) NOT NULL,
+  `attendance_id` int(11) DEFAULT NULL,
+  `action` varchar(20) NOT NULL,
+  `old_status` varchar(50) DEFAULT NULL,
+  `new_status` varchar(50) DEFAULT NULL,
+  `changed_by_user_id` varchar(50) NOT NULL,
+  `changed_by_role` varchar(20) NOT NULL,
+  `timestamp` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -98,13 +119,13 @@ CREATE TABLE `attendance_audit_log` (
 --
 
 CREATE TABLE `drop_requests` (
-  `request_id` int NOT NULL,
-  `teacher_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `user_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject_id` int NOT NULL,
-  `reason` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Pending',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+  `request_id` int(11) NOT NULL,
+  `teacher_id` varchar(20) NOT NULL,
+  `user_id` varchar(20) NOT NULL,
+  `subject_id` int(11) NOT NULL,
+  `reason` text DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'Pending',
+  `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -114,9 +135,9 @@ CREATE TABLE `drop_requests` (
 --
 
 CREATE TABLE `enrollments` (
-  `enrollment_id` int NOT NULL,
-  `user_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `assignment_id` int NOT NULL
+  `enrollment_id` int(11) NOT NULL,
+  `user_id` varchar(20) NOT NULL,
+  `assignment_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -124,7 +145,8 @@ CREATE TABLE `enrollments` (
 --
 
 INSERT INTO `enrollments` (`enrollment_id`, `user_id`, `assignment_id`) VALUES
-(4, 'S26-0001', 5);
+(5, 'S26-0006', 6),
+(6, 'S26-0006', 7);
 
 -- --------------------------------------------------------
 
@@ -133,15 +155,39 @@ INSERT INTO `enrollments` (`enrollment_id`, `user_id`, `assignment_id`) VALUES
 --
 
 CREATE TABLE `excuse_letters` (
-  `letter_id` int NOT NULL,
-  `user_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `teacher_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject_id` int NOT NULL,
-  `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `file_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Pending',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+  `letter_id` int(11) NOT NULL,
+  `user_id` varchar(20) NOT NULL,
+  `teacher_id` varchar(20) NOT NULL,
+  `subject_id` int(11) NOT NULL,
+  `message` text NOT NULL,
+  `file_path` varchar(255) DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'Pending',
+  `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `excuse_letters`
+--
+
+INSERT INTO `excuse_letters` (`letter_id`, `user_id`, `teacher_id`, `subject_id`, `message`, `file_path`, `status`, `created_at`) VALUES
+(3, 'S26-0006', 'T26-0003', 7, 'asdasd', 'S26-0006_20260711182627_d13d8af8-7fe9-4eba-92d3-0cf967212ddb.jpg', 'Approved', '2026-07-11 18:26:27'),
+(4, 'S26-0006', 'T26-0003', 7, 'hotdog', 'S26-0006_20260711183257_d13d8af8-7fe9-4eba-92d3-0cf967212ddb.jpg', 'Approved', '2026-07-11 18:32:57');
+
+--
+-- Triggers `excuse_letters`
+--
+DELIMITER $$
+CREATE TRIGGER `after_excuse_update` AFTER UPDATE ON `excuse_letters` FOR EACH ROW BEGIN
+    DECLARE subj_code VARCHAR(50);
+    IF NEW.status != OLD.status AND NEW.status IN ('Approved', 'Rejected') THEN
+        SELECT subject_code INTO subj_code FROM Subjects WHERE subject_id = NEW.subject_id LIMIT 1;
+        
+        INSERT INTO Notifications (user_id, message, type)
+        VALUES (NEW.user_id, CONCAT('Your excuse letter for ', IFNULL(subj_code, 'a class'), ' has been ', LOWER(NEW.status), '.'), 'Info');
+    END IF;
+END
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -150,10 +196,10 @@ CREATE TABLE `excuse_letters` (
 --
 
 CREATE TABLE `login_logs` (
-  `log_id` int NOT NULL,
-  `user_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `user_role` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `login_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `log_id` int(11) NOT NULL,
+  `user_id` varchar(50) DEFAULT NULL,
+  `user_role` varchar(20) DEFAULT NULL,
+  `login_time` datetime DEFAULT current_timestamp(),
   `logout_time` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -208,13 +254,20 @@ INSERT INTO `login_logs` (`log_id`, `user_id`, `user_role`, `login_time`, `logou
 --
 
 CREATE TABLE `notifications` (
-  `notification_id` int NOT NULL,
-  `user_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `message` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Info',
-  `is_read` tinyint(1) DEFAULT '0',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+  `notification_id` int(11) NOT NULL,
+  `user_id` varchar(20) NOT NULL,
+  `message` varchar(255) NOT NULL,
+  `type` varchar(20) DEFAULT 'Info',
+  `is_read` tinyint(1) DEFAULT 0,
+  `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `notifications`
+--
+
+INSERT INTO `notifications` (`notification_id`, `user_id`, `message`, `type`, `is_read`, `created_at`) VALUES
+(1, 'S26-0006', 'Your excuse letter for CC1203 has been approved.', 'Info', 0, '2026-07-11 19:07:00');
 
 -- --------------------------------------------------------
 
@@ -223,7 +276,7 @@ CREATE TABLE `notifications` (
 --
 
 CREATE TABLE `otp_lockouts` (
-  `email` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(100) NOT NULL,
   `lockout_until` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -234,15 +287,15 @@ CREATE TABLE `otp_lockouts` (
 --
 
 CREATE TABLE `schedule` (
-  `schedule_id` int NOT NULL,
-  `subject_id` int NOT NULL,
-  `teacher_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `section` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `day_of_week` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `schedule_id` int(11) NOT NULL,
+  `subject_id` int(11) NOT NULL,
+  `teacher_id` varchar(20) NOT NULL,
+  `section` varchar(50) DEFAULT NULL,
+  `day_of_week` varchar(20) DEFAULT NULL,
   `start_time` time DEFAULT NULL,
   `end_time` time DEFAULT NULL,
-  `room` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `is_archived` tinyint(1) DEFAULT '0'
+  `room` varchar(50) DEFAULT NULL,
+  `is_archived` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -250,8 +303,8 @@ CREATE TABLE `schedule` (
 --
 
 INSERT INTO `schedule` (`schedule_id`, `subject_id`, `teacher_id`, `section`, `day_of_week`, `start_time`, `end_time`, `room`, `is_archived`) VALUES
-(1, 6, 'T26-0001', 'B', 'Monday', '10:00:00', '12:00:00', 'LABU2', 0),
-(3, 5, 'T26-0001', 'A', 'Wednesday', '07:00:00', '10:00:00', 'LABU3', 0);
+(4, 7, 'T26-0003', '2A', 'Thursday', '10:00:00', '17:00:00', 'LABU3', 0),
+(5, 13, 'T26-0001', '2A', 'Saturday', '07:49:00', '16:51:00', 'labu3', 0);
 
 -- --------------------------------------------------------
 
@@ -260,17 +313,17 @@ INSERT INTO `schedule` (`schedule_id`, `subject_id`, `teacher_id`, `section`, `d
 --
 
 CREATE TABLE `sessions` (
-  `session_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `teacher_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject_id` int NOT NULL,
-  `section` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `random_token` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `session_id` varchar(50) NOT NULL,
+  `teacher_id` varchar(20) NOT NULL,
+  `subject_id` int(11) NOT NULL,
+  `section` varchar(50) DEFAULT NULL,
+  `random_token` varchar(50) NOT NULL,
   `start_time` datetime NOT NULL,
   `expires_at` datetime NOT NULL,
   `latitude` decimal(10,8) DEFAULT NULL,
   `longitude` decimal(11,8) DEFAULT NULL,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Active',
-  `is_finalized` tinyint(1) DEFAULT '0'
+  `status` varchar(20) DEFAULT 'Active',
+  `is_finalized` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -278,9 +331,8 @@ CREATE TABLE `sessions` (
 --
 
 INSERT INTO `sessions` (`session_id`, `teacher_id`, `subject_id`, `section`, `random_token`, `start_time`, `expires_at`, `latitude`, `longitude`, `status`, `is_finalized`) VALUES
-('session_3cb800d8', 'T26-0001', 6, 'B', 'FdzuhMuDBz', '2026-07-06 14:20:12', '2026-07-06 14:30:12', 14.25533650, 121.40792100, 'Ended', 1),
-('session_c1490a63', 'T26-0001', 6, 'B', 'sAWX2KA3Mn', '2026-07-05 12:17:43', '2026-07-05 12:22:43', 14.23401400, 121.36642300, 'Ended', 1),
-('session_c1d0518f', 'T26-0001', 5, 'A', 'Jcd2oPa5Io', '2026-07-05 11:22:29', '2026-07-05 11:27:29', 14.23402400, 121.36646900, 'Ended', 1);
+('MANUAL-3d382e3b', 'T26-0003', 7, '2A', 'MANUAL', '2026-07-11 15:02:00', '2026-07-11 15:02:00', 0.00000000, 0.00000000, 'Ended', 1),
+('session_87c8ca69', 'T26-0001', 13, '2A', 'qUbTGqd3z8', '2026-07-11 15:56:30', '2026-07-11 16:06:30', 14.25601356, 121.40086615, 'Active', 0);
 
 -- --------------------------------------------------------
 
@@ -289,27 +341,33 @@ INSERT INTO `sessions` (`session_id`, `teacher_id`, `subject_id`, `section`, `ra
 --
 
 CREATE TABLE `students` (
-  `user_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `user_role` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'student',
-  `first_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `middle_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `last_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `course` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `level` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `section` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Active',
-  `failed_attempts` int DEFAULT '0',
-  `lockout_time` datetime DEFAULT NULL
+  `user_id` varchar(20) NOT NULL,
+  `user_role` varchar(20) NOT NULL DEFAULT 'student',
+  `first_name` varchar(50) NOT NULL,
+  `middle_name` varchar(50) NOT NULL,
+  `last_name` varchar(50) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `program` varchar(100) DEFAULT NULL,
+  `year` varchar(50) DEFAULT NULL,
+  `block` varchar(50) DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'Active',
+  `failed_attempts` int(11) DEFAULT 0,
+  `lockout_time` datetime DEFAULT NULL,
+  `college` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `students`
 --
 
-INSERT INTO `students` (`user_id`, `user_role`, `first_name`, `middle_name`, `last_name`, `email`, `password_hash`, `course`, `level`, `section`, `status`, `failed_attempts`, `lockout_time`) VALUES
-('S26-0001', 'student', 'Juan', 'Dela', 'Cruz', 'juan.delacruz@gmail.com', 'scrypt:32768:8:1$YvgtLmwCFxlUVJIH$a89bb42e588e047de2ce7774de3df9566a225fd3e47fd3cf18077254e2bddc243872c374554785983caac8b15875ff7903423566ba8e908439494693a9872851', 'BSIT', '1st Year', 'A', 'Active', 0, NULL);
+INSERT INTO `students` (`user_id`, `user_role`, `first_name`, `middle_name`, `last_name`, `email`, `password_hash`, `program`, `year`, `block`, `status`, `failed_attempts`, `lockout_time`, `college`) VALUES
+('S26-0001', 'student', 'Cj', 'Han Nomo', 'Matienzo', 'arnzo@gmail.com', 'scrypt:32768:8:1$YvgtLmwCFxlUVJIH$a89bb42e588e047de2ce7774de3df9566a225fd3e47fd3cf18077254e2bddc243872c374554785983caac8b15875ff7903423566ba8e908439494693a9872851', 'BSIT-SD', '', '2A', 'Active', 0, NULL, NULL),
+('S26-0002', 'student', 'sda', 'adas', 'adas', 'adaa@gmail.com', 'scrypt:32768:8:1$QzRdmtDX2oGVjaVT$5c3b30df006f5dc32509bc41787b3e85b19cee55634bb7272186a7e0f86b3965d158a29df153153d5a2f2e744090161bcf8a4e2ee5983fb812d186b01a61c000', 'BSIT-SD', '', '2A', 'Active', 0, NULL, NULL),
+('S26-0003', 'student', 'Joan', 'Sidamon', 'Gutiza', 'jgutiza30@gmail.com', 'scrypt:32768:8:1$HqD2HVg4FSepa6FG$7d8e3910ac56d15104b5c7304d6a811100f57de669bb7cd1633e8636984c4827d28383f21306d0d51ef84a182c648f36089dc7aacf71088e97112a1fd10e9ee5', 'BSCS', '', '1A', 'Active', 0, NULL, 'CCS'),
+('S26-0004', 'student', 'Onin', '', 'Napiza', 'oninnapiza4@gmail.com', 'scrypt:32768:8:1$jOUCyXTrWlEJrvOT$3250c9b81f3d8a0bac9d65dfb63fde71653bea214b00ba008ea8335a8d29153e80e88a40a6a3aae815a591859d3a6033699981c8537ecec1d13b2cae4a15ecd2', 'BSSSS', '', '1A', 'Active', 0, NULL, 'CCS'),
+('S26-0005', 'student', 'Xzon', '', 'Guinto', 'gutizaaudie1@gmail.com', 'scrypt:32768:8:1$6tQ9ziIYKBnEYmq6$e1dd2a738389126bcd8fc5ac13bb4a7995e246923f036818646903b67e8926db34f6a6c30bf4617aa12dc72c51aa76b345a9d41621de97aed3ce5318cba63fa5', 'BSCS', '', '1A', 'Active', 0, NULL, 'CCS'),
+('S26-0006', 'student', 'Xzone', 'Nazarene', 'Ginto', 'xzoneginto@gmail.com', 'scrypt:32768:8:1$z4bstHJHvS1rwq8Y$f7190e654ca6bffdda342904b1caafc38c9960cc698f6a50fd2884f92f012eb01dace5631c2ea5718d25767edd14ecb189c7a678c96816da63855a11dd8acc72', 'BSED', '', '2A', 'Active', 0, NULL, 'COED');
 
 -- --------------------------------------------------------
 
@@ -318,10 +376,10 @@ INSERT INTO `students` (`user_id`, `user_role`, `first_name`, `middle_name`, `la
 --
 
 CREATE TABLE `subjects` (
-  `subject_id` int NOT NULL,
-  `subject_code` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `is_archived` tinyint(1) DEFAULT '0'
+  `subject_id` int(11) NOT NULL,
+  `subject_code` varchar(20) NOT NULL,
+  `subject_name` varchar(100) NOT NULL,
+  `is_archived` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -331,7 +389,14 @@ CREATE TABLE `subjects` (
 INSERT INTO `subjects` (`subject_id`, `subject_code`, `subject_name`, `is_archived`) VALUES
 (4, 'IT101', 'Introduction to Computing', 0),
 (5, 'IT102', 'Programming 1', 0),
-(6, 'IT103', 'Database Management Systems', 0);
+(6, 'IT103', 'Database Management Systems', 0),
+(7, 'CC1203', 'Introduction to Education', 0),
+(8, 'CC-1100', 'Introduction to Computing', 0),
+(9, 'IT-2206', 'Database Management System', 0),
+(10, 'IT-2208', 'Quantitative Methods', 0),
+(11, 'IT-2211', 'Integrative Programming and Technologies 2', 0),
+(12, 'ME 1', 'Mechanical Engineering', 0),
+(13, 'COED1Q', 'COED SUBJECT TEST', 0);
 
 -- --------------------------------------------------------
 
@@ -340,15 +405,15 @@ INSERT INTO `subjects` (`subject_id`, `subject_code`, `subject_name`, `is_archiv
 --
 
 CREATE TABLE `submitted_reports` (
-  `report_id` int NOT NULL,
-  `teacher_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject_id` int NOT NULL,
-  `section` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `submission_date` datetime DEFAULT CURRENT_TIMESTAMP,
-  `summary_json` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `teacher_message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Submitted',
-  `is_archived` tinyint(1) DEFAULT '0'
+  `report_id` int(11) NOT NULL,
+  `teacher_id` varchar(20) NOT NULL,
+  `subject_id` int(11) NOT NULL,
+  `section` varchar(50) DEFAULT NULL,
+  `submission_date` datetime DEFAULT current_timestamp(),
+  `summary_json` text DEFAULT NULL,
+  `teacher_message` text DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'Submitted',
+  `is_archived` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -358,14 +423,14 @@ CREATE TABLE `submitted_reports` (
 --
 
 CREATE TABLE `system_audit_log` (
-  `log_id` int NOT NULL,
-  `table_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `entity_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `action` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `performed_by_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `performed_by_role` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `details` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `timestamp` datetime DEFAULT CURRENT_TIMESTAMP
+  `log_id` int(11) NOT NULL,
+  `table_name` varchar(50) NOT NULL,
+  `entity_id` varchar(50) NOT NULL,
+  `action` varchar(20) NOT NULL,
+  `performed_by_id` varchar(50) NOT NULL,
+  `performed_by_role` varchar(20) NOT NULL,
+  `details` text DEFAULT NULL,
+  `timestamp` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -393,7 +458,18 @@ INSERT INTO `system_audit_log` (`log_id`, `table_name`, `entity_id`, `action`, `
 (18, 'Sessions', 'session_3cb800d8', 'Create', 'T26-0001', 'teacher', 'QR Session started for Subject 6, Section B', '2026-07-06 14:20:12'),
 (19, 'Attendance', '3', 'Create', 'S26-0001', 'student', 'Attendance recorded via QR. Status: Present', '2026-07-06 14:20:29'),
 (20, 'Sessions', 'session_3cb800d8', 'Update', 'T26-0001', 'teacher', 'Session ended manually', '2026-07-06 14:20:51'),
-(21, 'Sessions', 'session_3cb800d8', 'Update', 'T26-0001', 'teacher', 'Attendance finalized/saved for session session_3cb800d8', '2026-07-06 14:21:01');
+(21, 'Sessions', 'session_3cb800d8', 'Update', 'T26-0001', 'teacher', 'Attendance finalized/saved for session session_3cb800d8', '2026-07-06 14:21:01'),
+(22, 'Students', 'S26-0004', 'Update', 'A26-0003', 'admin', 'Student archived: S26-0004', '2026-07-11 04:14:53'),
+(23, 'Students', 'S26-0004', 'Update', 'A26-0003', 'admin', 'Student unarchived: S26-0004', '2026-07-11 04:15:12'),
+(24, 'schedule', '4', 'Create', 'A26-0003', 'admin', 'Schedule created for 7 - 2A on Thursday (10:00-17:00)', '2026-07-11 14:25:45'),
+(25, 'Sessions', 'MANUAL-3d382e3b', 'Create', 'T26-0003', 'teacher', 'Manual session created for Subject 7, Section 2A', '2026-07-11 15:02:00'),
+(26, 'Sessions', 'MANUAL-3d382e3b', 'Update', 'T26-0003', 'teacher', 'Attendance finalized/saved for session MANUAL-3d382e3b', '2026-07-11 15:08:38'),
+(27, 'schedule', '5', 'Create', 'A26-0003', 'admin', 'Schedule created for 13 - 2A on Saturday (07:49-16:51)', '2026-07-11 15:50:13'),
+(28, 'Sessions', 'session_87c8ca69', 'Create', 'T26-0001', 'teacher', 'QR Session started for Subject 13, Section 2A', '2026-07-11 15:56:30'),
+(29, 'Excuse_Letters', '3', 'Create', 'S26-0006', 'student', 'Excuse letter submitted for Subject 7', '2026-07-11 18:26:27'),
+(30, 'Excuse_Letters', '4', 'Create', 'S26-0006', 'student', 'Excuse letter submitted for Subject 7', '2026-07-11 18:32:57'),
+(31, 'Excuse_Letters', '4', 'Update', 'T26-0003', 'teacher', 'Excuse letter status updated to Approved', '2026-07-11 18:54:13'),
+(32, 'Excuse_Letters', '3', 'Update', 'T26-0003', 'teacher', 'Excuse letter status updated to Approved', '2026-07-11 19:07:00');
 
 -- --------------------------------------------------------
 
@@ -402,16 +478,16 @@ INSERT INTO `system_audit_log` (`log_id`, `table_name`, `entity_id`, `action`, `
 --
 
 CREATE TABLE `teachers` (
-  `user_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `user_role` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'teacher',
-  `first_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `middle_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `last_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `department` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `email` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Active',
-  `failed_attempts` int DEFAULT '0',
+  `user_id` varchar(20) NOT NULL,
+  `user_role` varchar(20) NOT NULL DEFAULT 'teacher',
+  `first_name` varchar(50) NOT NULL,
+  `middle_name` varchar(50) NOT NULL,
+  `last_name` varchar(50) NOT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `email` varchar(100) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `status` varchar(20) DEFAULT 'Active',
+  `failed_attempts` int(11) DEFAULT 0,
   `lockout_time` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -420,7 +496,13 @@ CREATE TABLE `teachers` (
 --
 
 INSERT INTO `teachers` (`user_id`, `user_role`, `first_name`, `middle_name`, `last_name`, `department`, `email`, `password_hash`, `status`, `failed_attempts`, `lockout_time`) VALUES
-('T26-0001', 'teacher', 'Maria', 'Santos', 'Reyes', 'Information Technology', 'maria.reyes@gmail.com', 'scrypt:32768:8:1$YvgtLmwCFxlUVJIH$a89bb42e588e047de2ce7774de3df9566a225fd3e47fd3cf18077254e2bddc243872c374554785983caac8b15875ff7903423566ba8e908439494693a9872851', 'Active', 0, NULL);
+('T26-0001', 'teacher', 'Cj', 'Han Nomo', 'Matienzo', 'COED', 'cjhanenzo@gmail.com', '<paste the password_hash from db_portal for T26-0001>', 'Active', 0, NULL),
+('T26-0002', 'teacher', 'Cj', 'Nomo', 'Matienzo', 'Faculty', 'cjhanmanzo@gmail.com', 'scrypt:32768:8:1$ckQJ21SK16873CO9$9dea696809a8e588105e3b4bcd4ba8d8388321a7996a68e3d40b1f398795309aa39ebabaeb939ac0dd95c43d800697adcbe549c60a80c63f0346d1bd74d3f7ae', 'Active', 0, NULL),
+('T26-0003', 'teacher', 'Cj', 'No', 'Maenzo', 'Faculty', 'cjhano@gmail.com', 'scrypt:32768:8:1$FnLUfDqgaFnrZtEQ$e8a90d99b0448998ba3cd945f67e589acf28ef497dc5c7fda29701fb84153a842c7eae19dca7894c81e7af8a404f039b91f213c5fca0eb386a508de04223ccd3', 'Active', 0, NULL),
+('T26-0004', 'teacher', 'John', 'Andrei Sidamon', 'Napiza', 'CCS', 'johnandreisidamongutiza@gmail.com', 'scrypt:32768:8:1$UNpnbxnD4SUFGtcT$05a9f698bd70141261534bfdeddc41f7a1add7ae835faba1d5e591a6ce5629d59cad3adbd69e98afdd6c71c90de51cae771f5dd06d31b096971ab13e4fdf6a59', 'Active', 0, NULL),
+('T26-0005', 'teacher', 'John', 'Andrei', 'gutiza', '', 'johnandreisidamongutizaa@gmail.com', 'scrypt:32768:8:1$hLVDc3xJYS2MNSq8$da95e6c24c1359614a9fc02f7631d407264025fbac679fc7077703644d55899ac8f8655dbfc41f9bf1db7809f61215768fe18d37558b2d08833034cc932dbe69', 'Active', 0, NULL),
+('T26-0006', 'teacher', 'John', 'Andrei', 'gutizas', '', 'jgutiza301@gmail.com', 'scrypt:32768:8:1$iTVZIsIFzmop6DBD$7ecabab9a8a69b804a0ded1839b61976d05fc86761e8ea187d78ff659151ed46157f2c84149891ec2b67213a2b0804621d9e2909bd6095402b2310834863fcb8', 'Active', 0, NULL),
+('T26-0007', 'teacher', 'Onin', '', 'napizas', 'CCS', 'oninnapiza41@gmail.com', 'scrypt:32768:8:1$X0hYlIWjv4ffxkv1$bc337728406452ff89bbc0081fad4c40edf456b0ea61d849a1d47e0405d7cde4263922b3eab546ba97d1aebae8f92a27140a6e74ebefe04fd4913826148bc138', 'Active', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -429,19 +511,24 @@ INSERT INTO `teachers` (`user_id`, `user_role`, `first_name`, `middle_name`, `la
 --
 
 CREATE TABLE `teacher_assignments` (
-  `assignment_id` int NOT NULL,
-  `teacher_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject_id` int NOT NULL,
-  `section` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `is_archived` tinyint(1) DEFAULT '0'
+  `assignment_id` int(11) NOT NULL,
+  `teacher_id` varchar(20) NOT NULL,
+  `subject_id` int(11) NOT NULL,
+  `section` varchar(50) DEFAULT NULL,
+  `is_archived` tinyint(1) DEFAULT 0,
+  `class_code` varchar(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `teacher_assignments`
 --
 
-INSERT INTO `teacher_assignments` (`assignment_id`, `teacher_id`, `subject_id`, `section`, `is_archived`) VALUES
-(5, 'T26-0001', 6, 'B', 0);
+INSERT INTO `teacher_assignments` (`assignment_id`, `teacher_id`, `subject_id`, `section`, `is_archived`, `class_code`) VALUES
+(6, 'T26-0003', 7, '2A', 0, '#101'),
+(7, 'T26-0001', 13, '2A', 0, '#102'),
+(8, 'T26-0005', 11, '1A', 0, '#103'),
+(9, 'T26-0006', 9, '1A', 0, '#104'),
+(10, 'T26-0007', 11, '1A', 0, '#105');
 
 --
 -- Indexes for dumped tables
@@ -571,6 +658,7 @@ ALTER TABLE `teachers`
 ALTER TABLE `teacher_assignments`
   ADD PRIMARY KEY (`assignment_id`),
   ADD UNIQUE KEY `teacher_id` (`teacher_id`,`subject_id`,`section`),
+  ADD UNIQUE KEY `class_code` (`class_code`),
   ADD KEY `subject_id` (`subject_id`);
 
 --
@@ -581,79 +669,79 @@ ALTER TABLE `teacher_assignments`
 -- AUTO_INCREMENT for table `admins`
 --
 ALTER TABLE `admins`
-  MODIFY `admin_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `admin_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `attendance`
 --
 ALTER TABLE `attendance`
-  MODIFY `attendance_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `attendance_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `attendance_audit_log`
 --
 ALTER TABLE `attendance_audit_log`
-  MODIFY `log_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `drop_requests`
 --
 ALTER TABLE `drop_requests`
-  MODIFY `request_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `request_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `enrollments`
 --
 ALTER TABLE `enrollments`
-  MODIFY `enrollment_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `enrollment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `excuse_letters`
 --
 ALTER TABLE `excuse_letters`
-  MODIFY `letter_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `letter_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `login_logs`
 --
 ALTER TABLE `login_logs`
-  MODIFY `log_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
 
 --
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `notification_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `schedule`
 --
 ALTER TABLE `schedule`
-  MODIFY `schedule_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `schedule_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `subjects`
 --
 ALTER TABLE `subjects`
-  MODIFY `subject_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `subject_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `submitted_reports`
 --
 ALTER TABLE `submitted_reports`
-  MODIFY `report_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `report_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `system_audit_log`
 --
 ALTER TABLE `system_audit_log`
-  MODIFY `log_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
 
 --
 -- AUTO_INCREMENT for table `teacher_assignments`
 --
 ALTER TABLE `teacher_assignments`
-  MODIFY `assignment_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `assignment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- Constraints for dumped tables
