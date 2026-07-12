@@ -230,6 +230,7 @@ def exam_analysis():
         stats = {}
         rankings = []
         item_analysis = []
+        integrity_anomalies = []
 
         if exam_id:
             cursor.execute("SELECT * FROM exams WHERE exam_id = %s", (exam_id,))
@@ -286,19 +287,48 @@ def exam_analysis():
 
                     for item in items:
                         total = item['total']
+                        success_rate = round((item['correct_count'] / total) * 100, 1) if total > 0 else 0
+                        classification = "Balanced"
+                        if success_rate < 30.0:
+                            classification = "Ambiguous/Extremely Hard"
+                        elif success_rate > 85.0:
+                            classification = "Easy/High Mastery"
+
                         item_analysis.append({
                             'text': item['question_text'],
-                            'correct_p': round((item['correct_count'] / total) * 100, 1) if total > 0 else 0,
+                            'correct_p': success_rate,
                             'incorrect_p': round((item['incorrect_count'] / total) * 100, 1) if total > 0 else 0,
-                            'incorrect_count': item['incorrect_count']
+                            'incorrect_count': item['incorrect_count'],
+                            'classification': classification
                         })
+
+                    # Proctoring Integrity Risk Analyzer (Correlate scores with browser violations)
+                    cursor.execute("""
+                        SELECT
+                            ea.attempt_id,
+                            s.student_id,
+                            CONCAT(s.firstname, ' ', s.lastname) AS student_name,
+                            ea.score,
+                            ea.tab_switches AS proctoring_violations,
+                            CASE
+                                WHEN ea.tab_switches > 15 AND (ea.score / %s * 100) >= 85.0 THEN 'High Integrity Risk (High Score & High Violations)'
+                                WHEN ea.tab_switches > 15 AND (ea.score / %s * 100) < 50.0 THEN 'Frequent Off-task Behavior'
+                                ELSE 'Normal Parameters'
+                            END AS risk_profile
+                        FROM exam_attempts ea
+                        JOIN students s ON ea.student_id = s.student_id
+                        WHERE ea.exam_id = %s AND ea.status = 'finished'
+                        ORDER BY ea.tab_switches DESC
+                    """, (selected_exam['question_limit'], selected_exam['question_limit'], exam_id))
+                    integrity_anomalies = cursor.fetchall()
 
         return render_template('teacher_analysis.html',
                                all_exams=all_exams,
                                selected_exam=selected_exam,
                                stats=stats,
                                rankings=rankings,
-                               item_analysis=item_analysis) # This now contains the full list
+                               item_analysis=item_analysis,
+                               integrity_anomalies=integrity_anomalies)
     finally:
         cursor.close()
         connection.close()
@@ -1073,16 +1103,35 @@ def manage_enrollees(class_code):
         """, (class_code,))
         class_exams = cursor.fetchall()
 
-        # 3. Fetch Enrolled Students
+        # 3. Fetch Enrolled Students with Cumulative Class Rank & Grade Average
         cursor.execute("""
-            SELECT s.student_id, s.firstname, s.lastname, s.email,
-                   CONCAT(p.program_name, ' - ', b.block_name) AS academic_block
-            FROM enrollments e
-            JOIN students s ON e.student_id = s.student_id
+            SELECT
+                s.student_id, s.firstname, s.lastname, s.email,
+                CONCAT(p.program_name, ' - ', b.block_name) AS academic_block,
+                rank_data.cumulative_avg,
+                rank_data.class_rank,
+                rank_data.total_students
+            FROM (
+                SELECT
+                    t.student_id,
+                    t.cumulative_avg,
+                    RANK() OVER (ORDER BY t.cumulative_avg DESC) as class_rank,
+                    COUNT(*) OVER () as total_students
+                FROM (
+                    SELECT
+                        en.student_id,
+                        AVG(COALESCE((ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0)) * 100, 0)) as cumulative_avg
+                    FROM enrollments en
+                    LEFT JOIN exam_attempts ea ON en.student_id = ea.student_id AND ea.status = 'finished'
+                    LEFT JOIN exams ex ON ea.exam_id = ex.exam_id AND ex.archived = 0
+                    WHERE en.class_code = %s
+                    GROUP BY en.student_id
+                ) t
+            ) rank_data
+            JOIN students s ON rank_data.student_id = s.student_id
             LEFT JOIN blocks b ON s.block_id = b.block_id
             LEFT JOIN programs p ON b.program_id = p.program_id
-            WHERE e.class_code = %s
-            ORDER BY s.lastname ASC
+            ORDER BY rank_data.class_rank ASC, s.lastname ASC
         """, (class_code,))
         enrollees = cursor.fetchall()
 

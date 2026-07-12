@@ -45,7 +45,7 @@
     <div class="col-md-8">
         <h1 style="font-family: var(--tp-serif); color: var(--tp-teacher-ink);" class="mb-1">{{ course.course_name }}</h1>
         <p class="text-muted mb-0">
-            Class ID: <span class="font-weight-bold text-danger">{{ class_code }}</span> • 
+            Class ID: <span class="font-weight-bold text-danger">{{ class_code }}</span> •
             Section: <span class="font-weight-bold">{{ course.program_name }} {{ course.block_name }}</span>
         </p>
     </div>
@@ -59,7 +59,7 @@
 <div class="row">
     <!-- ── LEFT: DESCRIPTION & EXAMS ── -->
     <div class="col-lg-8">
-        
+
         <!-- Description Card -->
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white py-3 border-bottom">
@@ -136,18 +136,39 @@
         </div>
     </div>
 
-    <!-- ── RIGHT: STUDENT ROSTER ── -->
+    <!-- ── RIGHT: STUDENT ROSTER & STANDINGS ── -->
     <div class="col-lg-4">
         <div class="card shadow-sm border-0 sticky-top" style="top: 100px; z-index: 1000;">
             <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
-                <h6 class="m-0 font-weight-bold text-dark text-uppercase small" style="letter-spacing: 1px;">Class Roster</h6>
+                <h6 class="m-0 font-weight-bold text-dark text-uppercase small" style="letter-spacing: 1px;">Class Roster & Standings</h6>
                 <span class="badge badge-danger rounded-pill px-2">{{ enrollees|length }}</span>
             </div>
+
+            <!-- Live Search Bar -->
+            <div class="px-3 pt-3">
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text bg-light border-right-0" style="border-radius: 20px 0 0 20px;"><i class="fas fa-search text-muted small"></i></span>
+                    </div>
+                    <input type="text" id="searchInput" class="form-control form-control-sm border-left-0 bg-light" placeholder="Search student or ID..." style="border-radius: 0 20px 20px 0;">
+                </div>
+            </div>
+
             <div class="card-body p-0" style="max-height: 70vh; overflow-y: auto;">
                 {% for s in enrollees %}
                 <div class="roster-item p-3 border-bottom d-flex align-items-center mx-2">
-                    <img src="https://ui-avatars.com/api/?name={{ s.firstname }}+{{ s.lastname }}&background=f1f5f9&color=d93025&bold=true" 
+                    <!-- Rank Indicator -->
+                    <div class="mr-2 text-center" style="min-width: 25px;">
+                        {% if s.class_rank == 1 %}
+                            <span class="badge badge-warning" style="font-size: 11px; width: 22px; height: 22px; border-radius: 50%; padding-top: 5px;" title="Rank 1"></span>
+                        {% else %}
+                            <span class="badge badge-light border text-muted font-weight-bold" style="font-size: 11px; width: 22px; height: 22px; border-radius: 50%; padding-top: 5px;">#{{ s.class_rank }}</span>
+                        {% endif %}
+                    </div>
+
+                    <img src="https://ui-avatars.com/api/?name={{ s.firstname }}+{{ s.lastname }}&background=f1f5f9&color=d93025&bold=true"
                          class="rounded-circle mr-3" style="width: 36px; height: 36px;">
+
                     <div class="flex-grow-1 overflow-hidden">
                         <div class="font-weight-bold text-dark text-truncate mb-0" style="font-size: 13.5px;">
                             {{ s.lastname }}, {{ s.firstname }}
@@ -157,6 +178,15 @@
                             <span class="text-muted" style="font-size: 10px;">{{ s.academic_block or 'N/A' }}</span>
                         </div>
                     </div>
+
+                    <!-- Cumulative Average -->
+                    <div class="text-right ml-2" style="min-width: 65px;">
+                        <div class="font-weight-bold text-dark" style="font-size: 12.5px;">
+                            {{ s.cumulative_avg | round(1) if s.cumulative_avg is not none else '0.0' }}%
+                        </div>
+                        <div class="small text-muted" style="font-size: 9px; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">GPA</div>
+                    </div>
+
                     <a href="mailto:{{ s.email }}" class="btn btn-circle-sm btn-light border ml-2">
                         <i class="far fa-envelope text-muted" style="font-size: 10px;"></i>
                     </a>
@@ -168,6 +198,7 @@
                 </div>
                 {% endfor %}
             </div>
+
             <div class="card-footer bg-light border-0 text-center py-3">
                 <button onclick="window.print()" class="btn btn-link btn-sm text-danger font-weight-bold text-decoration-none p-0">
                     <i class="fas fa-print mr-1"></i> Print Attendance List
@@ -181,19 +212,19 @@
 {% block extra_js %}
 <script>
     $(document).ready(function () {
-        // High-density filter logic
+        // High-density filter logic on roster-item container elements
         $('#searchInput').on('keyup', function () {
             var val = $(this).val().toLowerCase().trim();
-            $('#enrolleeTable tbody tr').each(function () {
+            $('.roster-item').each(function () {
                 var text = $(this).text().toLowerCase();
                 $(this).toggle(text.indexOf(val) > -1);
             });
 
             // Handle empty results
-            var visibleRows = $('#enrolleeTable tbody tr:visible').length;
-            if (visibleRows === 0 && $('#enrolleeTable tbody tr').length > 0) {
+            var visibleItems = $('.roster-item:visible').length;
+            if (visibleItems === 0 && $('.roster-item').length > 0) {
                 if (!$('#noMatch').length) {
-                    $('#enrolleeTable tbody').append('<tr id="noMatch"><td colspan="5" class="text-center py-5 text-muted"><i class="fas fa-search mr-2"></i> No students matching your search criteria.</td></tr>');
+                    $('.card-body').append('<div id="noMatch" class="text-center py-5 text-muted small"><i class="fas fa-search mr-2"></i> No students matching your search criteria.</div>');
                 }
             } else {
                 $('#noMatch').remove();

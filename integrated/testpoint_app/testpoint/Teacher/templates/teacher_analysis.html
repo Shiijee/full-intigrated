@@ -15,21 +15,26 @@
 
     .killer-q-item { margin-bottom: 20px; }
     .killer-label { font-size: 13px; font-weight: 600; color: #2d3436; margin-bottom: 5px; display: block; }
-    
+
     /* Custom Stacked Progress Bar */
     .analysis-progress { height: 12px; border-radius: 6px; overflow: hidden; background: #eee; display: flex; }
     .prog-correct { background-color: #2ecc71; height: 100%; transition: width 0.6s ease; }
     .prog-wrong { background-color: #ff7675; height: 100%; transition: width 0.6s ease; }
-    
+
     .legend-box { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-right: 5px; }
 
-    /* ── ANTI-GREY AREA MODAL FIX ── */
-    #fullReportModal {
-        z-index: 1060 !important;
-    }
-    .modal-backdrop {
-        z-index: 1050 !important;
-    }
+/* Bootstrap handles modal stacking correctly */
+#fullReportModal .modal-dialog {
+    max-width: 900px;
+}
+
+.analysis-progress {
+    height: 12px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #eee;
+    display: flex;
+}
 </style>
 {% endblock %}
 
@@ -42,7 +47,7 @@
         <p class="text-muted mb-0">Visual breakdown of exam results and question difficulty.</p>
     </div>
     <div class="col-md-5 text-md-right mt-3 mt-md-0">
-        <select class="form-control form-control-sm rounded-pill border shadow-sm font-weight-bold d-inline-block w-auto" 
+        <select class="form-control form-control-sm rounded-pill border shadow-sm font-weight-bold d-inline-block w-auto"
                 onchange="location.href='?exam_id=' + this.value;">
             <option value="">Choose Exam...</option>
             {% for ex in all_exams %}
@@ -135,7 +140,7 @@
             </div>
             <div class="card-body">
                 <p class="text-muted small">Top 5 questions with the highest failure rate.</p>
-                
+
                 {% for item in item_analysis[:5] %}
                 <div class="killer-q-item">
                     <span class="killer-label">
@@ -210,11 +215,36 @@
 </div>
 {% endif %}
 {% endblock %}
-
 {% block scripts %}
+{{ super() }}
+
 <script>
-    $(document).ready(function() {
-        $('#fullReportModal').appendTo('body');
+$(function () {
+    // Relocate the modal directly to <body> to escape the container's animated stacking context
+    $('#fullReportModal').appendTo('body');
+
+    // Clean up when analytics modal closes
+    $('#fullReportModal').on('hidden.bs.modal', function () {
+
+        // Remove any leftover backdrop
+        $('.modal-backdrop').remove();
+
+        // Reset body state
+        $('body')
+            .removeClass('modal-open')
+            .css({
+                overflow: '',
+                'padding-right': ''
+            });
+
     });
+
+    // If logout opens while analytics is open,
+    // close analytics first.
+    $('#logoutModal').on('show.bs.modal', function () {
+        $('#fullReportModal').modal('hide');
+    });
+
+});
 </script>
 {% endblock %}

@@ -1,10 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, make_response
-import mysql.connector
 from testpoint import db_config
 from testpoint.Auth.login import user_logged_in
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
-import random
+import random, re, mysql.connector
 from fpdf import FPDF
 
 student = Blueprint('student', __name__, template_folder='templates', static_folder='static',
@@ -707,26 +706,73 @@ def submit_exam(attempt_id):
         # Remove exam lockdown
         session.pop('active_exam_id', None)
 
-        # Grading Logic (Existing)
-        cursor.execute("SELECT question_id FROM attempt_questions WHERE attempt_id = %s", (attempt_id,))
+        # Helper string normalizer for intelligent identification/short-answer grading
+        def normalize_string(val):
+            if not val:
+                return ""
+            val = str(val).lower().strip()
+            val = re.sub(r'[^\w\s]', '', val)  # Remove punctuation
+            val = re.sub(r'\s+', ' ', val)     # Collapse consecutive whitespace
+            return val.strip()
+
+        # Fetch all served questions including their types for smart grading
+        cursor.execute("""
+            SELECT aq.question_id, q.question_type
+            FROM attempt_questions aq
+            JOIN questions q ON aq.question_id = q.question_id
+            WHERE aq.attempt_id = %s
+        """, (attempt_id,))
         questions = cursor.fetchall()
         total_score = 0
 
         for q in questions:
             q_id = q['question_id']
+            q_type = q['question_type']
+
             cursor.execute("SELECT submitted_answer FROM student_answers WHERE attempt_id = %s AND question_id = %s", (attempt_id, q_id))
             student_row = cursor.fetchone()
-            student_ans = str(student_row['submitted_answer']).strip().lower() if student_row else ""
+            student_ans = student_row['submitted_answer'] if student_row else ""
 
-            cursor.execute("SELECT option_text FROM options WHERE question_id = %s AND is_correct = 1", (q_id,))
-            correct_row = cursor.fetchone()
-            correct_ans = str(correct_row['option_text']).strip().lower() if correct_row else None
+            # Fetch options list for matching correctness
+            cursor.execute("SELECT option_id, option_text, is_correct FROM options WHERE question_id = %s", (q_id,))
+            options_list = cursor.fetchall()
 
-            if correct_ans and student_ans == correct_ans:
-                cursor.execute("UPDATE student_answers SET is_correct = 1 WHERE attempt_id = %s AND question_id = %s", (attempt_id, q_id))
+            is_correct = 0
+            if student_ans:
+                student_ans_str = str(student_ans).strip()
+
+                if q_type in ('multiple_choice', 'true_false'):
+                    # Binary exact match against option_id or normalized text option
+                    for opt in options_list:
+                        if opt['is_correct']:
+                            if (student_ans_str == str(opt['option_id']) or
+                                student_ans_str.lower() == str(opt['option_text']).strip().lower()):
+                                is_correct = 1
+                                break
+
+                elif q_type == 'identification':
+                    # Smart fuzzy/normalization matching
+                    normalized_student = normalize_string(student_ans_str)
+                    for opt in options_list:
+                        if opt['is_correct']:
+                            # Supports multiple correct answer variations separated by '|'
+                            accepted_aliases = str(opt['option_text']).split('|')
+                            for alias in accepted_aliases:
+                                if normalized_student == normalize_string(alias):
+                                    is_correct = 1
+                                    break
+                            if is_correct == 1:
+                                break
+
+            # Update the specific student answer correctness mapping
+            cursor.execute("""
+                UPDATE student_answers
+                SET is_correct = %s
+                WHERE attempt_id = %s AND question_id = %s
+            """, (is_correct, attempt_id, q_id))
+
+            if is_correct == 1:
                 total_score += 1
-            else:
-                cursor.execute("UPDATE student_answers SET is_correct = 0 WHERE attempt_id = %s AND question_id = %s", (attempt_id, q_id))
 
         cursor.execute("""
             UPDATE exam_attempts
@@ -852,6 +898,7 @@ def view_course(course_id):
         connection.close()
 
 #! 5. ANALYTICS & INSIGHTS
+#! 5. ANALYTICS & INSIGHTS
 @student.route('/student_analytics')
 def student_analytics():
     if not user_logged_in():
@@ -920,15 +967,14 @@ def student_analytics():
                 standings_by_course[course] = []
             standings_by_course[course].append(row)
 
-        # 2. ITEM ANALYSIS (The "Class Killers")
-        # Identify questions in the student's courses that have the highest failure rate globally
+        # 2. ITEM ANALYSIS (The "Class Killers" - Structured to match Teacher Analysis format)
         cursor.execute("""
             SELECT
                 q.question_text,
                 c.course_name,
                 COUNT(sa.answer_id) as total_attempts,
-                SUM(CASE WHEN sa.is_correct = 0 THEN 1 ELSE 0 END) as fail_count,
-                (SUM(CASE WHEN sa.is_correct = 0 THEN 1 ELSE 0 END) / COUNT(sa.answer_id) * 100) as difficulty_index
+                SUM(CASE WHEN sa.is_correct = 1 THEN 1 ELSE 0 END) as correct_count,
+                SUM(CASE WHEN sa.is_correct = 0 THEN 1 ELSE 0 END) as incorrect_count
             FROM student_answers sa
             JOIN questions q ON sa.question_id = q.question_id
             JOIN courses c ON q.course_code = c.course_code
@@ -936,10 +982,29 @@ def student_analytics():
             JOIN classes cl ON en.class_code = cl.class_code AND cl.course_code = c.course_code
             GROUP BY q.question_id, q.question_text, c.course_name
             HAVING total_attempts > 2
-            ORDER BY difficulty_index DESC
+            ORDER BY incorrect_count DESC
             LIMIT 5
         """, (student_id,))
-        item_analysis = cursor.fetchall()
+        raw_items = cursor.fetchall()
+
+        item_analysis = []
+        for item in raw_items:
+            total = item['total_attempts']
+            success_rate = round((item['correct_count'] / total) * 100, 1) if total > 0 else 0
+            classification = "Balanced"
+            if success_rate < 30.0:
+                classification = "Ambiguous/Extremely Hard"
+            elif success_rate > 85.0:
+                classification = "Easy/High Mastery"
+
+            item_analysis.append({
+                'text': item['question_text'],
+                'course_name': item['course_name'],
+                'correct_p': success_rate,
+                'incorrect_p': round((item['incorrect_count'] / total) * 100, 1) if total > 0 else 0,
+                'incorrect_count': item['incorrect_count'],
+                'classification': classification
+            })
 
         # 3. EXAM STATISTICS (Pass/Fail Distribution)
         cursor.execute("""
@@ -960,7 +1025,7 @@ def student_analytics():
     finally:
         cursor.close()
         connection.close()
-
+        
 #! 6. CERTIFICATES & TRANSCRIPTS
 @student.route('/student_certificates')
 def student_certificates():
