@@ -209,27 +209,6 @@ def edit_college(college_id):
     return redirect(url_for('super_admin.manage_colleges'))
 
 
-@superadmin_bp.route("/delete-college/<int:college_id>")
-@superadmin_required
-def delete_college(college_id):
-    conn = current_app.config["get_db_connection"]()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("DELETE FROM colleges WHERE id=%s", (college_id,))
-        conn.commit()
-        if cursor.rowcount == 0:
-            flash("College not found.", "error")
-        else:
-            flash("College deleted successfully!", "success")
-    except Exception as e:
-        conn.rollback()
-        flash(f"Error deleting college: {str(e)}", "error")
-    finally:
-        cursor.close()
-        conn.close()
-    return redirect(url_for('super_admin.manage_colleges'))
-
-
 @superadmin_bp.route("/create-admin", methods=["POST"])
 @superadmin_required
 def create_admin():
@@ -624,6 +603,46 @@ def system_logs():
     return render_template('system_logs.html', logs=logs, search=search, action_filter=action_filter,
                            action_types=action_types, page=page, total_pages=total_pages,
                            total_logs=total_logs, per_page=per_page, current_page=page)
+
+@superadmin_bp.route("/system-logs/delete-old", methods=["POST"])
+@superadmin_required
+def delete_old_system_logs():
+    """
+    Keeps only the most recent 100 admin/superadmin system log entries
+    and deletes everything older than that — not a full wipe. Voter
+    log entries (used by each college Admin's Audit Logs page) are
+    untouched, since this only ever considers the same admin/superadmin
+    subset shown on this page.
+    """
+    KEEP = 100
+    conn = current_app.config["get_db_connection"]()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT l.id
+            FROM system_logs l
+            LEFT JOIN users u ON l.user_id = u.id
+            WHERE (u.role IN ('admin', 'superadmin') OR l.user_id IS NULL)
+            ORDER BY l.created_at DESC
+        """)
+        all_ids = [row['id'] for row in cursor.fetchall()]
+        ids_to_delete = all_ids[KEEP:]
+
+        if ids_to_delete:
+            placeholders = ','.join(['%s'] * len(ids_to_delete))
+            cursor.execute(f"DELETE FROM system_logs WHERE id IN ({placeholders})", ids_to_delete)
+            conn.commit()
+            flash(f"Deleted {len(ids_to_delete)} old log(s). Kept the most recent {KEEP}.", "success")
+        else:
+            flash(f"Nothing to delete — there are only {len(all_ids)} log(s), within the {KEEP}-log limit.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error deleting old logs: {str(e)}", "error")
+    finally:
+        cursor.close()
+        conn.close()
+    return redirect(url_for('super_admin.system_logs'))
+
 
 @superadmin_bp.route("/audit-logs")
 @superadmin_required
