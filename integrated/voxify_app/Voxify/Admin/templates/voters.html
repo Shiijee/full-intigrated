@@ -14,60 +14,12 @@
     <p class="page-subheading">Create, edit, and archive voters in your college.</p>
   </div>
   <div class="page-header-actions" style="display:flex;gap:10px;align-items:center;">
-    <button class="btn-primary-custom" type="button" onclick="openModal('importVotersModal')"
-      style="background:#16a34a;border-color:#16a34a;">
-      <i class="bi bi-cloud-download-fill"></i> Import from TestPoint
-    </button>
     <button class="btn-primary-custom" type="button" onclick="openModal('addVoterModal')">
       <i class="bi bi-person-plus-fill"></i> Add Voter
     </button>
   </div>
-
-  <!-- ── Import from TestPoint Modal ── -->
-  <div class="vmodal-overlay" id="importVotersModal" style="display:none;" onclick="if(event.target===this)closeModal('importVotersModal')">
-    <div class="vmodal" style="max-width:460px;">
-      <div class="vmodal-header">
-        <h5><i class="bi bi-cloud-download-fill" style="margin-right:8px;color:#16a34a;"></i>Import Voters from TestPoint</h5>
-        <button class="vmodal-close" onclick="closeModal('importVotersModal')">&times;</button>
-      </div>
-      <div class="vmodal-body">
-        <p style="font-size:.85rem;color:#64748b;margin-bottom:16px;">
-          This will pull all active students from <strong>TestPoint</strong> and register them as voters in this college.
-          Already-existing voters will be skipped.
-        </p>
-        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:6px;">Default Password for imported voters</label>
-        <input id="import-pw" type="text" value="Voter@2026" style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;margin-bottom:14px;"/>
-        <div id="import-status" style="font-size:.82rem;min-height:24px;"></div>
-      </div>
-      <div class="vmodal-footer">
-        <button type="button" class="vbtn vbtn-secondary" onclick="closeModal('importVotersModal')">Cancel</button>
-        <button type="button" class="vbtn vbtn-primary" style="background:#16a34a;border-color:#16a34a;" onclick="triggerImport()">
-          <i class="bi bi-cloud-download-fill"></i> Import Now
-        </button>
-      </div>
-    </div>
-  </div>
-  <script>
-  async function triggerImport() {
-    const pw = document.getElementById('import-pw').value;
-    const statusEl = document.getElementById('import-status');
-    statusEl.innerHTML = '<span style="color:#64748b">⏳ Importing from TestPoint…</span>';
-    try {
-      const r = await fetch('/api/voters/import-from-testpoint', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ college_id: {{ college_id|default(1) }}, default_password: pw })
-      });
-      const data = await r.json();
-      if (data.error) throw new Error(data.error);
-      statusEl.innerHTML = `<span style="color:#16a34a;font-weight:600;">✅ ${data.message}</span>`;
-      setTimeout(() => location.reload(), 1800);
-    } catch(e) {
-      statusEl.innerHTML = `<span style="color:#ef4444;">⚠ ${e.message}</span>`;
-    }
-  }
-  </script>
 </div>
+
 
 
 <!-- Tab Navigation -->
@@ -146,9 +98,6 @@
       <i class="bi bi-people"></i>
       <h5>No Active Voters</h5>
       <p>Start by adding voters to your college.</p>
-      <span class="btn-primary-custom" style="cursor:default;pointer-events:none;opacity:0.85;display:inline-flex;align-items:center;gap:6px;">
-        <i class="bi bi-person-plus-fill"></i> Add First Voter
-      </span>
     </div>
     {% endif %}
   </div>
