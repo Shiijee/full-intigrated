@@ -41,119 +41,172 @@ def inject_teacher_courses():
             return dict(assigned_courses=[])
     return dict(assigned_courses=[])
 
+
 #! 1. DASHBOARD & OVERVIEW
-@teacher.route('/')
+@teacher.route("/")
 def teacher_dashboard():
     if teacher_logged_in():
-        teacher_id = session.get('user_id')
+        teacher_id = session.get("user_id")
         connection = mysql.connector.connect(**db_config)
         cursor = connection.cursor(dictionary=True)
         try:
             # 1. Dashboard Stats
-            cursor.execute("SELECT COUNT(DISTINCT course_code) as count FROM classes WHERE teacher_id = %s", (teacher_id,))
-            course_count = cursor.fetchone()['count']
+            cursor.execute(
+                "SELECT COUNT(DISTINCT course_code) as count FROM classes WHERE teacher_id = %s",
+                (teacher_id,),
+            )
+            course_count = cursor.fetchone()["count"]
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) as count FROM exam_attempts ea
                 JOIN exams ex ON ea.exam_id = ex.exam_id
                 JOIN classes cl ON ex.class_code = cl.class_code
                 WHERE cl.teacher_id = %s AND ea.status = 'in-progress'
-            """, (teacher_id,))
-            active_examinees = cursor.fetchone()['count']
+            """,
+                (teacher_id,),
+            )
+            active_examinees = cursor.fetchone()["count"]
 
-            cursor.execute("SELECT COUNT(*) as count FROM questions WHERE teacher_id = %s AND is_isolated = 0", (teacher_id,))
-            total_q = cursor.fetchone()['count']
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM questions WHERE teacher_id = %s AND is_isolated = 0",
+                (teacher_id,),
+            )
+            total_q = cursor.fetchone()["count"]
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT SUM(ea.tab_switches) as total FROM exam_attempts ea
                 JOIN exams ex ON ea.exam_id = ex.exam_id
                 JOIN classes cl ON ex.class_code = cl.class_code
                 WHERE cl.teacher_id = %s
-            """, (teacher_id,))
-            total_violations = cursor.fetchone()['total'] or 0
+            """,
+                (teacher_id,),
+            )
+            total_violations = cursor.fetchone()["total"] or 0
 
             # 2. Exam Pipeline (Drafts vs published)
-            cursor.execute("SELECT is_active, COUNT(*) as count FROM exams WHERE created_by = %s AND archived = 0 GROUP BY is_active", (teacher_id,))
+            cursor.execute(
+                "SELECT is_active, COUNT(*) as count FROM exams WHERE created_by = %s AND archived = 0 GROUP BY is_active",
+                (teacher_id,),
+            )
             exam_stats = cursor.fetchall()
-            draft_count = sum(item['count'] for item in exam_stats if item['is_active'] == 0)
-            published_count = sum(item['count'] for item in exam_stats if item['is_active'] == 1)
+            draft_count = sum(
+                item["count"] for item in exam_stats if item["is_active"] == 0
+            )
+            published_count = sum(
+                item["count"] for item in exam_stats if item["is_active"] == 1
+            )
 
-            # 3. Course Performance (Chart Data)
-            cursor.execute("""
-                SELECT c.course_name, AVG((ea.score / ex.question_limit) * 100) as avg_score
+            # 3. Course Performance with Base 50 average conversion
+            cursor.execute(
+                """
+                SELECT c.course_name, AVG(50 + ((ea.score / ex.question_limit) * 50)) as avg_score
                 FROM exam_attempts ea
                 JOIN exams ex ON ea.exam_id = ex.exam_id
                 JOIN classes cl ON ex.class_code = cl.class_code
                 JOIN courses c ON cl.course_code = c.course_code
                 WHERE cl.teacher_id = %s AND ea.status = 'finished' AND ex.archived = 0
                 GROUP BY c.course_code LIMIT 5
-            """, (teacher_id,))
+            """,
+                (teacher_id,),
+            )
             course_data = cursor.fetchall()
-            course_labels = [d['course_name'][:15] + '...' if len(d['course_name']) > 15 else d['course_name'] for d in course_data]
-            course_avgs = [round(float(d['avg_score']), 1) for d in course_data]
+            course_labels = [
+                (
+                    d["course_name"][:15] + "..."
+                    if len(d["course_name"]) > 15
+                    else d["course_name"]
+                )
+                for d in course_data
+            ]
+            course_avgs = [round(float(d["avg_score"]), 1) for d in course_data]
 
             # 4. Upcoming Schedule
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT ex.title, ex.date_time, c.course_name
                 FROM exams ex
                 JOIN classes cl ON ex.class_code = cl.class_code
                 JOIN courses c ON cl.course_code = c.course_code
                 WHERE cl.teacher_id = %s AND ex.date_time > NOW() AND ex.archived = 0
                 ORDER BY ex.date_time ASC LIMIT 3
-            """, (teacher_id,))
+            """,
+                (teacher_id,),
+            )
             upcoming_exams = cursor.fetchall()
 
             # 5. Question Type Distribution (Pie)
-            cursor.execute("SELECT question_type, COUNT(*) as count FROM questions WHERE teacher_id = %s AND is_isolated = 0 GROUP BY question_type", (teacher_id,))
+            cursor.execute(
+                "SELECT question_type, COUNT(*) as count FROM questions WHERE teacher_id = %s AND is_isolated = 0 GROUP BY question_type",
+                (teacher_id,),
+            )
             dist_data = cursor.fetchall()
-            type_mapping = {'multiple_choice': 'MCQ', 'true_false': 'T/F', 'identification': 'Ident.', 'essay': 'Essay'}
-            dist_labels = [type_mapping.get(d['question_type'], d['question_type']) for d in dist_data]
-            dist_values = [int(d['count']) for d in dist_data]
+            type_mapping = {
+                "multiple_choice": "MCQ",
+                "true_false": "T/F",
+                "identification": "Ident.",
+                "essay": "Essay",
+            }
+            dist_labels = [
+                type_mapping.get(d["question_type"], d["question_type"])
+                for d in dist_data
+            ]
+            dist_values = [int(d["count"]) for d in dist_data]
 
-            # 6. Recent Submissions
-            cursor.execute("""
-                SELECT ea.score, s.firstname, s.lastname, ex.title, ea.end_time, ex.question_limit
+            # 6. Recent Submissions with Base 50 conversion
+            cursor.execute(
+                """
+                SELECT ea.score, s.firstname, s.lastname, ex.title, ea.end_time, ex.question_limit,
+                       ROUND(50 + ((ea.score / ex.question_limit) * 50), 1) as percentage
                 FROM exam_attempts ea
                 JOIN students s ON ea.student_id = s.student_id
                 JOIN exams ex ON ea.exam_id = ex.exam_id
                 JOIN classes cl ON ex.class_code = cl.class_code
                 WHERE cl.teacher_id = %s AND ea.status = 'finished' AND ex.archived = 0
                 ORDER BY ea.end_time DESC LIMIT 5
-            """, (teacher_id,))
+            """,
+                (teacher_id,),
+            )
             recent_submissions = cursor.fetchall()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT t.*, u.created_at, u.email
                 FROM teachers t
                 JOIN users u ON t.teacher_id = u.user_id
                 WHERE t.teacher_id = %s
-            """, (teacher_id,))
+            """,
+                (teacher_id,),
+            )
             user = cursor.fetchone()
 
-            session['firstname'] = user['firstname']
-            session['lastname'] = user['lastname']
+            session["firstname"] = user["firstname"]
+            session["lastname"] = user["lastname"]
 
-
-            return render_template('teacher_dashboard.html',
-                                   user = user,
-                                   firstname=session.get('firstname'),
-                                   course_count=course_count,
-                                   active_examinees=active_examinees,
-                                   total_q=total_q,
-                                   total_violations=total_violations,
-                                   draft_count=draft_count,
-                                   published_count=published_count,
-                                   course_labels=course_labels,
-                                   course_avgs=course_avgs,
-                                   upcoming_exams=upcoming_exams,
-                                   dist_labels=dist_labels,
-                                   dist_values=dist_values,
-                                   recent_submissions=recent_submissions)
+            return render_template(
+                "teacher_dashboard.html",
+                user=user,
+                firstname=session.get("firstname"),
+                course_count=course_count,
+                active_examinees=active_examinees,
+                total_q=total_q,
+                total_violations=total_violations,
+                draft_count=draft_count,
+                published_count=published_count,
+                course_labels=course_labels,
+                course_avgs=course_avgs,
+                upcoming_exams=upcoming_exams,
+                dist_labels=dist_labels,
+                dist_values=dist_values,
+                recent_submissions=recent_submissions,
+            )
         finally:
             cursor.close()
             connection.close()
 
-    return redirect(url_for('auth.login'))
+    return redirect(url_for("auth.login"))
+
 
 @teacher.route('/question_bank')
 def question_bank():
@@ -237,7 +290,13 @@ def exam_analysis():
             selected_exam = cursor.fetchone()
 
             if selected_exam:
-                passing_threshold = float(selected_exam['question_limit']) * (float(selected_exam['pass_percentage']) / 100)
+                # Mathematical derivation of passing threshold for Base 50 scale:
+                # passing_score >= limit * ((pass_percentage - 50) / 50)
+                pass_pct = float(selected_exam['pass_percentage'])
+                if pass_pct < 50.0:
+                    passing_threshold = 0.0
+                else:
+                    passing_threshold = float(selected_exam['question_limit']) * ((pass_pct - 50.0) / 50.0)
 
                 cursor.execute("""
                     SELECT
@@ -253,14 +312,16 @@ def exam_analysis():
                 if summary and summary['total_takers'] > 0:
                     stats = {
                         'total_takers': summary['total_takers'],
-                        'avg_percent': round((summary['avg_raw_score'] / selected_exam['question_limit']) * 100, 1) if summary['avg_raw_score'] else 0,
+                        # Class average percentage on Base 50
+                        'avg_percent': round(50 + ((summary['avg_raw_score'] / selected_exam['question_limit']) * 50), 1) if summary['avg_raw_score'] else 0.0,
                         'pass_rate': round((summary['passed_count'] / summary['total_takers']) * 100, 1),
                         'violations': summary['total_violations'] or 0
                     }
 
+                    # Rankings (Base 50 converted)
                     cursor.execute("""
                         SELECT s.firstname, s.lastname, ea.score, ea.attempt_id,
-                               round((ea.score / %s) * 100, 1) as percentage
+                               ROUND(50 + ((ea.score / %s) * 50), 1) as percentage
                         FROM exam_attempts ea
                         JOIN students s ON ea.student_id = s.student_id
                         WHERE ea.exam_id = %s AND ea.status = 'finished'
@@ -302,7 +363,7 @@ def exam_analysis():
                             'classification': classification
                         })
 
-                    # Proctoring Integrity Risk Analyzer (Correlate scores with browser violations)
+                    # Proctoring Integrity Risk Analyzer (Correlate scores with browser violations under Base 50 conversion)
                     cursor.execute("""
                         SELECT
                             ea.attempt_id,
@@ -311,8 +372,8 @@ def exam_analysis():
                             ea.score,
                             ea.tab_switches AS proctoring_violations,
                             CASE
-                                WHEN ea.tab_switches > 15 AND (ea.score / %s * 100) >= 85.0 THEN 'High Integrity Risk (High Score & High Violations)'
-                                WHEN ea.tab_switches > 15 AND (ea.score / %s * 100) < 50.0 THEN 'Frequent Off-task Behavior'
+                                WHEN ea.tab_switches > 15 AND (50 + ((ea.score / %s) * 50)) >= 85.0 THEN 'High Integrity Risk (High Score & High Violations)'
+                                WHEN ea.tab_switches > 15 AND (50 + ((ea.score / %s) * 50)) < 50.0 THEN 'Frequent Off-task Behavior'
                                 ELSE 'Normal Parameters'
                             END AS risk_profile
                         FROM exam_attempts ea
@@ -466,25 +527,88 @@ def publish_exam_to_classes():
 @teacher.route('/add_exam', methods=['POST'])
 def add_exam():
     if teacher_logged_in():
-        class_code = request.form.get('class_code'); title = request.form.get('title'); duration = request.form.get('duration')
-        pass_percent = request.form.get('pass_percentage'); schedule = request.form.get('schedule'); q_limit = request.form.get('question_limit', 50)
-        connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
-        cursor.execute("INSERT INTO exams (class_code, title, duration_minutes, pass_percentage, date_time, created_by, question_limit, is_active) VALUES (%s, %s, %s, %s, %s, %s, %s, 0)", (class_code, title, duration, pass_percent, schedule, session.get('user_id'), q_limit))
-        new_id = cursor.lastrowid; connection.commit(); cursor.close(); connection.close()
+        class_code = request.form.get('class_code')
+        title = request.form.get('title')
+        duration = request.form.get('duration')
+        # Hard-lock passing percentage to 75% per institutional requirement
+        pass_percent = 75
+        schedule = request.form.get('schedule')
+        q_limit = request.form.get('question_limit', 50)
+
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO exams (class_code, title, duration_minutes, pass_percentage, date_time, created_by, question_limit, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+            """, (class_code, title, duration, pass_percent, schedule, session.get('user_id'), q_limit))
+            new_id = cursor.lastrowid
+            connection.commit()
+            flash("Exam drafted successfully.", "success")
+        except Exception as e:
+            flash(f"Error creating exam: {str(e)}", "danger")
+            return redirect(url_for('teacher.manage_exams'))
+        finally:
+            cursor.close()
+            connection.close()
+
         return redirect(url_for('teacher.manage_questions', exam_id=new_id))
     return redirect(url_for('auth.login'))
 
 @teacher.route('/update_exam', methods=['POST'])
 def update_exam():
-    if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    exam_id = request.form.get('exam_id'); status = request.form.get('status'); title = request.form.get('title'); duration = request.form.get('duration')
-    pass_percent = request.form.get('pass_percentage'); schedule = request.form.get('schedule'); q_limit = request.form.get('question_limit')
-    connection = mysql.connector.connect(**db_config); cursor = connection.cursor(dictionary=True)
-    if status == 'active':
-        cursor.execute("SELECT COUNT(*) as count FROM exam_questions WHERE exam_id = %s", (exam_id,))
-        if cursor.fetchone()['count'] == 0: flash("Empty exam pool.", "danger"); return redirect(url_for('teacher.manage_exams'))
-    cursor.execute("UPDATE exams SET title=%s, duration_minutes=%s, pass_percentage=%s, is_active=%s, date_time=%s, question_limit=%s WHERE exam_id=%s", (title, duration, pass_percent, 1 if status=='active' else 0, schedule, q_limit, exam_id))
-    connection.commit(); cursor.close(); connection.close()
+    if not teacher_logged_in():
+        return redirect(url_for('auth.login'))
+
+    exam_id = request.form.get('exam_id')
+    status = request.form.get('status')
+    title = request.form.get('title')
+    duration = request.form.get('duration')
+    # Hard-lock passing percentage to 75% per institutional requirement
+    pass_percent = 75
+    schedule = request.form.get('schedule')
+    q_limit = request.form.get('question_limit')
+
+    connection = mysql.connector.connect(**db_config)
+    cursor = connection.cursor(dictionary=True)
+
+    try:
+        if status == 'active':
+            # Parse the target question limit from the submitted form
+            q_limit_val = int(q_limit) if q_limit else 50
+
+            # Fetch the total number of questions currently linked to this exam
+            cursor.execute("SELECT COUNT(*) as count FROM exam_questions WHERE exam_id = %s", (exam_id,))
+            q_count = cursor.fetchone()['count']
+
+            # Enforce validation: block activation if the linked pool size is less than the question limit
+            if q_count < q_limit_val:
+                cursor.close()
+                connection.close()
+                flash(
+                    f"Cannot activate exam: The number of questions in your exam pool ({q_count}) "
+                    f"is less than your configured question limit ({q_limit_val}). "
+                    f"Please add more questions or reduce the question limit before activating.",
+                    "danger"
+                )
+                return redirect(url_for('teacher.manage_exams'))
+
+        cursor.execute("""
+            UPDATE exams
+            SET title=%s, duration_minutes=%s, pass_percentage=%s, is_active=%s, date_time=%s, question_limit=%s
+            WHERE exam_id=%s
+        """, (title, duration, pass_percent, 1 if status=='active' else 0, schedule, q_limit, exam_id))
+
+        connection.commit()
+        flash("Exam settings updated successfully. Passing threshold is locked at 75%.", "success")
+
+    except Exception as e:
+        connection.rollback()
+        flash(f"Error updating exam settings: {str(e)}", "danger")
+    finally:
+        cursor.close()
+        connection.close()
+
     return redirect(url_for('teacher.manage_exams'))
 
 @teacher.route('/delete_exam/<int:exam_id>', methods=['POST'])
@@ -1103,7 +1227,7 @@ def manage_enrollees(class_code):
         """, (class_code,))
         class_exams = cursor.fetchall()
 
-        # 3. Fetch Enrolled Students with Cumulative Class Rank & Grade Average
+        # 3. Fetch Enrolled Students with Cumulative Class Rank & Grade Average on Base 50 Scale
         cursor.execute("""
             SELECT
                 s.student_id, s.firstname, s.lastname, s.email,
@@ -1120,7 +1244,7 @@ def manage_enrollees(class_code):
                 FROM (
                     SELECT
                         en.student_id,
-                        AVG(COALESCE((ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0)) * 100, 0)) as cumulative_avg
+                        AVG(COALESCE(50 + ((ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0)) * 50), 0)) as cumulative_avg
                     FROM enrollments en
                     LEFT JOIN exam_attempts ea ON en.student_id = ea.student_id AND ea.status = 'finished'
                     LEFT JOIN exams ex ON ea.exam_id = ex.exam_id AND ex.archived = 0
@@ -1144,18 +1268,20 @@ def manage_enrollees(class_code):
         cursor.close()
         connection.close()
 
-#! 6. MONITORING & RESULTS
 @teacher.route('/student_monitor')
 def student_monitor():
-    if not teacher_logged_in(): return redirect(url_for('auth.login'))
+    if not teacher_logged_in():
+        return redirect(url_for('auth.login'))
+
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
 
-    # Updated query to get the LATEST latitude and longitude for each attempt
+    # Updated query to get the LATEST latitude and longitude and calculate Base 50 grade
     query = """
         SELECT
             ea.*, s.firstname, s.lastname, ex.title,
-            vl.latitude, vl.longitude
+            vl.latitude, vl.longitude,
+            ROUND(50 + (ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0) * 50), 1) as percentage
         FROM exam_attempts ea
         JOIN students s ON ea.student_id = s.student_id
         JOIN exams ex ON ea.exam_id = ex.exam_id
@@ -1174,48 +1300,69 @@ def student_monitor():
     connection.close()
     return render_template('teacher_monitor.html', attempts=attempts)
 
-@teacher.route('/exam_results/<int:exam_id>')
+@teacher.route("/exam_results/<int:exam_id>")
 def exam_results(exam_id):
-    if not teacher_logged_in(): return redirect(url_for('auth.login'))
-    teacher_id = session.get('user_id')
+    if not teacher_logged_in():
+        return redirect(url_for("auth.login"))
+    teacher_id = session.get("user_id")
     connection = mysql.connector.connect(**db_config)
     cursor = connection.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT e.*, c.course_name
             FROM exams e
             JOIN classes cl ON e.class_code = cl.class_code
             JOIN courses c ON cl.course_code = c.course_code
             WHERE e.exam_id = %s AND cl.teacher_id = %s
-        """, (exam_id, teacher_id))
+        """,
+            (exam_id, teacher_id),
+        )
         exam = cursor.fetchone()
-
 
         if not exam:
             flash("Exam not found or access denied.", "danger")
-            return redirect(url_for('teacher.manage_exams'))
+            return redirect(url_for("teacher.manage_exams"))
 
-        cursor.execute("""
+        # Fetch students with dynamic Base 50 conversion percentages based on actual served questions [1]
+        cursor.execute(
+            """
             SELECT
                 s.student_id, s.firstname, s.lastname,
                 ea.attempt_id, ea.score, ea.status as attempt_status, ea.tab_switches,
-                (SELECT COUNT(*) FROM exam_questions WHERE exam_id = %s) as total_questions
+                (SELECT COUNT(*) FROM exam_questions WHERE exam_id = %s) as total_questions,
+                CASE
+                    WHEN ea.score IS NOT NULL THEN ROUND(50 + (ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0) * 50), 1)
+                    ELSE NULL
+                END as percentage
             FROM enrollments en
             JOIN students s ON en.student_id = s.student_id
-            LEFT JOIN exam_attempts ea ON s.student_id = ea.student_id AND ea.exam_id = %s
+            LEFT JOIN exam_attempts ea ON s.student_id = ea.student_id AND ea.status = 'finished' AND ea.exam_id = %s
             WHERE en.class_code = %s
             ORDER BY s.lastname ASC
-        """, (exam_id, exam_id, exam['class_code']))
+        """,
+            (exam_id, exam_id, exam["class_code"]),
+        )
         results = cursor.fetchall()
 
         now = datetime.now()
-        exam_end_time = exam['date_time'] + timedelta(minutes=exam['duration_minutes']) if exam['date_time'] else None
+        exam_end_time = (
+            exam["date_time"] + timedelta(minutes=exam["duration_minutes"])
+            if exam["date_time"]
+            else None
+        )
         is_past_due = (now > exam_end_time) if exam_end_time else False
 
-        return render_template('teacher_exam_results.html', exam=exam, results=results, is_past_due=is_past_due, now=now)
+        return render_template(
+            "teacher_exam_results.html",
+            exam=exam,
+            results=results,
+            is_past_due=is_past_due,
+            now=now,
+        )
     finally:
-        cursor.close(); connection.close()
-
+        cursor.close()
+        connection.close()
 
 @teacher.route('/toggle_block_student/<string:student_id>/<int:exam_id>', methods=['POST'])
 def toggle_block_student(student_id, exam_id):
@@ -1330,8 +1477,10 @@ def review_student_attempt(attempt_id):
     cursor = connection.cursor(dictionary=True, buffered=True)
 
     try:
+        # Fetch attempt details with built-in Base 50 percentage calculation to match student review views [1]
         cursor.execute("""
-            SELECT ea.*, s.firstname, s.lastname, e.title, e.pass_percentage
+            SELECT ea.*, s.firstname, s.lastname, e.title, e.pass_percentage,
+                   ROUND(50 + (ea.score / NULLIF((SELECT COUNT(*) FROM attempt_questions WHERE attempt_id = ea.attempt_id), 0) * 50), 1) as percentage
             FROM exam_attempts ea
             JOIN students s ON ea.student_id = s.student_id
             JOIN exams e ON ea.exam_id = e.exam_id

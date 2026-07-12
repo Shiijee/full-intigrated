@@ -159,7 +159,7 @@
     <div class="section-container mb-5">
         <div class="tp-section-divider">
             <span class="shadow-sm">
-                <i class="fas fa-layer-group mr-1"></i> Section: 
+                <i class="fas fa-layer-group mr-1"></i> Section:
 
                 {# FIX: use direct lookup instead of looping #}
                 {% set class_info = classes_map.get(class_code) %}
@@ -176,7 +176,7 @@
                 Code: <b class="class-code-text">{{ class_code }}</b>
             </span>
         </div>
-        
+
         <div class="row">
             {% for exam in section_exams %}
             <div class="col-xl-4 col-md-6 mb-4 exam-card-container">
@@ -282,8 +282,8 @@
                             </div>
                             <div class="col-6">
                                 <div class="form-group"><label class="small font-weight-bold text-muted">Pass
-                                        %</label><input type="number" name="pass_percentage"
-                                        class="form-control rounded-pill" value="50"></div>
+                                        %</label><input disabled type="number" name="pass_percentage"
+                                        class="form-control rounded-pill" value="75" readonly></div>
                             </div>
                         </div>
                         <div class="form-group"><label class="small font-weight-bold text-muted">Questions
@@ -373,7 +373,7 @@
                             </div>
                             <div class="col-6">
                                 <div class="form-group"><label class="small font-weight-bold text-muted">Pass
-                                        %</label><input type="number" name="pass_percentage"
+                                        %</label><input disabled type="number" name="pass_percentage"
                                         class="form-control rounded-pill" value="{{ exam.pass_percentage }}"
                                         {{ 'disabled' if exam.is_active }}></div>
                             </div>

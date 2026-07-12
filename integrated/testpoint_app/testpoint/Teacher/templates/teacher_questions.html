@@ -97,10 +97,10 @@
         font-size: 12px;
         padding: 6px 12px;
         background: #f0fdf4;
-        border-radius: 6px;
         border: 1px solid #dcfce7;
         color: #16a34a;
         font-weight: 600;
+        border-radius: 20px;
     }
 
     .lock-overlay-text {
@@ -135,7 +135,24 @@
                     class="font-weight-bold text-dark">{{ exam.course_code }}</span></p>
         </div>
         <div class="col-lg-6 text-lg-right mt-3 mt-lg-0">
-            <div class="d-flex flex-wrap justify-content-lg-end" style="gap: 8px;">
+            <div class="d-flex flex-wrap justify-content-lg-end align-items-center" style="gap: 8px;">
+
+                <!-- Quick Activation Button (Only visible for inactive drafts) -->
+                {% if exam.is_active == 0 %}
+                <form action="{{ url_for('teacher.update_exam') }}" method="POST" class="d-inline">
+                    <input type="hidden" name="exam_id" value="{{ exam.exam_id }}">
+                    <input type="hidden" name="status" value="active">
+                    <input type="hidden" name="title" value="{{ exam.title }}">
+                    <input type="hidden" name="duration" value="{{ exam.duration_minutes }}">
+                    <input type="hidden" name="pass_percentage" value="{{ exam.pass_percentage }}">
+                    <input type="hidden" name="question_limit" value="{{ exam.question_limit }}">
+                    <input type="hidden" name="schedule" value="{{ exam.date_time.strftime('%Y-%m-%dT%H:%M') if exam.date_time else '' }}">
+                    <button type="submit" class="btn btn-success px-4 rounded-pill font-weight-bold btn-sm shadow-sm">
+                        <i class="fas fa-play mr-1"></i> Activate Exam
+                    </button>
+                </form>
+                {% endif %}
+
                 {% if not is_locked %}
                 <button class="btn btn-dark px-3 rounded-pill font-weight-bold btn-sm shadow-sm" data-toggle="modal"
                     data-target="#aiModal">
@@ -300,6 +317,25 @@
                                 </div>
                                 <h6 class="text-dark font-weight-bold mb-3" style="line-height: 1.5;">{{ loop.index }}.
                                     {{ q.question_text }}</h6>
+
+                                <!-- Display Choices/Options inside the Question Card -->
+                                {% if q.question_type in ('multiple_choice', 'true_false') %}
+                                <div class="row no-gutters mt-2 mb-3" style="gap: 10px;">
+                                    {% for opt in q.options %}
+                                    <div class="col-md-5 mr-3 mb-2 p-2 rounded border d-flex align-items-center {% if opt.is_correct %}border-success bg-light text-success font-weight-bold{% else %}text-muted{% endif %}" style="font-size: 13px; background: #fafbfc;">
+                                        <span class="mr-2">
+                                            {% if opt.is_correct %}
+                                                <i class="fas fa-check-circle text-success"></i>
+                                            {% else %}
+                                                <i class="far fa-circle text-muted"></i>
+                                            {% endif %}
+                                        </span>
+                                        <span>{{ opt.option_text }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+
                                 <div class="answer-preview d-inline-block">
                                     {% for opt in q.options if opt.is_correct %}<i
                                         class="fas fa-check-double mr-2"></i>Correct: {{ opt.option_text }}{% endfor %}
@@ -370,6 +406,25 @@
                                 </div>
                                 <h6 class="text-dark font-weight-bold mb-3" style="line-height: 1.5;">{{ loop.index }} .
                                     {{ q.question_text }}</h6>
+
+                                <!-- Display Choices/Options inside the Question Card -->
+                                {% if q.question_type in ('multiple_choice', 'true_false') %}
+                                <div class="row no-gutters mt-2 mb-3" style="gap: 10px;">
+                                    {% for opt in q.options %}
+                                    <div class="col-md-5 mr-3 mb-2 p-2 rounded border d-flex align-items-center {% if opt.is_correct %}border-success bg-light text-success font-weight-bold{% else %}text-muted{% endif %}" style="font-size: 13px; background: #fafbfc;">
+                                        <span class="mr-2">
+                                            {% if opt.is_correct %}
+                                                <i class="fas fa-check-circle text-success"></i>
+                                            {% else %}
+                                                <i class="far fa-circle text-muted"></i>
+                                            {% endif %}
+                                        </span>
+                                        <span>{{ opt.option_text }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+
                                 <div class="answer-preview d-inline-block">
                                     {% for opt in q.options if opt.is_correct %}<i
                                         class="fas fa-check-double mr-2"></i>Correct: {{ opt.option_text }}{% endfor %}

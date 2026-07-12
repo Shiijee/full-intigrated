@@ -174,7 +174,8 @@
                 </thead>
                 <tbody class="text-dark">
                     {% for r in results %}
-                    {% set percent = ((r.score / exam.question_limit) * 100)|round(1) if r.attempt_id and exam.question_limit > 0 else 0 %}
+                    {# Updated to map directly to the pre-calculated Base-50 percentage variable [1] #}
+                    {% set percent = r.percentage if r.attempt_id and r.percentage is not none else 0 %}
                     <tr class="student-row {% if r.attempt_status == 'blocked' %}bg-light opacity-75{% endif %}">
                         <td class="pl-4 py-3 align-middle">
                             <div class="d-flex align-items-center">
