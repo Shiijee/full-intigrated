@@ -48,7 +48,7 @@
 
     <div class="nav-section-label">Administration</div>
     <a href="{{ url_for('super_admin.manage_colleges') }}"
-       class="nav-item {% if request.endpoint in ['super_admin.manage_colleges', 'super_admin.create_college', 'super_admin.edit_college', 'super_admin.delete_college'] %}active{% endif %}"
+       class="nav-item {% if request.endpoint in ['super_admin.manage_colleges', 'super_admin.create_college', 'super_admin.edit_college'] %}active{% endif %}"
        data-label="Colleges">
       <i class="bi bi-building"></i>
       <span>Colleges</span>

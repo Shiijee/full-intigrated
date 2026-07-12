@@ -92,6 +92,25 @@ def _resolve_local_user_id(username: str) -> int | None:
         conn.close()
 
 
+def _log_system_event(user_id, action, details=""):
+    """Best-effort insert into system_logs. Never lets a logging failure
+    break the request that triggered it."""
+    if not user_id:
+        return
+    try:
+        conn = current_app.config["get_db_connection"]()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO system_logs (user_id, action, details) VALUES (%s, %s, %s)",
+            (user_id, action, details)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception:
+        pass
+
+
 def _get_sso_user() -> dict | None:
     """
     Read the auth_token cookie, verify it with the Portal,
@@ -119,9 +138,18 @@ def _get_sso_user() -> dict | None:
         if local_id is not None:
             user["user_id"] = local_id   # overwrite Portal id with Voxify's local id
 
+        is_new_session = session.get("user_id") != user["user_id"] or not session.get("_login_logged")
+
         session["user_id"]   = user["user_id"]
         session["full_name"] = user["full_name"]
         session["role"]      = mapped_role
+
+        # Log exactly once per browser session — _get_sso_user() runs on
+        # every request, so without this guard every page view would
+        # insert a new "login" row.
+        if is_new_session:
+            session["_login_logged"] = True
+            _log_system_event(user["user_id"], "login", f"{mapped_role} logged in")
     return user
 
 
@@ -182,12 +210,155 @@ def _no_college_assigned(user):
     display bug.
     """
     return (
-        f"<h2>No College Assigned Yet</h2>"
-        f"<p>Hi <b>{user.get('full_name', 'there')}</b> — your admin account "
-        f"isn't linked to a college yet, so there's no election data to show.</p>"
-        f"<p>Ask your superadmin to open <b>Manage Admins</b> and assign you "
-        f"to a college. Once that's done, refresh this page.</p>"
-        f"<p><a href=\"{PORTAL_URL}\">Back to Portal</a></p>",
+        f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>No College Assigned — Voxify</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {{
+    --ink:       #0d1117;
+    --paper:     #f5f0e8;
+    --navy:      #1a3a5c;
+    --navy-dark: #122840;
+    --navy-mid:  #1e4470;
+    --gold:      #d4a843;
+    --gold-dim:  rgba(212,168,67,0.15);
+    --accent:    #c8392b;
+    --muted:     #8a8070;
+    --border:    #ddd5c4;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(26,58,92,0.06) 0%, transparent 45%),
+      radial-gradient(circle at 85% 80%, rgba(212,168,67,0.10) 0%, transparent 45%);
+  }}
+  .card {{
+    width: 100%;
+    max-width: 480px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 16px 48px rgba(13,17,23,0.14);
+    overflow: hidden;
+  }}
+  .card-top {{
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 100%);
+    padding: 30px 32px 26px;
+    position: relative;
+  }}
+  .card-top::after {{
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--gold), var(--navy));
+  }}
+  .badge {{
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    background: var(--gold-dim);
+    border: 1px solid rgba(212,168,67,0.35);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+  }}
+  .badge svg {{ width: 26px; height: 26px; stroke: var(--gold); }}
+  .card-top h1 {{
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #fff;
+    line-height: 1.2;
+  }}
+  .card-top p {{
+    color: rgba(255,255,255,0.72);
+    font-size: 0.85rem;
+    margin-top: 6px;
+    font-weight: 300;
+  }}
+  .card-body {{
+    padding: 28px 32px 32px;
+  }}
+  .card-body p {{
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }}
+  .card-body p:last-of-type {{ margin-bottom: 0; }}
+  .card-body b {{ color: var(--navy); font-weight: 600; }}
+  .steps {{
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin: 18px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }}
+  .steps svg {{ width: 18px; height: 18px; stroke: var(--accent); flex-shrink: 0; margin-top: 2px; }}
+  .steps p {{ margin: 0; font-size: 0.87rem; color: var(--muted); }}
+  .steps b {{ color: var(--ink); }}
+  .btn {{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+    background: var(--navy);
+    color: #fff !important;
+    text-decoration: none;
+    font-size: 0.87rem;
+    font-weight: 600;
+    padding: 11px 22px;
+    border-radius: 8px;
+    transition: background 0.18s ease;
+  }}
+  .btn:hover {{ background: var(--navy-dark); }}
+  .btn svg {{ width: 15px; height: 15px; stroke: #fff; }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-top">
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5zM6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/>
+        </svg>
+      </div>
+      <h1>No College Assigned Yet</h1>
+      <p>Voxify · Admin Access</p>
+    </div>
+    <div class="card-body">
+      <p>Hi <b>{user.get('full_name', 'there')}</b> — your admin account isn't linked to a college yet, so there's no election data to show.</p>
+      <div class="steps">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p>Ask your superadmin to open <b>Manage Admins</b> and assign you to a college. Once that's done, refresh this page.</p>
+      </div>
+      <a class="btn" href="{PORTAL_URL}">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+        </svg>
+        Back to Portal
+      </a>
+    </div>
+  </div>
+</body>
+</html>""",
         403,
     )
 
@@ -258,6 +429,7 @@ def admin_login():
 
 @auth_bp.route("/logout")
 def logout():
+    _log_system_event(session.get("user_id"), "logout", f"{session.get('role', 'user')} logged out")
     session.clear()
     resp = make_response(redirect(PORTAL_URL))
     resp.set_cookie("auth_token", "", expires=0, httponly=True, samesite="Lax")

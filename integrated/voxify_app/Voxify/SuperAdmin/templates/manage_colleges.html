@@ -63,11 +63,6 @@
                   data-bs-toggle="modal" data-bs-target="#editCollegeModal{{ college.id }}">
                   <i class="bi bi-pencil-fill"></i>
                 </button>
-                <a href="{{ url_for('super_admin.delete_college', college_id=college.id) }}"
-                   class="btn-action btn-action-delete" title="Delete"
-                   onclick="return confirmDelete()">
-                  <i class="bi bi-trash3-fill"></i>
-                </a>
               </div>
             </td>
           </tr>
