@@ -49,6 +49,7 @@
               <label class="form-label-custom">Start Date & Time</label>
               <input type="datetime-local" id="start_date" name="start_date" class="form-control form-control-custom"
                      value="{{ election.start_date.strftime('%Y-%m-%dT%H:%M') if election and election.start_date else '' }}"
+                     {% if max_dt %}max="{{ max_dt.strftime('%Y-%m-%dT%H:%M') }}"{% endif %}
                      {{ 'disabled' if (lock_both or is_paused) else 'required' }}/>
               {% if lock_both or is_paused %}
                 <input type="hidden" name="start_date" value="{{ election.start_date.strftime('%Y-%m-%dT%H:%M') if election and election.start_date else '' }}"/>
@@ -60,6 +61,7 @@
               <label class="form-label-custom">End Date & Time</label>
               <input type="datetime-local" id="end_date" name="end_date" class="form-control form-control-custom"
                      value="{{ election.end_date.strftime('%Y-%m-%dT%H:%M') if election and election.end_date else '' }}"
+                     {% if max_dt %}max="{{ max_dt.strftime('%Y-%m-%dT%H:%M') }}"{% endif %}
                      {{ 'disabled' if lock_both else 'required' }}/>
               {% if lock_both %}
                 <input type="hidden" name="end_date" value="{{ election.end_date.strftime('%Y-%m-%dT%H:%M') if election and election.end_date else '' }}"/>
@@ -68,6 +70,11 @@
               <div class="invalid-feedback" id="end_date_error" style="display:none; color:#dc3545; font-size:0.875em;"></div>
             </div>
           </div>
+          {% if max_dt and not lock_both %}
+          <p class="text-muted mb-4" style="font-size:0.82rem; margin-top:-0.75rem;">
+            <i class="bi bi-info-circle me-1"></i>Elections can only be scheduled between now and <strong>{{ max_dt.strftime('%B %d, %Y') }}</strong>.
+          </p>
+          {% endif %}
 
           <div class="form-actions">
             <a href="{{ url_for('admin.view_elections') }}" class="btn btn-outline-custom">Cancel</a>
@@ -88,6 +95,7 @@
     const endInput   = document.getElementById('end_date');
     const startErr   = document.getElementById('start_date_error');
     const endErr     = document.getElementById('end_date_error');
+    const maxDt      = {{ (max_dt.strftime('%Y-%m-%dT%H:%M') | tojson) if max_dt else 'null' }};
 
     function nowString() {
       const now = new Date();
@@ -110,6 +118,7 @@
       now.setSeconds(0, 0);
       const startVal = startInput.value ? new Date(startInput.value) : null;
       const endVal   = endInput.value   ? new Date(endInput.value)   : null;
+      const maxVal   = maxDt ? new Date(maxDt) : null;
 
       clearError(startErr);
       clearError(endErr);
@@ -118,8 +127,16 @@
         showError(startErr, 'Start date and time cannot be in the past.');
         valid = false;
       }
+      if (maxVal && startVal && startVal > maxVal) {
+        showError(startErr, 'Elections can only be scheduled up to ' + maxVal.toLocaleDateString() + '.');
+        valid = false;
+      }
       if (startVal && endVal && endVal <= startVal) {
         showError(endErr, 'End date and time must be after the start date and time.');
+        valid = false;
+      }
+      if (maxVal && endVal && endVal > maxVal) {
+        showError(endErr, 'Elections can only be scheduled up to ' + maxVal.toLocaleDateString() + '.');
         valid = false;
       }
       return valid;

@@ -1,5 +1,6 @@
 ﻿from flask import Blueprint, render_template, request, session, redirect, url_for, flash, current_app, jsonify
 from datetime import datetime
+import calendar
 from Voxify.Authentication.routes import admin_required
 from Voxify.utils.election_status import sync_election_statuses
 from Voxify.utils.otp import send_account_email
@@ -16,6 +17,17 @@ admin_bp = Blueprint('admin', __name__,
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'candidates')
 ANNOUNCEMENT_UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'announcements')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+# Elections may only be scheduled within this many months from today.
+ELECTION_WINDOW_MONTHS = 4
+
+def add_months(dt, months):
+    """Return dt shifted forward by `months` calendar months (day clamped to the target month's length)."""
+    month_index = dt.month - 1 + months
+    year = dt.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(dt.day, calendar.monthrange(year, month)[1])
+    return dt.replace(year=year, month=month, day=day)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -335,15 +347,20 @@ def create_election():
             end_dt = datetime.fromisoformat(end_date)
         except ValueError:
             flash("Invalid date format.", "error")
-            return render_template('election_form.html', action='add', election=None)
+            now = datetime.now()
+            return render_template('election_form.html', action='add', election=None, now=now, max_dt=add_months(now, ELECTION_WINDOW_MONTHS))
 
         now = datetime.now()
+        max_dt = add_months(now, ELECTION_WINDOW_MONTHS)
         if start_dt < now:
             flash("Start date and time cannot be in the past.", "error")
-            return render_template('election_form.html', action='add', election=None)
+            return render_template('election_form.html', action='add', election=None, now=now, max_dt=max_dt)
         if end_dt <= start_dt:
             flash("End date and time must be after the start date and time.", "error")
-            return render_template('election_form.html', action='add', election=None)
+            return render_template('election_form.html', action='add', election=None, now=now, max_dt=max_dt)
+        if start_dt > max_dt or end_dt > max_dt:
+            flash(f"Elections can only be scheduled up to {ELECTION_WINDOW_MONTHS} months from today (by {max_dt.strftime('%B %d, %Y')}).", "error")
+            return render_template('election_form.html', action='add', election=None, now=now, max_dt=max_dt)
 
         conn = current_app.config["get_db_connection"]()
         cursor = conn.cursor()
@@ -364,7 +381,8 @@ def create_election():
         flash("Election created successfully!", "success")
         return redirect(url_for('admin.view_elections'))
     
-    return render_template('election_form.html', action='add', election=None)
+    now = datetime.now()
+    return render_template('election_form.html', action='add', election=None, now=now, max_dt=add_months(now, ELECTION_WINDOW_MONTHS))
 
 @admin_bp.route("/elections/<int:election_id>/positions")
 @admin_required
@@ -496,11 +514,15 @@ def edit_election(election_id):
             return redirect(url_for('admin.edit_election', election_id=election_id))
 
         now = datetime.now()
+        max_dt = add_months(now, ELECTION_WINDOW_MONTHS)
         if start_dt < now:
             flash("Start date and time cannot be in the past.", "error")
             return redirect(url_for('admin.edit_election', election_id=election_id))
         if end_dt <= start_dt:
             flash("End date and time must be after the start date and time.", "error")
+            return redirect(url_for('admin.edit_election', election_id=election_id))
+        if start_dt > max_dt or end_dt > max_dt:
+            flash(f"Elections can only be scheduled up to {ELECTION_WINDOW_MONTHS} months from today (by {max_dt.strftime('%B %d, %Y')}).", "error")
             return redirect(url_for('admin.edit_election', election_id=election_id))
 
         if college_id is not None:
@@ -532,7 +554,8 @@ def edit_election(election_id):
     cursor.close()
     conn.close()
     from datetime import datetime as _dt
-    return render_template('election_form.html', action='edit', election=election, now=_dt.now())
+    _now = _dt.now()
+    return render_template('election_form.html', action='edit', election=election, now=_now, max_dt=add_months(_now, ELECTION_WINDOW_MONTHS))
 
 @admin_bp.route("/elections/<int:election_id>/activate")
 @admin_required
