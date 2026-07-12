@@ -10,7 +10,7 @@
         <!-- User Information -->
         <li class="nav-item dropdown no-arrow">
             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-toggle="dropdown">
-                
+
                 <div class="d-flex flex-column text-right mr-3 d-none d-lg-block">
                     <span class="text-dark font-weight-bold small mb-0" style="line-height: 1.2;">
                         Prof. {{ session.get('firstname', 'Instructor') }} {{ session.get('lastname', '') }}
@@ -18,7 +18,7 @@
                 </div>
 
                 <div class="position-relative">
-                    <img class="img-profile rounded-circle shadow-sm" 
+                    <img class="img-profile rounded-circle shadow-sm"
                          src="https://ui-avatars.com/api/?name={{ session.get('firstname', 'I') }}+{{ session.get('lastname', 'P') }}&background=d93025&color=fff&bold=true"
                          style="width: 38px; height: 38px; object-fit: cover; border: 2px solid var(--tp-teacher-accent-lt);">
                 </div>
@@ -28,18 +28,18 @@
                 <div class="px-3 py-2 mb-2 d-lg-none">
                     <p class="font-weight-bold mb-0 small">{{ session.get('firstname') }} {{ session.get('lastname') }}</p>
                 </div>
-                
+
                 <a class="dropdown-item rounded py-2" href="{{ url_for('teacher.profile') }}">
                     <i class="fas fa-user-cog fa-sm fa-fw mr-2 text-gray-400"></i>
                     <span style="font-size: 13.5px;">Account Settings</span>
                 </a>
 
                 <div class="dropdown-divider" style="opacity: 0.05;"></div>
-                
+
                 <button type="button" class="dropdown-item rounded py-2 text-danger font-weight-bold border-0 bg-transparent w-100 text-left"
                     data-toggle="modal" data-target="#logoutModal">
                     <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2"></i>
-                    <span style="font-size: 13.5px;">Secure Logout</span>
+                    <span style="font-size: 13.5px;">Sign Out</span>
                 </button>
             </div>
         </li>

@@ -27,9 +27,9 @@
         <div id="collapseMyClasses" class="collapse {% if is_class_active %}show{% endif %}" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded shadow-sm border-left-danger" style="border-left: 3px solid var(--tp-teacher-accent) !important;">
                 <h6 class="collapse-header" style="font-size: 10px; letter-spacing: 0.5px; color: #b7b9cc;">Classroom Tools:</h6>
-                
+
                 <!-- Main Overview Link -->
-                <a class="collapse-item font-weight-bold {% if request.endpoint == 'teacher.my_courses' %}active{% endif %}" 
+                <a class="collapse-item font-weight-bold {% if request.endpoint == 'teacher.my_courses' %}active{% endif %}"
                    href="{{ url_for('teacher.my_courses') }}">
                    <i class="fas fa-list-ul small"></i> View All Classes
                 </a>
@@ -83,6 +83,13 @@
             <span>Results & Analytics</span>
         </a>
     </li>
+
+      <li class="nav-item">
+    <a class="nav-link" href="http://127.0.0.1:5000">
+      <i class="fas fa-fw fa-home"></i>
+      <span>Go to Main Portal</span>
+    </a>
+  </li>
 
     <!-- Sidebar Toggler -->
     <div class="text-center d-none d-md-inline mt-auto mb-4">

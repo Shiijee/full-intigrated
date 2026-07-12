@@ -80,7 +80,9 @@ def logout():
     Clear the local Flask session and the shared auth_token cookie,
     then send the user back to the Portal.
     """
+    session.clear()
     resp = make_response(redirect(PORTAL_URL))
+    resp.set_cookie("auth_token", "", expires=0)
     return resp
 
 
