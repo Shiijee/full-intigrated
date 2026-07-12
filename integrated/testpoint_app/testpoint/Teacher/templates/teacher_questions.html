@@ -3,13 +3,40 @@
 
 {% block extra_head %}
 <style>
-    /* ── HIGH DENSITY QUESTION UI ── */
+    /* ── HIGH DENSITY QUESTION UI (Slimmer Cards) ── */
     .question-card {
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         border: 1px solid var(--tp-teacher-border) !important;
         border-radius: 12px !important;
         position: relative;
         overflow: hidden;
+    }
+
+    .question-card .card-body {
+        padding: 1.15rem 1.5rem !important;
+    }
+
+    .question-card h6 {
+        font-size: 14.5px !important;
+        margin-bottom: 0.5rem !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Compact Choices Layout */
+    .choice-row {
+        margin-top: 0.4rem !important;
+        margin-bottom: 0.6rem !important;
+    }
+
+    .question-card .choice-item {
+        font-size: 11.5px !important;
+        padding: 5px 10px !important;
+        margin-bottom: 6px !important;
+        border-radius: 8px !important;
+        background: #fff;
+        border: 1px solid var(--tp-teacher-border);
+        display: flex;
+        align-items: center;
     }
 
     .question-card.selected {
@@ -94,8 +121,8 @@
     }
 
     .answer-preview {
-        font-size: 12px;
-        padding: 6px 12px;
+        font-size: 11.5px;
+        padding: 5px 12px;
         background: #f0fdf4;
         border: 1px solid #dcfce7;
         color: #16a34a;
@@ -116,6 +143,34 @@
         background: #fff;
         border-radius: 12px;
         border: 1px solid var(--tp-teacher-border);
+    }
+
+    /* ── CLICKABLE INTERACTIVE NUMBER BOXES ── */
+    .page-num-btn {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border-radius: 50% !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: bold;
+        transition: all 0.15s ease;
+    }
+    .page-num-btn.active {
+        background-color: var(--tp-teacher-accent) !important;
+        border-color: var(--tp-teacher-accent) !important;
+        color: #fff !important;
+    }
+    .page-num-ellipsis {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: #94a3b8;
     }
 </style>
 {% endblock %}
@@ -318,16 +373,16 @@
                                 <h6 class="text-dark font-weight-bold mb-3" style="line-height: 1.5;">{{ loop.index }}.
                                     {{ q.question_text }}</h6>
 
-                                <!-- Display Choices/Options inside the Question Card -->
+                                <!-- Display Choices/Options inside the Question Card (Compact View) -->
                                 {% if q.question_type in ('multiple_choice', 'true_false') %}
-                                <div class="row no-gutters mt-2 mb-3" style="gap: 10px;">
+                                <div class="row no-gutters choice-row" style="gap: 8px;">
                                     {% for opt in q.options %}
-                                    <div class="col-md-5 mr-3 mb-2 p-2 rounded border d-flex align-items-center {% if opt.is_correct %}border-success bg-light text-success font-weight-bold{% else %}text-muted{% endif %}" style="font-size: 13px; background: #fafbfc;">
+                                    <div class="col-md-5 mr-2 choice-item {% if opt.is_correct %}border-success text-success font-weight-bold{% else %}text-muted{% endif %}" style="background: #fafbfc;">
                                         <span class="mr-2">
                                             {% if opt.is_correct %}
-                                                <i class="fas fa-check-circle text-success"></i>
+                                                <i class="fas fa-check-circle text-success" style="font-size: 11px;"></i>
                                             {% else %}
-                                                <i class="far fa-circle text-muted"></i>
+                                                <i class="far fa-circle text-muted" style="font-size: 11px;"></i>
                                             {% endif %}
                                         </span>
                                         <span>{{ opt.option_text }}</span>
@@ -358,6 +413,17 @@
             <div class="no-results-msg text-center py-5 bg-white rounded border mb-4 d-none">
                 <i class="fas fa-search fa-3x text-gray-100 mb-3"></i>
                 <p class="text-muted font-weight-bold">No matching bank questions.</p>
+            </div>
+
+            <!-- Bank Pagination Controls (Max 10) -->
+            <div id="bankPaginationControls" class="d-flex justify-content-center align-items-center mt-3 mb-4 animate__animated animate__fadeIn" style="gap: 6px;">
+                <button type="button" id="prevBankPage" class="btn btn-sm btn-light border rounded-pill px-3 font-weight-bold">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="bankPageNumbers" class="d-flex" style="gap: 5px;"></div>
+                <button type="button" id="nextBankPage" class="btn btn-sm btn-light border rounded-pill px-3 font-weight-bold">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
             </div>
         </div>
 
@@ -407,16 +473,16 @@
                                 <h6 class="text-dark font-weight-bold mb-3" style="line-height: 1.5;">{{ loop.index }} .
                                     {{ q.question_text }}</h6>
 
-                                <!-- Display Choices/Options inside the Question Card -->
+                                <!-- Display Choices/Options inside the Question Card (Compact View) -->
                                 {% if q.question_type in ('multiple_choice', 'true_false') %}
-                                <div class="row no-gutters mt-2 mb-3" style="gap: 10px;">
+                                <div class="row no-gutters choice-row" style="gap: 8px;">
                                     {% for opt in q.options %}
-                                    <div class="col-md-5 mr-3 mb-2 p-2 rounded border d-flex align-items-center {% if opt.is_correct %}border-success bg-light text-success font-weight-bold{% else %}text-muted{% endif %}" style="font-size: 13px; background: #fafbfc;">
+                                    <div class="col-md-5 mr-2 choice-item {% if opt.is_correct %}border-success text-success font-weight-bold{% else %}text-muted{% endif %}" style="background: #fafbfc;">
                                         <span class="mr-2">
                                             {% if opt.is_correct %}
-                                                <i class="fas fa-check-circle text-success"></i>
+                                                <i class="fas fa-check-circle text-success" style="font-size: 11px;"></i>
                                             {% else %}
-                                                <i class="far fa-circle text-muted"></i>
+                                                <i class="far fa-circle text-muted" style="font-size: 11px;"></i>
                                             {% endif %}
                                         </span>
                                         <span>{{ opt.option_text }}</span>
@@ -447,6 +513,17 @@
             <div class="no-results-msg text-center py-5 bg-white rounded border mb-4 d-none">
                 <i class="fas fa-search fa-3x text-gray-100 mb-3"></i>
                 <p class="text-muted font-weight-bold">No matching unique questions.</p>
+            </div>
+
+            <!-- Unique/Isolated Pagination Controls (Max 10) -->
+            <div id="isolatedPaginationControls" class="d-flex justify-content-center align-items-center mt-3 mb-4 animate__animated animate__fadeIn" style="gap: 10px;">
+                <button type="button" id="prevIsoPage" class="btn btn-sm btn-light border rounded-pill px-3 font-weight-bold">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="isoPageNumbers" class="d-flex" style="gap: 5px;"></div>
+                <button type="button" id="nextIsoPage" class="btn btn-sm btn-light border rounded-pill px-3 font-weight-bold">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
             </div>
         </div>
     </form>
@@ -804,6 +881,132 @@
             $('.section-select').prop('checked', false);
         });
 
+        // ── DUAL PAGINATION CONTROLS (MAX 10 PER PAGE) ──
+        let currentBankPage = 1;
+        let currentIsoPage = 1;
+        const pageSize = 10;
+
+        function getPaginationRange(current, total) {
+            const range = [];
+            const maxVisible = 5;
+
+            if (total <= maxVisible) {
+                for (let i = 1; i <= total; i++) range.push(i);
+            } else {
+                let start = Math.max(1, current - 2);
+                let end = Math.min(total, start + maxVisible - 1);
+
+                if (end - start + 1 < maxVisible) {
+                    start = Math.max(1, end - maxVisible + 1);
+                }
+
+                if (start > 1) {
+                    range.push(1);
+                    if (start > 2) range.push('...');
+                }
+
+                for (let i = start; i <= end; i++) {
+                    range.push(i);
+                }
+
+                if (end < total) {
+                    if (end < total - 1) range.push('...');
+                    range.push(total);
+                }
+            }
+            return range;
+        }
+
+        function renderPageNumbers(containerSelector, current, total, onPageClick) {
+            const container = $(containerSelector);
+            container.empty();
+
+            const range = getPaginationRange(current, total);
+
+            range.forEach(item => {
+                if (item === '...') {
+                    container.append('<span class="page-num-ellipsis">...</span>');
+                } else {
+                    const isActive = (item === current);
+                    const btn = $(`<button type="button" class="btn btn-sm btn-light border page-num-btn ${isActive ? 'active' : ''}">${item}</button>`);
+                    if (!isActive) {
+                        btn.on('click', () => onPageClick(item));
+                    }
+                    container.append(btn);
+                }
+            });
+        }
+
+        function paginateBankCards() {
+            const matchedCards = $('#bankSection .question-card.matched');
+            const totalMatched = matchedCards.length;
+            const totalPages = Math.ceil(totalMatched / pageSize) || 1;
+
+            if (currentBankPage > totalPages) currentBankPage = totalPages;
+            if (currentBankPage < 1) currentBankPage = 1;
+
+            matchedCards.hide();
+
+            // Slicing out matching indices
+            const start = (currentBankPage - 1) * pageSize;
+            const end = start + pageSize;
+            matchedCards.slice(start, end).show();
+
+            renderPageNumbers('#bankPageNumbers', currentBankPage, totalPages, function(targetPage) {
+                currentBankPage = targetPage;
+                paginateBankCards();
+                $('html, body').animate({
+                    scrollTop: $("#bankSection").offset().top - 100
+                }, 300);
+            });
+
+            $('#prevBankPage').prop('disabled', currentBankPage === 1);
+            $('#nextBankPage').prop('disabled', currentBankPage === totalPages);
+
+            if (totalMatched <= pageSize) {
+                $('#bankPaginationControls').hide();
+            } else {
+                $('#bankPaginationControls').show();
+            }
+
+            $('#bankSection .no-results-msg').toggleClass('d-none', totalMatched > 0);
+        }
+
+        function paginateIsoCards() {
+            const matchedCards = $('#isolatedSection .question-card.matched');
+            const totalMatched = matchedCards.length;
+            const totalPages = Math.ceil(totalMatched / pageSize) || 1;
+
+            if (currentIsoPage > totalPages) currentIsoPage = totalPages;
+            if (currentIsoPage < 1) currentIsoPage = 1;
+
+            matchedCards.hide();
+
+            // Slicing out matching indices
+            const start = (currentIsoPage - 1) * pageSize;
+            const end = start + pageSize;
+            matchedCards.slice(start, end).show();
+
+            renderPageNumbers('#isoPageNumbers', currentIsoPage, totalPages, function(targetPage) {
+                currentIsoPage = targetPage;
+                paginateIsoCards();
+                $('html, body').animate({
+                    scrollTop: $("#isolatedSection").offset().top - 100
+                }, 300);
+            });
+
+            $('#prevIsoPage').prop('disabled', currentIsoPage === 1);
+            $('#nextIsoPage').prop('disabled', currentIsoPage === totalPages);
+
+            if (totalMatched <= pageSize) {
+                $('#isolatedPaginationControls').hide();
+            } else {
+                $('#isolatedPaginationControls').show();
+            }
+
+            $('#isolatedSection .no-results-msg').toggleClass('d-none', totalMatched > 0);
+        }
+
         function applyMainFilters() {
             const search = $('#searchInput').val().toLowerCase().trim();
             const source = $('#sourceFilter').val();
@@ -812,29 +1015,106 @@
 
             $('.question-card').each(function () {
                 const card = $(this);
-                const matches = (source === '' || card.data('source') === source) &&
-                    (type === '' || card.data('type') === type) &&
-                    (diff === '' || card.data('difficulty') === diff) &&
-                    (search === '' || card.data('text').includes(search));
-                if (matches) card.show();
-                else { card.hide(); card.find('.q-checkbox').prop('checked', false).trigger('change'); }
+                // Extract text directly from the visible heading to avoid jQuery .data() caching issues
+                const cardText = card.find('h6').text().toLowerCase();
+                const cardSource = card.attr('data-source') || '';
+                const cardType = card.attr('data-type') || '';
+                const cardDifficulty = card.attr('data-difficulty') || '';
+
+                const matches = (source === '' || cardSource === source) &&
+                    (type === '' || cardType === type) &&
+                    (diff === '' || cardDifficulty === diff) &&
+                    (search === '' || cardText.includes(search));
+
+                if (matches) {
+                    card.addClass('matched');
+                } else {
+                    card.removeClass('matched').hide();
+                    card.find('.q-checkbox').prop('checked', false).trigger('change');
+                }
             });
 
-            $('.source-group').each(function () {
-                const group = $(this);
-                const visibleCount = group.find('.question-card:visible').length;
-                group.find('.no-results-msg').toggleClass('d-none', visibleCount > 0);
-                if (source !== '' && group.attr('id') !== (source + 'Section')) group.hide();
-                else group.show();
-            });
+            // Trigger paginations
+            paginateBankCards();
+            paginateIsoCards();
 
-            $('#isolatedDivider').toggle($('#bankSection').is(':visible') && $('#isolatedSection').is(':visible'));
+            // Toggle section grouping and divider visibility
+            const visibleBankTotal = $('#bankSection .question-card.matched').length;
+            const visibleIsoTotal = $('#isolatedSection .question-card.matched').length;
+
+            if (source === 'bank') {
+                $('#bankSection').show();
+                $('#isolatedSection').hide();
+                $('#isolatedDivider').hide();
+            } else if (source === 'isolated') {
+                $('#bankSection').hide();
+                $('#isolatedSection').show();
+                $('#isolatedDivider').hide();
+            } else {
+                $('#bankSection').show();
+                $('#isolatedSection').show();
+                $('#isolatedDivider').toggle(visibleBankTotal > 0 && visibleIsoTotal > 0);
+            }
+
             updateMainUI();
         }
 
+        // Initialize Filter States on first load
+        applyMainFilters();
+
         $('#searchInput').on('keyup', applyMainFilters);
         $('#sourceFilter, #typeFilter, #difficultyFilter').on('change', applyMainFilters);
-        $('#resetFilters').on('click', function () { $('#filterForm')[0].reset(); applyMainFilters(); });
+        $('#resetFilters').on('click', function () {
+            $('#filterForm')[0].reset();
+            currentBankPage = 1;
+            currentIsoPage = 1;
+            applyMainFilters();
+        });
+
+        // Pagination Click Events
+        $('#prevBankPage').on('click', function() {
+            if (currentBankPage > 1) {
+                currentBankPage--;
+                paginateBankCards();
+                $('html, body').animate({
+                    scrollTop: $("#bankSection").offset().top - 100
+                }, 300);
+            }
+        });
+
+        $('#nextBankPage').on('click', function() {
+            const totalMatched = $('#bankSection .question-card.matched').length;
+            const totalPages = Math.ceil(totalMatched / pageSize) || 1;
+            if (currentBankPage < totalPages) {
+                currentBankPage++;
+                paginateBankCards();
+                $('html, body').animate({
+                    scrollTop: $("#bankSection").offset().top - 100
+                }, 300);
+            }
+        });
+
+        $('#prevIsoPage').on('click', function() {
+            if (currentIsoPage > 1) {
+                currentIsoPage--;
+                paginateIsoCards();
+                $('html, body').animate({
+                    scrollTop: $("#isolatedSection").offset().top - 100
+                }, 300);
+            }
+        });
+
+        $('#nextIsoPage').on('click', function() {
+            const totalMatched = $('#isolatedSection .question-card.matched').length;
+            const totalPages = Math.ceil(totalMatched / pageSize) || 1;
+            if (currentIsoPage < totalPages) {
+                currentIsoPage++;
+                paginateIsoCards();
+                $('html, body').animate({
+                    scrollTop: $("#isolatedSection").offset().top - 100
+                }, 300);
+            }
+        });
 
         $('#bankSearch, #bankTypeFilter, #bankDifficultyFilter').on('input change', function () {
             const search = $('#bankSearch').val().toLowerCase();
