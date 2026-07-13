@@ -17,9 +17,6 @@
         <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-trash-alt mr-2 text-danger"></i>Trash Bin</h1>
         <p class="text-muted small mb-0">Recover or permanently destroy deleted accounts.</p>
     </div>
-    <button class="btn btn-danger shadow-sm px-4 rounded-pill font-weight-bold small" data-toggle="modal" data-target="#emptyTrashModal">
-        <i class="fas fa-eraser mr-2"></i> Wipe All Trash
-    </button>
 </div>
 
 <!-- Breadcrumb -->
@@ -85,9 +82,11 @@
                             <button class="btn btn-white border btn-circle-sm mr-1" data-toggle="modal" data-target="#restoreUserModal" data-id="{{ tu.user_id }}" data-name="{{ tu.firstname }} {{ tu.lastname }}" title="Restore Account">
                                 <i class="fas fa-undo text-success"></i>
                             </button>
+                        <!--
                             <button class="btn btn-white border btn-circle-sm" data-toggle="modal" data-target="#permDeleteUserModal" data-id="{{ tu.user_id }}" data-name="{{ tu.firstname }} {{ tu.lastname }}" title="Permanent Delete">
                                 <i class="fas fa-exclamation-triangle text-danger"></i>
                             </button>
+                            -->
                         </td>
                     </tr>
                     {% endfor %}
@@ -189,7 +188,7 @@ $(document).ready(function() {
     $('#trashRoleFilter').on('change', performFilter);
 
     $('#restoreUserModal').on('show.bs.modal', function (event) {
-        var btn = $(event.relatedTarget); 
+        var btn = $(event.relatedTarget);
         $('#restoreUserName').text(btn.data('name'));
         var actionUrl = "{{ url_for('admin.restore_account', user_id='PLACEHOLDER') }}".replace('PLACEHOLDER', btn.data('id'));
         $('#restoreForm').attr('action', actionUrl);
@@ -204,7 +203,7 @@ $(document).ready(function() {
 
     const paginator = createPaginator({
         tableBodySelector: '#trashTable tbody',
-        paginationSelector: '#trash-pagination', 
+        paginationSelector: '#trash-pagination',
         rowsPerPage: 10,
         getVisibleRows: () => filteredRows,
     });

@@ -2099,125 +2099,457 @@ def resubmit_user(pending_id):
 @admin.route("/download_user_template")
 def download_user_template():
     return redirect(
-        "https://docs.google.com/spreadsheets/d/1EBgMF1eZRewSn41HML28RPFEyNzcfyDowS-icgewbj8/copy"
+        "https://docs.google.com/spreadsheets/d/1mu5OZOJA4olgZZvRiBTYO6uWsf7Ex_9UCbaxeyX3xmE/copy"
     )
 
 
-@admin.route('/import_users', methods=['POST'])
-def import_users():
-    if not admin_logged_in(): return redirect(url_for('auth.login'))
+# @admin.route('/import_users', methods=['POST'])
+# def import_users():
+#     if not admin_logged_in(): return redirect(url_for('auth.login'))
+
+#     if 'excel_file' not in request.files:
+#         flash('No file uploaded.', 'danger')
+#         return redirect(url_for('admin.manage_accounts'))
+
+#     file = request.files['excel_file']
+#     if file.filename == '':
+#         flash('No file selected.', 'danger')
+#         return redirect(url_for('admin.manage_accounts'))
+
+#     connection = None
+#     cursor = None
+
+#     try:
+#         df = pd.read_excel(file)
+#         # Standardize column names to remove leading/trailing spaces
+#         df.columns = df.columns.str.strip()
+
+#         required_cols = ['First Name', 'Last Name', 'Email', 'Password', 'Role']
+#         for col in required_cols:
+#             if col not in df.columns:
+#                 flash(f'Missing required column: {col}', 'danger')
+#                 return redirect(url_for('admin.manage_accounts'))
+
+#         connection = mysql.connector.connect(**db_config)
+#         # CRITICAL FIX: Use buffered=True to prevent "Unread result found" error
+#         cursor = connection.cursor(dictionary=True, buffered=True)
+
+#         success_count = 0
+#         error_logs = []
+
+#         for index, row in df.iterrows():
+#             try:
+#                 email = str(row['Email']).strip()
+#                 role = str(row['Role']).lower().strip()
+
+#                 # Check duplicate email
+#                 cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+#                 if cursor.fetchone():
+#                     error_logs.append(f"Row {index+2}: Email {email} exists.")
+#                     continue
+
+#                 if role not in ['student', 'teacher', 'admin']:
+#                     error_logs.append(f"Row {index+2}: Invalid role '{role}'.")
+#                     continue
+
+#                 # Generate ID
+#                 prefix = {'admin': 'A', 'teacher': 'T', 'student': 'S'}.get(role, 'U')
+#                 custom_user_id = generate_id_internal(cursor, prefix)
+#                 hashed_pw = generate_password_hash(str(row['Password']))
+
+#                 # 1. Insert Core User locally
+#                 cursor.execute("""
+#                     INSERT INTO users (user_id, email, password, role, is_verified, is_active)
+#                     VALUES (%s, %s, %s, %s, 1, 1)
+#                 """, (custom_user_id, email, hashed_pw, role))
+
+#                 # Extract Full Address Data
+#                 mname = row.get('Middle Name') if pd.notnull(row.get('Middle Name')) else None
+#                 reg = row.get('Region') if pd.notnull(row.get('Region')) else None
+#                 prov = row.get('Province') if pd.notnull(row.get('Province')) else None
+#                 cit = row.get('City') if pd.notnull(row.get('City')) else None
+#                 bar = row.get('Barangay') if pd.notnull(row.get('Barangay')) else None
+
+#                 if role == 'student':
+#                     block_id = None
+#                     block_name = str(row.get('Block Name', '')).strip()
+#                     if block_name and block_name != 'nan':
+#                         cursor.execute("SELECT block_id FROM blocks WHERE block_name = %s", (block_name,))
+#                         blk_res = cursor.fetchone()
+#                         if blk_res: block_id = blk_res['block_id']
+
+#                     cursor.execute("""
+#                         INSERT INTO students (student_id, email, firstname, middlename, lastname, block_id, region, province, city, barangay)
+#                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+#                     """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], block_id, reg, prov, cit, bar))
+
+#                 elif role == 'teacher':
+#                     cursor.execute("""
+#                         INSERT INTO teachers (teacher_id, email, firstname, middlename, lastname, region, province, city, barangay)
+#                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+#                     """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], reg, prov, cit, bar))
+
+#                 else: # Admin
+#                     cursor.execute("""
+#                         INSERT INTO admins (admin_id, email, firstname, middlename, lastname, region, province, city, barangay)
+#                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+#                     """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], reg, prov, cit, bar))
+
+#                 # ── 2. SYSTEM-WIDE SYNCHRONIZATION CASCADE ──
+#                 from testpoint.portal_sync import sync_user_to_portal, portal_role, mirror_user_to_modules
+#                 fullname_for_portal = ' '.join([row['First Name'], mname, row['Last Name']] if mname else [row['First Name'], row['Last Name']])
+
+#                 # Fetch target metadata for Attendeez/Attendance integration
+#                 extra_data = {}
+#                 if role == 'student' and block_id:
+#                     cursor.execute("""
+#                         SELECT b.block_name, p.program_name, c.college_name
+#                         FROM blocks b
+#                         JOIN programs p ON b.program_id = p.program_id
+#                         LEFT JOIN colleges c ON p.college_id = c.college_id
+#                         WHERE b.block_id = %s
+#                     """, (block_id,))
+#                     block_info = cursor.fetchone()
+#                     if block_info:
+#                         block_name = block_info['block_name']
+#                         program_name = block_info['program_name']
+#                         college_name = block_info['college_name']
+
+#                         extra_data["program"] = program_name
+#                         extra_data["college"] = college_name
+#                         if block_name and "-" in block_name:
+#                             parts = block_name.split("-")
+#                             if len(parts) == 2 and len(parts[1]) >= 2:
+#                                 extra_data["year"] = parts[1][0]
+#                                 extra_data["block"] = parts[1][1:]
+#                             else:
+#                                 extra_data["block"] = block_name
+#                         else:
+#                             extra_data["block"] = block_name
+
+#                 # Sync core account identity to Portal SSO database
+#                 sync_user_to_portal(
+#                     username=custom_user_id,
+#                     password=str(row['Password']),
+#                     full_name=fullname_for_portal,
+#                     role=portal_role(role),
+#                     email=email,
+#                     external_id=custom_user_id,
+#                 )
+
+#                 # Mirror account to other downstream modules (Attendeez / Voxify)
+#                 mirror_user_to_modules(
+#                     username=custom_user_id,
+#                     password=str(row['Password']),
+#                     full_name=fullname_for_portal,
+#                     role=portal_role(role),
+#                     email=email,
+#                     extra_data=extra_data
+#                 )
+
+#                 success_count += 1
+
+#             except Exception as row_err:
+#                 error_logs.append(f"Row {index+2}: {str(row_err)}")
+#                 connection.rollback() # Rollback the specific failed user transaction
+#                 continue
+
+#         connection.commit()
+#         flash(f'Successfully imported {success_count} users!', 'success')
+
+#         if error_logs:
+#             err_msg = "Issues found: " + " | ".join(error_logs[:5])
+#             flash(err_msg, 'warning')
+
+#     except Exception as e:
+#         if connection: connection.rollback()
+#         flash(f'Critical file error: {str(e)}', 'danger')
+#     finally:
+#         if cursor: cursor.close()
+#         if connection: connection.close()
+
+#     return redirect(url_for('admin.manage_accounts'))
+
+@admin.route('/preview_import', methods=['POST'])
+def preview_import():
+    """
+    Step 1 of the Bulk Import Flow.
+    Parses the uploaded Excel spreadsheet, standardizes column inputs,
+    and checks the database for conflicts or duplicates.
+    """
+    if not admin_logged_in():
+        return jsonify({"success": False, "reason": "Unauthorized"}), 403
 
     if 'excel_file' not in request.files:
-        flash('No file uploaded.', 'danger')
-        return redirect(url_for('admin.manage_accounts'))
+        return jsonify({"success": False, "reason": "No file uploaded."}), 400
 
     file = request.files['excel_file']
     if file.filename == '':
-        flash('No file selected.', 'danger')
-        return redirect(url_for('admin.manage_accounts'))
+        return jsonify({"success": False, "reason": "No file selected."}), 400
 
     connection = None
     cursor = None
-
     try:
-        df = pd.read_excel(file)
-        # Standardize column names to remove leading/trailing spaces
+        df = pd.read_excel(file).fillna('')
         df.columns = df.columns.str.strip()
 
         required_cols = ['First Name', 'Last Name', 'Email', 'Password', 'Role']
         for col in required_cols:
             if col not in df.columns:
-                flash(f'Missing required column: {col}', 'danger')
-                return redirect(url_for('admin.manage_accounts'))
+                return jsonify({"success": False, "reason": f"Missing required column: {col}"}), 400
 
         connection = mysql.connector.connect(**db_config)
-        # CRITICAL FIX: Use buffered=True to prevent "Unread result found" error
-        cursor = connection.cursor(dictionary=True, buffered=True)
+        cursor = connection.cursor(dictionary=True)
 
-        success_count = 0
-        error_logs = []
-
+        preview_rows = []
         for index, row in df.iterrows():
-            try:
-                email = str(row['Email']).strip()
-                role = str(row['Role']).lower().strip()
+            email = str(row['Email']).strip()
+            role = str(row['Role']).lower().strip()
+            fname = str(row['First Name']).strip()
+            lname = str(row['Last Name']).strip()
+            password = str(row['Password']).strip()
 
+            mname = str(row.get('Middle Name', '')).strip()
+            assignment = str(row.get('Assignment', '')).strip()
+            region = str(row.get('Region', '')).strip()
+            province = str(row.get('Province', '')).strip()
+            city = str(row.get('City', '')).strip()
+            barangay = str(row.get('Barangay', '')).strip()
+
+            # Clean Pandas NaN representation
+            assignment = "" if assignment.lower() == 'nan' else assignment
+            mname = "" if mname.lower() == 'nan' else mname
+            region = "" if region.lower() == 'nan' else region
+            province = "" if province.lower() == 'nan' else province
+            city = "" if city.lower() == 'nan' else city
+            barangay = "" if barangay.lower() == 'nan' else barangay
+
+            status = "valid"
+            reason = "Ready to import"
+
+            if not fname or not lname or not email or not password or not role:
+                status = "invalid"
+                reason = "Missing required fields"
+            elif role not in ['student', 'teacher', 'admin']:
+                status = "invalid"
+                reason = f"Invalid role: {role}"
+            else:
                 # Check duplicate email
                 cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
                 if cursor.fetchone():
-                    error_logs.append(f"Row {index+2}: Email {email} exists.")
+                    status = "invalid"
+                    reason = "Email already registered"
+
+            preview_rows.append({
+                "index": index,
+                "firstname": fname,
+                "middlename": mname,
+                "lastname": lname,
+                "email": email,
+                "password": password,
+                "role": role,
+                "assignment": assignment,
+                "region": region,
+                "province": province,
+                "city": city,
+                "barangay": barangay,
+                "status": status,
+                "reason": reason
+            })
+
+        return jsonify({"success": True, "rows": preview_rows}), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "reason": f"Error parsing spreadsheet: {str(e)}"}), 500
+    finally:
+        if cursor: cursor.close()
+        if connection: connection.close()
+
+
+@admin.route('/execute_import', methods=['POST'])
+def execute_import():
+    """
+    Step 2 of the Bulk Import Flow.
+    Processes the checked row datasets, inserts personal profiles,
+    and executes the system-wide synchronization cascade across 3 modules.
+    """
+    if not admin_logged_in():
+        return jsonify({"success": False, "reason": "Unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    selected_rows = body.get("rows") or []
+
+    if not selected_rows:
+        return jsonify({"success": False, "reason": "No users selected for import."}), 400
+
+    connection = None
+    cursor = None
+    success_count = 0
+    failed_count = 0
+    error_logs = []
+
+    from testpoint.portal_sync import sync_user_to_portal, portal_role, mirror_user_to_modules
+
+    try:
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor(dictionary=True, buffered=True)
+
+        for item in selected_rows:
+            try:
+                email = str(item['email']).strip()
+                role = str(item['role']).lower().strip()
+                fname = str(item['firstname']).strip()
+                lname = str(item['lastname']).strip()
+                mname = str(item.get('middlename', '')).strip() or None
+                password = str(item['password']).strip()
+
+                if mname and mname.lower() == 'nan':
+                    mname = None
+
+                # Guard check duplicate email
+                cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+                if cursor.fetchone():
+                    failed_count += 1
+                    error_logs.append(f"Skipped {email}: Email already exists.")
                     continue
 
-                if role not in ['student', 'teacher', 'admin']:
-                    error_logs.append(f"Row {index+2}: Invalid role '{role}'.")
-                    continue
-
-                # Generate ID
+                # Generate unique system-wide sequential ID
                 prefix = {'admin': 'A', 'teacher': 'T', 'student': 'S'}.get(role, 'U')
                 custom_user_id = generate_id_internal(cursor, prefix)
-                hashed_pw = generate_password_hash(str(row['Password']))
+                hashed_pw = generate_password_hash(password)
 
-                # 1. Insert Core User
+                # 1. Insert into core users
                 cursor.execute("""
                     INSERT INTO users (user_id, email, password, role, is_verified, is_active)
                     VALUES (%s, %s, %s, %s, 1, 1)
                 """, (custom_user_id, email, hashed_pw, role))
 
-                # Extract Full Address Data
-                mname = row.get('Middle Name') if pd.notnull(row.get('Middle Name')) else None
-                reg = row.get('Region') if pd.notnull(row.get('Region')) else None
-                prov = row.get('Province') if pd.notnull(row.get('Province')) else None
-                cit = row.get('City') if pd.notnull(row.get('City')) else None
-                bar = row.get('Barangay') if pd.notnull(row.get('Barangay')) else None
+                reg = item.get('region') or None
+                prov = item.get('province') or None
+                cit = item.get('city') or None
+                bar = item.get('barangay') or None
+                assignment = str(item.get('assignment', '')).strip()
+
+                if reg and reg.lower() == 'nan': reg = None
+                if prov and prov.lower() == 'nan': prov = None
+                if cit and cit.lower() == 'nan': cit = None
+                if bar and bar.lower() == 'nan': bar = None
+                if assignment and assignment.lower() == 'nan': assignment = ""
+
+                # Role specific sub-tables and assignments
+                block_id = None
+                college_id = None
 
                 if role == 'student':
-                    block_id = None
-                    block_name = str(row.get('Block Name', '')).strip()
-                    if block_name and block_name != 'nan':
-                        cursor.execute("SELECT block_id FROM blocks WHERE block_name = %s", (block_name,))
+                    if assignment:
+                        cursor.execute("SELECT block_id FROM blocks WHERE block_name = %s", (assignment,))
                         blk_res = cursor.fetchone()
-                        if blk_res: block_id = blk_res['block_id']
+                        if blk_res:
+                            block_id = blk_res['block_id']
 
                     cursor.execute("""
                         INSERT INTO students (student_id, email, firstname, middlename, lastname, block_id, region, province, city, barangay)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], block_id, reg, prov, cit, bar))
+                    """, (custom_user_id, email, fname, mname, lname, block_id, reg, prov, cit, bar))
 
                 elif role == 'teacher':
-                    cursor.execute("""
-                        INSERT INTO teachers (teacher_id, email, firstname, middlename, lastname, region, province, city, barangay)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], reg, prov, cit, bar))
+                    if assignment:
+                        cursor.execute("SELECT college_id FROM colleges WHERE college_name = %s OR college_name LIKE %s", (assignment, f"%{assignment}%"))
+                        col_res = cursor.fetchone()
+                        if col_res:
+                            college_id = col_res['college_id']
 
-                else: # Admin
+                    cursor.execute("""
+                        INSERT INTO teachers (teacher_id, email, firstname, middlename, lastname, region, province, city, barangay, college_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (custom_user_id, email, fname, mname, lname, reg, prov, cit, bar, college_id))
+
+                else:  # Admin
                     cursor.execute("""
                         INSERT INTO admins (admin_id, email, firstname, middlename, lastname, region, province, city, barangay)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (custom_user_id, email, row['First Name'], mname, row['Last Name'], reg, prov, cit, bar))
+                    """, (custom_user_id, email, fname, mname, lname, reg, prov, cit, bar))
+
+                # 2. System-wide sync
+                fullname_for_portal = ' '.join([fname, mname, lname] if mname else [fname, lname])
+
+                extra_data = {}
+                if role == 'student' and block_id:
+                    cursor.execute("""
+                        SELECT b.block_name, p.program_name, c.college_name
+                        FROM blocks b
+                        JOIN programs p ON b.program_id = p.program_id
+                        LEFT JOIN colleges c ON p.college_id = c.college_id
+                        WHERE b.block_id = %s
+                    """, (block_id,))
+                    block_info = cursor.fetchone()
+                    if block_info:
+                        block_name = block_info['block_name']
+                        program_name = block_info['program_name']
+                        college_name = block_info['college_name']
+
+                        extra_data["program"] = program_name
+                        extra_data["college"] = college_name
+                        if block_name and "-" in block_name:
+                            parts = block_name.split("-")
+                            if len(parts) == 2 and len(parts[1]) >= 2:
+                                extra_data["year"] = parts[1][0]
+                                extra_data["block"] = parts[1][1:]
+                            else:
+                                extra_data["block"] = block_name
+                        else:
+                            extra_data["block"] = block_name
+
+                elif role == 'teacher' and college_id:
+                    # Sync teacher's assigned college as department
+                    cursor.execute("SELECT college_name FROM colleges WHERE college_id = %s", (college_id,))
+                    coll_info = cursor.fetchone()
+                    if coll_info:
+                        extra_data["department"] = coll_info['college_name']
+
+                # Sync to central Portal SSO database
+                sync_user_to_portal(
+                    username=custom_user_id,
+                    password=password,
+                    full_name=fullname_for_portal,
+                    role=portal_role(role),
+                    email=email,
+                    external_id=custom_user_id,
+                )
+
+                # Mirror to downstream modules (Attendeez / Voxify)
+                mirror_user_to_modules(
+                    username=custom_user_id,
+                    password=password,
+                    full_name=fullname_for_portal,
+                    role=portal_role(role),
+                    email=email,
+                    extra_data=extra_data
+                )
 
                 success_count += 1
 
             except Exception as row_err:
-                error_logs.append(f"Row {index+2}: {str(row_err)}")
-                connection.rollback() # Rollback the specific failed user
+                failed_count += 1
+                error_logs.append(f"Error on {item.get('email', 'Row')}: {str(row_err)}")
+                if connection: connection.rollback()
                 continue
 
         connection.commit()
-        flash(f'Successfully imported {success_count} users!', 'success')
-
-        if error_logs:
-            # Join errors into a readable format, limited to first 5 to avoid alert overflow
-            err_msg = "Issues found: " + " | ".join(error_logs[:5])
-            flash(err_msg, 'warning')
+        return jsonify({
+            "success": True,
+            "imported": success_count,
+            "failed": failed_count,
+            "errors": error_logs
+        }), 201
 
     except Exception as e:
         if connection: connection.rollback()
-        flash(f'Critical file error: {str(e)}', 'danger')
+        return jsonify({"success": False, "reason": f"System error: {str(e)}"}), 500
     finally:
         if cursor: cursor.close()
         if connection: connection.close()
 
-    return redirect(url_for('admin.manage_accounts'))
 
 def generate_id_internal(cursor, role_prefix):
     # This assumes the cursor passed is already buffered

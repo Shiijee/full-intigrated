@@ -29,10 +29,7 @@
     <div>
         <h1 class="h3 mb-1 text-gray-800 font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-trash-alt mr-2 text-danger"></i>Trashed Courses</h1>
         <p class="text-muted small mb-0">Manage subjects flagged for permanent deletion or restoration.</p>
-    </div>
-    <button class="btn btn-danger shadow-sm tp-pill font-weight-bold" data-toggle="modal" data-target="#emptyTrashModal">
-        <i class="fas fa-eraser mr-2"></i> Purge All Trash
-    </button>
+    </div>  
 </div>
 
 <!-- Breadcrumb -->
@@ -94,9 +91,12 @@
                             <button type="button" class="btn btn-circle-sm mr-2 shadow-sm" data-toggle="modal" data-target="#restoreCourseModal" data-id="{{ course.course_code }}" data-name="{{ course.course_name }}" title="Restore Subject">
                                 <i class="fas fa-undo text-success"></i>
                             </button>
+                           <!--
                             <button type="button" class="btn btn-circle-sm shadow-sm" data-toggle="modal" data-target="#permDeleteCourseModal" data-id="{{ course.course_code }}" data-name="{{ course.course_name }}" title="Destroy Permanently">
                                 <i class="fas fa-bomb text-danger"></i>
                             </button>
+                            -->
+
                         </td>
                     </tr>
                     {% else %}

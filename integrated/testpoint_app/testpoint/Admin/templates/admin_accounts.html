@@ -108,11 +108,10 @@
         <p class="text-muted small mb-0">Oversee and manage institutional user profiles.</p>
     </div>
     <div class="d-flex" style="gap: 12px;">
-        <!--
             <button class="btn btn-outline-success shadow-sm px-4 rounded-pill font-weight-bold small" data-toggle="modal" data-target="#importExcelModal">
                 <i class="fas fa-file-excel mr-2"></i> Bulk Import
             </button>
-        -->
+
             <button class="btn btn-dark shadow-sm px-4 rounded-pill font-weight-bold small" data-toggle="modal"
             data-target="#addUserModal">
             <i class="fas fa-user-plus mr-2"></i> Add New User
@@ -492,7 +491,8 @@
                 </h5>
                 <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
             </div>
-            <form action="{{ url_for('admin.import_users') }}" method="POST" enctype="multipart/form-data">
+            <!-- Intercepted by jQuery to trigger pre-import preview modal -->
+            <form id="importExcelForm" enctype="multipart/form-data">
                 <div class="modal-body p-4">
                     <div class="bg-light p-3 rounded-lg border mb-4">
                         <div class="d-flex align-items-center justify-content-between">
@@ -521,9 +521,54 @@
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0">
                     <button class="btn btn-light px-4 rounded-pill" type="button" data-dismiss="modal">Cancel</button>
-                    <button class="btn btn-success px-4 font-weight-bold rounded-pill shadow-sm" type="submit">Execute Bulk Import</button>
+                    <button class="btn btn-success px-4 font-weight-bold rounded-pill shadow-sm" type="submit">Upload & Preview</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- PREVIEW IMPORT MODAL -->
+<div class="modal fade" id="previewImportModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 pb-0 pt-4 px-4 d-flex align-items-center justify-content-between">
+                <h5 class="modal-title font-weight-bold" style="font-family: var(--tp-serif);"><i class="fas fa-list-check mr-2 text-info"></i>Select Users to Import</h5>
+                <div>
+                    <span class="badge badge-light border text-muted px-3 py-2 rounded-pill font-weight-bold mr-2" id="previewTotalCount">0 Found</span>
+                    <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
+                </div>
+            </div>
+            <div class="modal-body p-4">
+                <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
+                    <table class="table align-middle mb-0" id="previewTable">
+                        <thead class="bg-light">
+                            <tr style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <th class="text-center px-4" width="5%">
+                                    <input type="checkbox" id="selectAllPreview" checked>
+                                </th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Assignment</th>
+                                <th>Address</th>
+                                <th>Verification Status</th>
+                            </tr>
+                        </thead>
+                        <tbody style="font-size: 13.5px;">
+                            <!-- Dynamic rows appended from JSON -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="previewProgressArea" class="text-center py-4" style="display:none;">
+                    <div class="spinner-grow text-success mb-2" role="status"></div>
+                    <p class="small font-weight-bold text-success" id="progressStatusText">Analyzing and synchronizing selected profiles...</p>
+                </div>
+            </div>
+            <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                <button class="btn btn-light px-4 rounded-pill" type="button" data-dismiss="modal">Cancel</button>
+                <button class="btn btn-success px-5 font-weight-bold rounded-pill shadow-sm" type="button" id="btnConfirmImport">Confirm & Import Selected</button>
+            </div>
         </div>
     </div>
 </div>
@@ -716,10 +761,143 @@
             rowsPerPage: 10,
             getVisibleRows: () => filteredRows,
         });
-        paginator.render();
+        paginator.reset();
 
         /* ══════════════════════════════════════════
-        3. UI ACTIONS
+        3. BULK EXCEL IMPORT PREVIEW & SELECTION
+        ══════════════════════════════════════════ */
+        let parsedImportRows = []; // Cache reference globally for execution
+
+        // Intercept upload to generate preview data first
+        $('#importExcelForm').on('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(this);
+            var btn = $(this).find('button[type="submit"]');
+            var originalText = btn.html();
+
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...');
+
+            $.ajax({
+                url: "{{ url_for('admin.preview_import') }}",
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(data) {
+                    btn.prop('disabled', false).html(originalText);
+                    if (data.success) {
+                        $('#importExcelModal').modal('hide');
+                        renderPreviewTable(data.rows);
+                        $('#previewImportModal').modal('show');
+                    } else {
+                        alert(data.reason || "Failed to analyze the file.");
+                    }
+                },
+                error: function(err) {
+                    btn.prop('disabled', false).html(originalText);
+                    var errMsg = err.responseJSON ? err.responseJSON.reason : "Network error analyzing spreadsheet.";
+                    alert(errMsg);
+                }
+            });
+        });
+
+        function renderPreviewTable(rows) {
+            parsedImportRows = rows;
+            var tbody = $('#previewTable tbody');
+            tbody.empty();
+
+            $('#previewTotalCount').text(`${rows.length} Found`);
+
+            let validCount = 0;
+
+            rows.forEach((row, idx) => {
+                var isInvalid = (row.status === 'invalid');
+                var badgeClass = isInvalid ? 'badge-danger' : 'badge-success';
+
+                var assignmentMarkup = '--';
+                if (row.role === 'student' && row.assignment) {
+                    assignmentMarkup = `<i class="fas fa-link mr-1 text-muted"></i>${row.assignment} (Block)`;
+                } else if (row.role === 'teacher' && row.assignment) {
+                    assignmentMarkup = `<i class="fas fa-university mr-1 text-muted"></i>${row.assignment} (College)`;
+                }
+
+                // Dynamic Address formulation
+                var addressParts = [];
+                if (row.barangay) addressParts.push(row.barangay);
+                if (row.city) addressParts.push(row.city);
+                if (row.province) addressParts.push(row.province);
+                if (row.region) addressParts.push(row.region);
+                var fullAddress = addressParts.join(', ') || '--';
+
+                var checkboxMarkup = `<input type="checkbox" class="preview-row-chk" data-idx="${idx}" ${isInvalid ? 'disabled style="cursor:not-allowed;"' : 'checked'}>`;
+                if (!isInvalid) validCount++;
+
+                tbody.append(`
+                    <tr class="align-middle ${isInvalid ? 'text-muted bg-light' : ''}">
+                        <td class="text-center px-4">${checkboxMarkup}</td>
+                        <td class="font-weight-bold">${row.lastname}, ${row.firstname}</td>
+                        <td>${row.email}</td>
+                        <td class="text-capitalize">${row.role}</td>
+                        <td>${assignmentMarkup}</td>
+                        <td><small class="font-weight-bold text-gray-700">${fullAddress}</small></td>
+                        <td><span class="badge ${badgeClass} text-uppercase font-weight-bold" style="font-size: 10px;">${row.reason}</span></td>
+                    </tr>
+                `);
+            });
+
+            $('#selectAllPreview').prop('checked', validCount > 0);
+            $('#btnConfirmImport').prop('disabled', validCount === 0);
+        }
+
+        $('#selectAllPreview').on('change', function() {
+            var checked = this.checked;
+            $('.preview-row-chk:not(:disabled)').prop('checked', checked);
+        });
+
+        $('#btnConfirmImport').on('click', function() {
+            var selected = [];
+            $('.preview-row-chk:checked').each(function() {
+                var idx = $(this).data('idx');
+                selected.push(parsedImportRows[idx]);
+            });
+
+            if (selected.length === 0) {
+                alert("Please select at least one valid user to import.");
+                return;
+            }
+
+            // Evict views and show loading spinners on execution
+            $('#previewTable').parent().hide();
+            $('#btnConfirmImport').prop('disabled', true);
+            $('#previewProgressArea').fadeIn();
+
+            $.ajax({
+                url: "{{ url_for('admin.execute_import') }}",
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ rows: selected }),
+                success: function(data) {
+                    $('#previewImportModal').modal('hide');
+                    if (data.success) {
+                        alert(`Import Completed!\nSuccessfully created and synchronized ${data.imported} users. (Failed/Skipped: ${data.failed})`);
+                        location.reload();
+                    } else {
+                        alert(data.reason || "Failed to execute import.");
+                        location.reload();
+                    }
+                },
+                error: function(err) {
+                    $('#previewProgressArea').hide();
+                    $('#previewTable').parent().show();
+                    $('#btnConfirmImport').prop('disabled', false);
+                    var errMsg = err.responseJSON ? err.responseJSON.reason : "Network error executing import.";
+                    alert(errMsg);
+                }
+            });
+        });
+
+        /* ══════════════════════════════════════════
+        4. UI ACTIONS
         ══════════════════════════════════════════ */
         $('.view-details-btn').on('click', function () {
             var userId = $(this).data('id'), name = $(this).data('name');
@@ -751,7 +929,7 @@
         });
 
         // Hierarchy Fix
-        $('#addUserModal, #deleteUserModal, #userDetailsModal, #importExcelModal').appendTo('body');
+        $('#addUserModal, #deleteUserModal, #userDetailsModal, #importExcelModal, #previewImportModal').appendTo('body');
     })(jQuery);
 </script>
 {% endblock %}

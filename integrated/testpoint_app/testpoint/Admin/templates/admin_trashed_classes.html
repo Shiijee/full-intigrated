@@ -65,9 +65,12 @@
                                     <i class="fas fa-undo text-success"></i>
                                 </button>
                             </form>
-                            <button class="btn btn-circle-sm" data-toggle="modal" data-target="#permDeleteClassModal{{ loop.index }}" title="Destroy Permanently">
-                                <i class="fas fa-times-circle text-danger"></i>
-                            </button>
+                            <!--
+                                <button class="btn btn-circle-sm" data-toggle="modal" data-target="#permDeleteClassModal{{ loop.index }}" title="Destroy Permanently">
+                                    <i class="fas fa-times-circle text-danger"></i>
+                                </button>
+                            -->
+
                         </td>
                     </tr>
                     {% else %}
@@ -113,11 +116,11 @@
         "use strict";
         const rows = Array.from(document.querySelectorAll('#classTrashTable tbody tr.trash-row'));
         let filtered = [...rows];
-        const paginator = createPaginator({ 
-            tableBodySelector: '#classTrashTable tbody', 
-            paginationSelector: '#class-trash-pagination', 
-            rowsPerPage: 10, 
-            getVisibleRows: () => filtered 
+        const paginator = createPaginator({
+            tableBodySelector: '#classTrashTable tbody',
+            paginationSelector: '#class-trash-pagination',
+            rowsPerPage: 10,
+            getVisibleRows: () => filtered
         });
         paginator.render();
 
