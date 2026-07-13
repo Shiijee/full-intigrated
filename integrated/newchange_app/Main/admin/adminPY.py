@@ -15,21 +15,21 @@ def validate_user_data(first_name, middle_name, last_name, email):
     middle_name = (middle_name or '').strip()
     last_name = (last_name or '').strip()
     email = (email or '').strip()
-    
+
     # 1. Basic Required Field Check
     if not first_name or not middle_name or not last_name or not email:
         return False, "All fields (first name, middle name, last name, email) are required.", None
-        
+
     # 2. Email Format Validation
     email_pattern = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     if not email_pattern.match(email):
         return False, "Invalid email format.", None
-        
+
     # 3. Name Character Validation (No special symbols/numbers)
     name_pattern = re.compile(r"^[A-Za-z\s\-\.']+$")
     if not name_pattern.match(first_name) or not name_pattern.match(middle_name) or not name_pattern.match(last_name):
         return False, "Names can only contain letters, spaces, hyphens, periods, and apostrophes.", None
-        
+
     # 4. Name Length Validation
     if not (2 <= len(first_name) <= 100) or not (2 <= len(middle_name) <= 100) or not (2 <= len(last_name) <= 100):
         return False, "Names must be between 2 and 100 characters long.", None
@@ -55,13 +55,13 @@ def validate_user_data(first_name, middle_name, last_name, email):
     email_prefix = email.split('@')[0].lower().replace('.', '').replace('_', '')
     fn_part = first_name.lower().replace(' ', '')
     ln_part = last_name.lower().replace(' ', '')
-    
+
     # Check if at least 3 chars of first or last name are in the email prefix
     # or if the prefix contains the whole first or last name
-    if not (fn_part[:3] in email_prefix or ln_part[:3] in email_prefix or 
+    if not (fn_part[:3] in email_prefix or ln_part[:3] in email_prefix or
             email_prefix in fn_part or email_prefix in ln_part):
         return False, "The Gmail address must be connected to the student's name (e.g., john.doe@gmail.com).", None
-        
+
     return True, "", (first_name, middle_name, last_name, email)
 
 
@@ -82,16 +82,16 @@ def require_login():
 def dashboard():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     cursor.execute("SELECT COUNT(*) as count FROM Students")
     student_count = cursor.fetchone()['count']
-    
+
     cursor.execute("SELECT COUNT(*) as count FROM Teachers")
     teacher_count = cursor.fetchone()['count']
-    
+
     cursor.execute("SELECT COUNT(*) as count FROM Subjects")
     subject_count = cursor.fetchone()['count']
-    
+
     # Pagination for submitted reports
     REPORTS_PER_PAGE = 10
     try:
@@ -100,17 +100,17 @@ def dashboard():
         report_page = 1
     if report_page < 1:
         report_page = 1
-    
+
     cursor.execute("SELECT COUNT(*) as count FROM Submitted_Reports WHERE is_archived IS NOT TRUE")
     total_reports = cursor.fetchone()['count']
     total_report_pages = max(1, (total_reports + REPORTS_PER_PAGE - 1) // REPORTS_PER_PAGE)
     if report_page > total_report_pages:
         report_page = total_report_pages
     report_offset = (report_page - 1) * REPORTS_PER_PAGE
-    
+
     # Fetch submitted reports from teachers (exclude archived)
     cursor.execute("""
-        SELECT sr.report_id, sr.submission_date, sr.section, t.first_name, t.middle_name as teacher_middle, t.last_name as teacher_last, 
+        SELECT sr.report_id, sr.submission_date, sr.section, t.first_name, t.middle_name as teacher_middle, t.last_name as teacher_last,
                sub.subject_code, sub.subject_name
         FROM Submitted_Reports sr
         JOIN Teachers t ON sr.teacher_id = t.user_id
@@ -120,27 +120,27 @@ def dashboard():
         LIMIT %s OFFSET %s
     """, (REPORTS_PER_PAGE, report_offset))
     submitted_reports = cursor.fetchall()
-    
+
     # New metrics for a better dashboard
     cursor.execute("SELECT COUNT(*) as count FROM Drop_Requests WHERE status = 'Pending'")
     pending_drops = cursor.fetchone()['count']
-    
+
     cursor.execute("SELECT COUNT(*) as count FROM Teacher_Assignments")
     total_classes = cursor.fetchone()['count']
-    
+
     cursor.execute("""
-        SELECT log_id, timestamp, performed_by_id, action, table_name, details 
-        FROM System_Audit_Log 
-        ORDER BY timestamp DESC 
+        SELECT log_id, timestamp, performed_by_id, action, table_name, details
+        FROM System_Audit_Log
+        ORDER BY timestamp DESC
         LIMIT 5
     """)
     recent_logs = cursor.fetchall()
-    
+
     cursor.close()
     conn.close()
-    return render_template('admin_dashboard.html', 
-                           student_count=student_count, 
-                           teacher_count=teacher_count, 
+    return render_template('admin_dashboard.html',
+                           student_count=student_count,
+                           teacher_count=teacher_count,
                            subject_count=subject_count,
                            submitted_reports=submitted_reports,
                            total_reports=total_reports,
@@ -210,13 +210,13 @@ def profile():
 def view_report(report_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     # Ensure is_archived column exists
     cursor.execute("""
         ALTER TABLE Submitted_Reports ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE
     """)
     conn.commit()
-    
+
     cursor.execute("""
         SELECT sr.*, t.first_name, t.middle_name, t.last_name, s.subject_code, s.subject_name
         FROM Submitted_Reports sr
@@ -225,11 +225,11 @@ def view_report(report_id):
         WHERE sr.report_id = %s
     """, (report_id,))
     report = cursor.fetchone()
-    
+
     if not report:
         flash('Report not found.', 'error')
         return redirect(url_for('admin.dashboard'))
-        
+
     summary_data = report.get('summary_json')
     if isinstance(summary_data, str):
         try:
@@ -240,14 +240,14 @@ def view_report(report_id):
         summary = summary_data
     else:
         summary = []
-    
+
     # Calculate aggregate stats for the Pie Chart from the JSON snapshot
     report_stats = {
         'Present': sum(row.get('days_present', 0) for row in summary),
         'Absent': sum(row.get('days_absent', 0) for row in summary),
         'Late': sum(row.get('days_late', 0) for row in summary)
     }
-    
+
     cursor.close()
     conn.close()
     return render_template('admin_view_report.html', report=report, summary=summary, report_stats=report_stats)
@@ -304,14 +304,14 @@ def unlock_user(user_type, user_id):
     """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     table = 'Students' if user_type == 'student' else 'Teachers' if user_type == 'teacher' else 'Admins'
     id_col = 'user_id' if user_type in ('student', 'teacher') else 'admin_id'
-    
+
     cursor.execute(f"UPDATE {table} SET failed_attempts = 0, lockout_time = NULL WHERE {id_col} = %s", (user_id,))
-    
+
     log_system_action(cursor, table, user_id, 'Update', session['user_id'], session['role'], f"Account unlocked by admin")
-    
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -325,32 +325,32 @@ def manage_students():
     Validates required fields, name format, and email uniqueness before insertion.
     """
     from datetime import datetime
-    
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     if request.method == 'POST':
         # Auto-generation logic for Student ID (S-YYYY-XXX)
         current_year = datetime.now().year
         prefix = f"S-{current_year}-"
-        
+
         cursor.execute("SELECT user_id AS usid FROM Students WHERE user_id LIKE %s ORDER BY user_id DESC LIMIT 1", (prefix + '%',))
         last_student = cursor.fetchone()
-        
+
         if last_student:
             last_id_num = int(last_student['usid'].split('-')[2])
             new_id_num = last_id_num + 1
         else:
             new_id_num = 1
-            
+
         new_usid = f"{prefix}{new_id_num:03d}"
-        
+
         # Check if Student ID already exists
         cursor.execute("SELECT user_id FROM Students WHERE user_id = %s", (new_usid,))
         if cursor.fetchone():
             flash('Student ID already exists', 'error')
             return redirect(url_for('admin.manage_students'))
-            
+
         first_name = request.form.get('first_name')
         middle_name = request.form.get('middle_name')
         last_name = request.form.get('last_name')
@@ -358,20 +358,20 @@ def manage_students():
         course = request.form.get('course')
         level = request.form.get('level')
         section = request.form.get('section')
-        
+
         is_valid, error_msg, validated_data = validate_user_data(first_name, middle_name, last_name, email)
         if not is_valid:
             flash(error_msg, 'error')
             return redirect(url_for('admin.manage_students'))
-            
+
         first_name, middle_name, last_name, email = validated_data
-        
+
         # Check duplicate email in Students and Teachers
         cursor.execute("SELECT email FROM Students WHERE email = %s UNION SELECT email FROM Teachers WHERE email = %s", (email, email))
         if cursor.fetchone():
             flash('Email already exists. Please use a different email.', 'error')
             return redirect(url_for('admin.manage_students'))
-        
+
         # Default password is the ID without the 'S-' prefix (e.g. 2026-001)
         default_password = f"{current_year}-{new_id_num:03d}"
         password_hash = generate_password_hash(default_password)
@@ -388,13 +388,13 @@ def manage_students():
             pass  # TestPoint offline — continue normally
 
         cursor.execute("""
-            INSERT INTO Students (user_id, first_name, middle_name, last_name, email, course, level, section, password_hash) 
+            INSERT INTO Students (user_id, first_name, middle_name, last_name, email, course, level, section, password_hash)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (new_usid, first_name, middle_name, last_name, email, course, level, section, password_hash))
-        
+
         # Audit Logging
         log_system_action(cursor, 'Students', new_usid, 'Create', session['user_id'], session['role'], f"Student created: {first_name} {last_name}")
-        
+
         conn.commit()
 
         # ── Sync to Portal + mirror into Voxify and TestPoint ────────────────
@@ -432,7 +432,7 @@ def manage_students():
     if page < 1: page = 1
     per_page = 10
     offset = (page - 1) * per_page
-    
+
     if request.args.get('clear'):
         session.pop('students_search', None)
         session.pop('students_program', None)
@@ -454,39 +454,39 @@ def manage_students():
     if status_param is not None:
         session['students_status'] = status_param.strip()
     status_filter = session.get('students_status', 'All')
-    
+
     # Base query for students
-    
+
     query = "SELECT * FROM Students WHERE 1=1"
     count_query = "SELECT COUNT(*) as total FROM Students WHERE 1=1"
     params = []
-    
+
     if search:
         search_clause = " AND (user_id LIKE %s OR first_name LIKE %s OR middle_name LIKE %s OR last_name LIKE %s OR email LIKE %s)"
         query += search_clause
         count_query += search_clause
         search_val = f"%{search}%"
         params.extend([search_val, search_val, search_val, search_val, search_val])
-        
+
     if program_filter:
         query += " AND program = %s"
         count_query += " AND program = %s"
         params.append(program_filter)
-        
+
     if status_filter and status_filter != 'All':
         query += " AND status = %s"
         count_query += " AND status = %s"
         params.append(status_filter)
-        
+
     # Get total count for pagination
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()['total']
     total_pages = (total_count + per_page - 1) // per_page
-    
+
     # Final paginated query
     query += " ORDER BY user_id DESC LIMIT %s OFFSET %s"
     query_params = params + [per_page, offset]
-    
+
     cursor.execute(query, query_params)
     students = cursor.fetchall()
 
@@ -495,8 +495,8 @@ def manage_students():
         SELECT ta.assignment_id, s.subject_id, s.subject_code, s.subject_name, ta.section,
                CONCAT(t.first_name, ' ', t.middle_name, ' ', t.last_name) as teacher_name,
                (
-                   SELECT COUNT(*) FROM Enrollments e 
-                   JOIN Students st ON e.user_id = st.user_id 
+                   SELECT COUNT(*) FROM Enrollments e
+                   JOIN Students st ON e.user_id = st.user_id
                    WHERE e.assignment_id = ta.assignment_id
     """
     assignment_params = []
@@ -510,14 +510,14 @@ def manage_students():
     if status_filter and status_filter != 'All':
         assignment_query += " AND st.status = %s"
         assignment_params.append(status_filter)
-        
+
     assignment_query += """
                ) as student_count
         FROM Teacher_Assignments ta
         JOIN Subjects s ON ta.subject_id = s.subject_id
         JOIN Teachers t ON ta.teacher_id = t.user_id
     """
-    
+
     # Apply subject search to the outer query as well
     if search:
         assignment_query += " WHERE (s.subject_code LIKE %s OR s.subject_name LIKE %s OR t.first_name LIKE %s OR t.last_name LIKE %s)"
@@ -552,13 +552,13 @@ def manage_students():
 
     # Fetch students with NO enrollments for the "Manual Enroll" feature
     cursor.execute("""
-        SELECT * FROM Students 
+        SELECT * FROM Students
         WHERE user_id NOT IN (SELECT DISTINCT user_id FROM Enrollments)
         AND status = 'Active'
         ORDER BY last_name ASC
     """)
     unassigned_students = cursor.fetchall()
-    
+
     # Fetch assignments for enrollment modal
     cursor.execute("""
         SELECT ta.assignment_id, s.subject_code, s.subject_name, ta.section, t.first_name, t.middle_name, t.last_name
@@ -573,9 +573,9 @@ def manage_students():
 
     cursor.close()
     conn.close()
-    return render_template('admin_manage_students.html', 
-                           students=students, 
-                           subjects=subjects, 
+    return render_template('admin_manage_students.html',
+                           students=students,
+                           subjects=subjects,
                            enrolled_students=enrolled_students,
                            unassigned_students=unassigned_students, # New data for manual enroll
                            all_assignments=all_assignments,
@@ -593,7 +593,7 @@ def download_student_template():
     import pandas as pd
     from io import BytesIO
     from flask import send_file
-    
+
     df = pd.DataFrame({
         'First Name': ['Juan', 'Maria'],
         'Middle Name': ['Dela', 'Clara'],
@@ -603,12 +603,12 @@ def download_student_template():
         'Level': ['1st Year', '2nd Year'],
         'Section': ['A', 'B']
     })
-    
+
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Students')
     output.seek(0)
-    
+
     return send_file(output, download_name="student_template.xlsx", as_attachment=True)
 
 @admin.route('/upload_students_excel', methods=['POST'])
@@ -616,32 +616,32 @@ def upload_students_excel():
     if 'excel_file' not in request.files:
         flash('No file part', 'error')
         return redirect(url_for('admin.manage_students'))
-        
+
     file = request.files['excel_file']
     if file.filename == '':
         flash('No selected file', 'error')
         return redirect(url_for('admin.manage_students'))
-        
+
     if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
         try:
             import pandas as pd
             df = pd.read_excel(file)
-            
+
             required_cols = ['First Name', 'Middle Name', 'Last Name', 'Email', 'Course', 'Level', 'Section']
             for col in required_cols:
                 if col not in df.columns:
                     flash(f'Missing required column in Excel: {col}', 'error')
                     return redirect(url_for('admin.manage_students'))
-            
+
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
-            
+
             success_count = 0
             error_count = 0
-            
+
             current_year = datetime.now().year
             prefix = f"S-{current_year}-"
-            
+
             for index, row in df.iterrows():
                 try:
                     first_name = str(row['First Name']).strip() if pd.notna(row['First Name']) else ''
@@ -651,60 +651,60 @@ def upload_students_excel():
                     course = str(row['Course']).strip() if pd.notna(row['Course']) else ''
                     level = str(row['Level']).strip() if pd.notna(row['Level']) else ''
                     section = str(row['Section']).strip() if pd.notna(row['Section']) else ''
-                    
+
                     is_valid, error_msg, validated_data = validate_user_data(first_name, middle_name, last_name, email)
                     if not is_valid:
                         error_count += 1
                         continue
-                        
+
                     first_name, middle_name, last_name, email = validated_data
-                    
+
                     # Check duplicate email
                     cursor.execute("SELECT email FROM Students WHERE email = %s UNION SELECT email FROM Teachers WHERE email = %s", (email, email))
                     if cursor.fetchone():
                         error_count += 1
                         continue
-                        
+
                     cursor.execute("SELECT user_id AS usid FROM Students WHERE user_id LIKE %s ORDER BY user_id DESC LIMIT 1", (prefix + '%',))
                     last_student = cursor.fetchone()
-                    
+
                     if last_student:
                         last_id_num = int(last_student['usid'].split('-')[2])
                         new_id_num = last_id_num + 1
                     else:
                         new_id_num = 1
-                        
+
                     new_usid = f"{prefix}{new_id_num:03d}"
-                    
+
                     default_password = f"{current_year}-{new_id_num:03d}"
                     password_hash = generate_password_hash(default_password)
-                    
+
                     cursor.execute("""
-                        INSERT INTO Students (user_id, first_name, middle_name, last_name, email, course, level, section, password_hash) 
+                        INSERT INTO Students (user_id, first_name, middle_name, last_name, email, course, level, section, password_hash)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (new_usid, first_name, middle_name, last_name, email, course, level, section, password_hash))
-                    
+
                     log_system_action(cursor, 'Students', new_usid, 'Create', session['user_id'], session['role'], f"Student bulk uploaded: {first_name} {last_name}")
-                    
+
                     success_count += 1
                 except Exception as e:
                     error_count += 1
                     print(f"Row {index} failed: {e}")
-                    
+
             conn.commit()
             cursor.close()
             conn.close()
-            
+
             if success_count > 0:
                 flash(f'Successfully added {success_count} students. ({error_count} failed or skipped)', 'success')
             else:
                 flash(f'No students were added. All rows failed validation or were duplicates.', 'error')
-                
+
         except Exception as e:
             flash(f'Error processing file: {str(e)}', 'error')
     else:
         flash('Invalid file format. Please upload an Excel file (.xlsx or .xls)', 'error')
-        
+
     return redirect(url_for('admin.manage_students'))
 
 @admin.route('/manage_teachers', methods=['GET', 'POST'])
@@ -714,57 +714,57 @@ def manage_teachers():
     Validates required fields, name format, and email uniqueness before insertion.
     """
     from datetime import datetime
-    
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     if request.method == 'POST':
         # Auto-generation logic for Teacher ID (T-YYYY-XXX)
         current_year = datetime.now().year
         prefix = f"T-{current_year}-"
-        
+
         cursor.execute("SELECT user_id AS utid FROM Teachers WHERE user_id LIKE %s ORDER BY user_id DESC LIMIT 1", (prefix + '%',))
         last_teacher = cursor.fetchone()
-        
+
         if last_teacher:
             last_id_num = int(last_teacher['utid'].split('-')[2])
             new_id_num = last_id_num + 1
         else:
             new_id_num = 1
-            
+
         new_utid = f"{prefix}{new_id_num:03d}"
-        
+
         first_name = request.form.get('first_name')
         middle_name = request.form.get('middle_name')
         last_name = request.form.get('last_name')
         department = request.form.get('department')
         email = request.form.get('email')
-        
+
         is_valid, error_msg, validated_data = validate_user_data(first_name, middle_name, last_name, email)
         if not is_valid:
             flash(error_msg, 'error')
             return redirect(url_for('admin.manage_teachers'))
-            
+
         first_name, middle_name, last_name, email = validated_data
-        
+
         # Check duplicate email
         cursor.execute("SELECT email FROM Students WHERE email = %s UNION SELECT email FROM Teachers WHERE email = %s", (email, email))
         if cursor.fetchone():
             flash('Email already exists. Please use a different email.', 'error')
             return redirect(url_for('admin.manage_teachers'))
-        
+
         # Default password is the ID without the 'T-' prefix (e.g. 2026-001)
         default_password = f"{current_year}-{new_id_num:03d}"
         password_hash = generate_password_hash(default_password)
-        
+
         cursor.execute("""
-            INSERT INTO Teachers (user_id, first_name, middle_name, last_name, department, email, password_hash) 
+            INSERT INTO Teachers (user_id, first_name, middle_name, last_name, department, email, password_hash)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (new_utid, first_name, middle_name, last_name, department, email, password_hash))
-        
+
         # Audit Logging
         log_system_action(cursor, 'Teachers', new_utid, 'Create', session['user_id'], session['role'], f"Teacher created: {first_name} {last_name}")
-        
+
         conn.commit()
 
         # ── Sync to Portal + mirror into Voxify and TestPoint ────────────────
@@ -800,7 +800,7 @@ def manage_teachers():
     if page < 1: page = 1
     per_page = 10
     offset = (page - 1) * per_page
-    
+
     # Persist search and filters in session
     if request.args.get('clear'):
         session.pop('teachers_search', None)
@@ -822,42 +822,42 @@ def manage_teachers():
     if status_param is not None:
         session['teachers_status'] = status_param.strip()
     status_filter = session.get('teachers_status', 'All')
-    
+
     # Base query for teachers
-    
+
     query = "SELECT *, user_id AS utid FROM Teachers WHERE 1=1"
     count_query = "SELECT COUNT(*) as total FROM Teachers WHERE 1=1"
     params = []
-    
+
     if search:
         search_clause = " AND (user_id LIKE %s OR first_name LIKE %s OR middle_name LIKE %s OR last_name LIKE %s OR email LIKE %s)"
         query += search_clause
         count_query += search_clause
         search_val = f"%{search}%"
         params.extend([search_val, search_val, search_val, search_val, search_val])
-        
+
     if dept_filter:
         query += " AND department = %s"
         count_query += " AND department = %s"
         params.append(dept_filter)
-        
+
     if status_filter and status_filter != 'All':
         query += " AND status = %s"
         count_query += " AND status = %s"
         params.append(status_filter)
-        
+
     # Get total count for pagination
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()['total']
     total_pages = (total_count + per_page - 1) // per_page
-    
+
     # Final paginated query
     query += " ORDER BY user_id DESC LIMIT %s OFFSET %s"
     query_params = params + [per_page, offset]
-    
+
     cursor.execute(query, query_params)
     teachers = cursor.fetchall()
-    
+
     # Fetch colleges from TestPoint database
     try:
         cursor.execute("SELECT college_name FROM db_exam.colleges WHERE is_active = 1 ORDER BY college_name")
@@ -866,10 +866,10 @@ def manage_teachers():
         print(f"Error fetching colleges from db_exam: {e}")
         cursor.execute("SELECT DISTINCT department FROM Teachers WHERE department IS NOT NULL AND department != ''")
         colleges = [row['department'] for row in cursor.fetchall()]
-        
+
     cursor.close()
     conn.close()
-    return render_template('admin_manage_teachers.html', 
+    return render_template('admin_manage_teachers.html',
                            teachers=teachers,
                            total_pages=total_pages,
                            total_count=total_count, # Pass total count for badge
@@ -888,14 +888,14 @@ def manage_schedules():
     """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     if request.method == 'POST':
         assignment_id = request.form.get('assignment_id')
         day = request.form.get('day_of_week')
         start = request.form.get('start_time')
         end = request.form.get('end_time')
         room = request.form.get('room')
-        
+
         # Time validation
         try:
             from datetime import datetime
@@ -903,35 +903,35 @@ def manage_schedules():
             end_dt = datetime.strptime(end, '%H:%M').time()
             school_start = datetime.strptime('07:00', '%H:%M').time()
             school_end = datetime.strptime('18:00', '%H:%M').time()
-            
+
             if start_dt < school_start or end_dt > school_end:
                 flash('Schedule must be within school hours (07:00 to 18:00).', 'error')
                 return redirect(url_for('admin.manage_schedules'))
-                
+
             if start_dt >= end_dt:
                 flash('End time must be after start time.', 'error')
                 return redirect(url_for('admin.manage_schedules'))
         except ValueError:
             flash('Invalid time format.', 'error')
             return redirect(url_for('admin.manage_schedules'))
-        
+
         # Get details from Teacher_Assignments
         cursor.execute("SELECT * FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
         ta = cursor.fetchone()
-        
+
         if ta:
             # Conflict Check: Does this teacher or room already have a class at this time?
             conflict_query = """
-                SELECT sch.*, s.subject_code 
+                SELECT sch.*, s.subject_code
                 FROM schedule sch
                 JOIN Subjects s ON sch.subject_id = s.subject_id
-                WHERE sch.day_of_week = %s 
+                WHERE sch.day_of_week = %s
                 AND (%s < sch.end_time AND %s > sch.start_time)
                 AND (sch.teacher_id = %s OR sch.room = %s)
             """
             cursor.execute(conflict_query, (day, start, end, ta['teacher_id'], room))
             conflict = cursor.fetchone()
-            
+
             if conflict:
                 conflict_type = "Teacher" if conflict['teacher_id'] == ta['teacher_id'] else "Room"
                 flash(f"Conflict Detected! {conflict_type} is already busy with {conflict['subject_code']} at this time.", "error")
@@ -941,10 +941,10 @@ def manage_schedules():
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (ta['subject_id'], ta['teacher_id'], ta['section'], day, start, end, room))
                 schedule_id = cursor.lastrowid
-                
+
                 # Audit Logging
                 log_system_action(cursor, 'schedule', schedule_id, 'Create', session['user_id'], session['role'], f"Schedule created for {ta['subject_id']} - {ta['section']} on {day} ({start}-{end})")
-                
+
                 conn.commit()
                 flash('Schedule added successfully.', 'success')
 
@@ -957,7 +957,7 @@ def manage_schedules():
     if search_param is not None:
         session['schedules_search'] = search_param.strip()
     search = session.get('schedules_search', '')
-    
+
 
     cursor.execute("""
         SELECT ta.assignment_id, t.first_name, t.middle_name, t.last_name, s.subject_code, s.subject_name, ta.section
@@ -966,7 +966,7 @@ def manage_schedules():
         JOIN Subjects s ON ta.subject_id = s.subject_id
     """)
     assignments = cursor.fetchall()
-    
+
     query = """
         SELECT sch.*, s.subject_code, s.subject_name, t.first_name, t.middle_name, t.last_name
         FROM schedule sch
@@ -979,10 +979,10 @@ def manage_schedules():
         query += " AND (s.subject_code LIKE %s OR s.subject_name LIKE %s OR t.first_name LIKE %s OR t.last_name LIKE %s OR sch.room LIKE %s OR sch.section LIKE %s)"
         search_val = f"%{search}%"
         params.extend([search_val, search_val, search_val, search_val, search_val, search_val])
-        
+
     cursor.execute(query, params)
     schedules = cursor.fetchall()
-    
+
     cursor.close()
     conn.close()
     return render_template('admin_manage_schedules.html', assignments=assignments, schedules=schedules, search=search)
@@ -1004,10 +1004,10 @@ def archive_student(user_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("UPDATE Students SET status = 'Archived' WHERE user_id = %s", (user_id,))
-    
+
     # Audit Logging
     log_system_action(cursor, 'Students', user_id, 'Update', session['user_id'], session['role'], f"Student archived: {user_id}")
-    
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -1019,10 +1019,10 @@ def unarchive_student(user_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("UPDATE Students SET status = 'Active' WHERE user_id = %s", (user_id,))
-    
+
     # Audit Logging
     log_system_action(cursor, 'Students', user_id, 'Update', session['user_id'], session['role'], f"Student unarchived: {user_id}")
-    
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -1034,10 +1034,10 @@ def archive_teacher(utid):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("UPDATE Teachers SET status = 'Archived' WHERE user_id = %s", (utid,))
-    
+
     # Audit Logging
     log_system_action(cursor, 'Teachers', utid, 'Update', session['user_id'], session['role'], f"Teacher archived: {utid}")
-    
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -1049,10 +1049,10 @@ def unarchive_teacher(utid):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("UPDATE Teachers SET status = 'Active' WHERE user_id = %s", (utid,))
-    
+
     # Audit Logging
     log_system_action(cursor, 'Teachers', utid, 'Update', session['user_id'], session['role'], f"Teacher unarchived: {utid}")
-    
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -1063,7 +1063,7 @@ def unarchive_teacher(utid):
 def remove_assignment(assignment_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     try:
         cursor.execute("DELETE FROM Teacher_Assignments WHERE assignment_id = %s", (assignment_id,))
         conn.commit()
@@ -1073,7 +1073,7 @@ def remove_assignment(assignment_id):
     finally:
         cursor.close()
         conn.close()
-        
+
     return redirect(url_for('admin.assign_classes'))
 
 @admin.route('/archive_schedule/<int:schedule_id>', methods=['POST'])
@@ -1112,7 +1112,7 @@ def archive_assignment(assignment_id):
 def drop_requests():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     if request.args.get('clear'):
         session.pop('drops_search', None)
         return redirect(url_for('admin.drop_requests'))
@@ -1122,10 +1122,10 @@ def drop_requests():
     if search_param is not None:
         session['drops_search'] = search_param.strip()
     search = session.get('drops_search', '')
-    
+
 
     query = """
-        SELECT dr.*, dr.user_id AS usid, s.first_name as s_first, s.middle_name as s_middle, s.last_name as s_last, 
+        SELECT dr.*, dr.user_id AS usid, s.first_name as s_first, s.middle_name as s_middle, s.last_name as s_last,
                sub.subject_code, sub.subject_name,
                t.first_name as t_first, t.middle_name as t_middle, t.last_name as t_last
         FROM Drop_Requests dr
@@ -1135,16 +1135,16 @@ def drop_requests():
         WHERE dr.status = 'Pending'
     """
     params = []
-    
+
     if search:
         query += " AND (s.first_name LIKE %s OR s.last_name LIKE %s OR s.user_id LIKE %s OR sub.subject_code LIKE %s OR sub.subject_name LIKE %s)"
         search_val = f"%{search}%"
         params.extend([search_val, search_val, search_val, search_val, search_val])
-        
+
     query += " ORDER BY dr.created_at DESC"
     cursor.execute(query, params)
     requests = cursor.fetchall()
-    
+
     cursor.close()
     conn.close()
     return render_template('admin_drop_requests.html', requests=requests, search=search)
@@ -1153,35 +1153,35 @@ def drop_requests():
 def approve_drop(request_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     cursor.execute("SELECT * FROM Drop_Requests WHERE request_id = %s", (request_id,))
     req = cursor.fetchone()
-    
+
     if req:
         # 1. Update drop request status
         cursor.execute("UPDATE Drop_Requests SET status = 'Approved' WHERE request_id = %s", (request_id,))
-        
+
         # 2. Find and remove the specific enrollment
         # We need to find the assignment_id for this subject and teacher
         cursor.execute("""
-            SELECT assignment_id FROM Teacher_Assignments 
+            SELECT assignment_id FROM Teacher_Assignments
             WHERE teacher_id = %s AND subject_id = %s
         """, (req['teacher_id'], req['subject_id']))
         ta = cursor.fetchone()
-        
+
         if ta:
             cursor.execute("DELETE FROM Enrollments WHERE user_id = %s AND assignment_id = %s", (req['user_id'], ta['assignment_id']))
         else:
             # Fallback if assignment not found (though it should be)
             cursor.execute("DELETE FROM Enrollments WHERE user_id = %s AND assignment_id IN (SELECT assignment_id FROM Teacher_Assignments WHERE subject_id = %s)", (req['user_id'], req['subject_id']))
-        
+
         # 3. Optional: Global Archive (Keeping it as per previous logic, but usually a drop is per subject)
         # If the user wants the student to be 'Archived' globally, we keep this.
         cursor.execute("UPDATE Students SET status = 'Archived' WHERE user_id = %s", (req['user_id'],))
-        
+
         conn.commit()
         flash('Drop request approved. Student has been unenrolled from the subject and archived.', 'success')
-    
+
     cursor.close()
     conn.close()
     return redirect(url_for('admin.drop_requests'))
@@ -1209,7 +1209,7 @@ def audit_logs():
         page = 1
     per_page = 20
     offset = (page - 1) * per_page
-    
+
     if request.args.get('clear'):
         session.pop('audit_search', None)
         session.pop('audit_table', None)
@@ -1231,54 +1231,54 @@ def audit_logs():
     if action_param is not None:
         session['audit_action'] = action_param.strip()
     action_filter = session.get('audit_action', '')
-    
-    
-    
+
+
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     # Base query
     query = "FROM System_Audit_Log WHERE 1=1"
     params = []
-    
+
     if search:
         query += " AND (details LIKE %s OR performed_by_id LIKE %s OR entity_id LIKE %s)"
         search_val = f"%{search}%"
         params.extend([search_val, search_val, search_val])
-        
+
     if table_filter:
         query += " AND table_name = %s"
         params.append(table_filter)
-        
+
     if action_filter:
         if action_filter == 'Status':
             query += " AND (action = 'Update' AND details LIKE '%Status%')"
         else:
             query += " AND action = %s"
             params.append(action_filter)
-        
+
     # Count total
     cursor.execute("SELECT COUNT(*) as total " + query, params)
     total_count = cursor.fetchone()['total']
     total_pages = (total_count + per_page - 1) // per_page
-    
+
     # Select data
     select_query = "SELECT * " + query + " ORDER BY timestamp DESC LIMIT %s OFFSET %s"
     select_params = params + [per_page, offset]
-    
+
     cursor.execute(select_query, select_params)
     logs = cursor.fetchall()
-    
+
     # Fetch unique tables for filter
     cursor.execute("SELECT DISTINCT table_name FROM System_Audit_Log ORDER BY table_name ASC")
     tables = [row['table_name'] for row in cursor.fetchall()]
-    
+
     cursor.close()
     conn.close()
-    
-    return render_template('admin_audit_logs.html', 
-                           logs=logs, 
-                           total_pages=total_pages, 
+
+    return render_template('admin_audit_logs.html',
+                           logs=logs,
+                           total_pages=total_pages,
                            current_page=page,
                            search=search,
                            table_filter=table_filter,
@@ -1290,10 +1290,10 @@ def attendance_analytics():
     subject_id = request.args.get('subject_id', type=int)
     utid = request.args.get('utid')
     section = request.args.get('section')
-    
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     # Fetch all assigned classes for the selector
     cursor.execute("""
         SELECT s.subject_id, s.subject_code, s.subject_name, ta.section, ta.teacher_id AS utid,
@@ -1304,18 +1304,18 @@ def attendance_analytics():
         ORDER BY s.subject_code, ta.section
     """)
     all_classes = cursor.fetchall()
-    
+
     weekly_trends = []
     monthly_trends = []
     selected_class = None
-    
+
     if subject_id and utid and section:
         # Find selected class details
         for c in all_classes:
             if c['subject_id'] == subject_id and c['utid'] == utid and c['section'] == section:
                 selected_class = c
                 break
-        
+
         if selected_class:
             # Weekly Trends
             cursor.execute("""
@@ -1336,7 +1336,7 @@ def attendance_analytics():
                 ORDER BY yr DESC, mo DESC, wk DESC
             """, (subject_id, utid, section))
             weekly_trends = cursor.fetchall()
-            
+
             # Monthly Trends
             cursor.execute("""
                 SELECT CONCAT(MONTHNAME(a.scan_time), ' ', EXTRACT(YEAR FROM a.scan_time)) as period,
@@ -1356,8 +1356,8 @@ def attendance_analytics():
 
     cursor.close()
     conn.close()
-    
-    return render_template('admin_attendance_analytics.html', 
+
+    return render_template('admin_attendance_analytics.html',
                            all_classes=all_classes,
                            selected_class=selected_class,
                            weekly_trends=weekly_trends,

@@ -56,28 +56,28 @@
         "name": "Portal",
         "autoExecuteCommands": true,
         "commands": [
-          "venv\\Scripts\\python.exe integrated\\portal\\app.py --debug"
+          "venv\\Scripts\\python.exe integrated\\portal\\app.py --debug --host=0.0.0.0"
         ]
       },
       {
         "name": "Testpoint",
         "autoExecuteCommands": true,
         "commands": [
-          "venv\\Scripts\\python.exe integrated\\testpoint_app\\app.py --debug"
+          "venv\\Scripts\\python.exe integrated\\testpoint_app\\app.py --debug --host=0.0.0.0"
         ]
       },
       {
         "name": "Newchange",
         "autoExecuteCommands": true,
         "commands": [
-          "venv\\Scripts\\python.exe integrated\\newchange_app\\app.py --debug"
+          "venv\\Scripts\\python.exe integrated\\newchange_app\\app.py --debug --host=0.0.0.0"
         ]
       },
       {
         "name": "Voxify",
         "autoExecuteCommands": true,
         "commands": [
-          "venv\\Scripts\\python.exe integrated\\voxify_app\\app.py --debug"
+          "venv\\Scripts\\python.exe integrated\\voxify_app\\app.py --debug --host=0.0.0.0"
         ]
       }
     ]

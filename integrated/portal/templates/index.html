@@ -110,6 +110,9 @@
             justify-content: center;
             text-decoration: none;
             color: var(--text);
+            animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+            animation-duration: 1.5s;
+            animation-fill-mode: backwards;
         }
 
         .wedge.locked {
@@ -122,14 +125,81 @@
         .wedge-top {
             clip-path: polygon(50% 50%, 0% 20%, 50% 0%, 100% 20%);
             padding-bottom: 140px;
+            animation-name: assembleTop;
+            animation-delay: 0.1s;
         }
         .wedge-left {
             clip-path: polygon(50% 50%, 0% 20%, 0% 80%, 50% 100%);
             padding-right: 140px;
+            animation-name: assembleLeft;
+            animation-delay: 0.28s;
         }
         .wedge-right {
             clip-path: polygon(50% 50%, 100% 20%, 100% 80%, 50% 100%);
             padding-left: 140px;
+            animation-name: assembleRight;
+            animation-delay: 0.46s;
+        }
+
+        /* ── ASSEMBLY KEYFRAMES ── */
+        @keyframes assembleTop {
+            0% {
+                opacity: 0;
+                transform: translateY(-260px) translateX(-40px) rotate(-25deg) scale(0.75);
+                filter: blur(6px);
+            }
+            65% {
+                opacity: 1;
+                filter: blur(0);
+            }
+            80% {
+                transform: translateY(6px) translateX(0) rotate(1deg) scale(1.015);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) translateX(0) rotate(0) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        @keyframes assembleLeft {
+            0% {
+                opacity: 0;
+                transform: translateX(-300px) translateY(180px) rotate(-30deg) scale(0.75);
+                filter: blur(6px);
+            }
+            65% {
+                opacity: 1;
+                filter: blur(0);
+            }
+            80% {
+                transform: translateX(5px) translateY(-4px) rotate(-1deg) scale(1.015);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) translateY(0) rotate(0) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        @keyframes assembleRight {
+            0% {
+                opacity: 0;
+                transform: translateX(300px) translateY(180px) rotate(30deg) scale(0.75);
+                filter: blur(6px);
+            }
+            65% {
+                opacity: 1;
+                filter: blur(0);
+            }
+            80% {
+                transform: translateX(-5px) translateY(-4px) rotate(1deg) scale(1.015);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) translateY(0) rotate(0) scale(1);
+                filter: blur(0);
+            }
         }
 
         .wedge i {
@@ -169,6 +239,31 @@
             border-radius: 50%;
             box-shadow: 0 0 15px 2px white;
             opacity: 0.5;
+            animation: coreIgnite 1.8s ease-out both;
+        }
+
+        @keyframes coreIgnite {
+            0%, 55% { opacity: 0; box-shadow: 0 0 0 0 transparent; }
+            70% { opacity: 1; box-shadow: 0 0 25px 6px white; }
+            100% { opacity: 0.5; box-shadow: 0 0 15px 2px white; }
+        }
+
+        /* ── DYNAMIC VECTOR OUTLINE OVERLAY ── */
+        .prism-outline {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 6;
+            animation: outlineFadeIn 2.2s ease-out both;
+            animation-delay: 1.2s; /* Aligns with wedge assembly locking */
+        }
+
+        @keyframes outlineFadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
         }
 
         .footer-meta {
@@ -256,6 +351,17 @@
             <i class="fa-solid fa-check-to-slot"></i>
             <span>E-Voting</span>
         </a>
+
+        <!-- Thin White Vector Outline Overlay -->
+        <svg class="prism-outline" viewBox="0 0 100 100">
+            <!-- Center spoke lines connecting to prism vertices -->
+            <line x1="50" y1="50" x2="0" y2="20" stroke="rgba(255,255,255,0.18)" stroke-width="0.38" />
+            <line x1="50" y1="50" x2="100" y2="20" stroke="rgba(255,255,255,0.18)" stroke-width="0.38" />
+            <line x1="50" y1="50" x2="50" y2="100" stroke="rgba(255,255,255,0.18)" stroke-width="0.38" />
+
+            <!-- Outer perimeter polygon representing the complete prism boundary -->
+            <polygon points="0,20 50,0 100,20 100,80 50,100 0,80" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.38" />
+        </svg>
     </div>
 </main>
 

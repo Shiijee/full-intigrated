@@ -188,6 +188,13 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    # if user logged in deny entry to login page
+    token = request.cookies.get("auth_token")
+    if token:
+        user_data = decode_token(token)
+        if user_data:
+            return redirect("/")
+
     if request.method == "GET":
         return render_template("login.html", next=request.args.get("next", ""))
 
@@ -425,4 +432,4 @@ def update_user():
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, port=5000, host="0.0.0.0")
