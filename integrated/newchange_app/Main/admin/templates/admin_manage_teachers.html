@@ -31,10 +31,10 @@
                 <div class="flex flex-responsive justify-between items-center mb-8">
                     <div>
                         <h1 class="auth-title">Faculty Management</h1>
-                        <p class="text-muted">Register and manage faculty members across colleges.</p>
+                        <p class="text-muted">Manage faculty members across colleges.</p>
                     </div>
                 </div>
-            
+
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
                         {% for category, message in messages %}
@@ -52,7 +52,7 @@
                             <label class="form-label">Search Teachers</label>
                             <input type="text" name="search" class="form-control" placeholder="ID, Name, or Email..." value="{{ search }}">
                         </div>
-                        
+
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">College</label>
                             <select name="dept_filter" class="form-control">
@@ -101,7 +101,7 @@
 
                 <!-- Active Teachers Tab -->
                 <div id="tab-active" class="tab-content">
-            
+
             <div class="glass-panel p-4" style="padding: 1.5rem;">
                 <div class="table-wrapper">
                     <table>
@@ -139,17 +139,17 @@
                                 </td>
                                 <td class="action-cell" data-label="Action">
                                         {% if teacher.lockout_time and teacher.lockout_time > now %}
-                                        <a href="{{ url_for('admin.unlock_user', user_type='teacher', user_id=teacher.utid) }}" 
-                                           class="btn btn-success" 
+                                        <a href="{{ url_for('admin.unlock_user', user_type='teacher', user_id=teacher.utid) }}"
+                                           class="btn btn-success"
                                            style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;">
                                             <i class="fas fa-unlock"></i> <span class="btn-text">Unlock</span>
                                         </a>
                                         {% endif %}
                                         {% set m_name = teacher.middle_name if teacher.middle_name else '' %}
                                         {% set dept = teacher.department if teacher.department else '' %}
-                                         
-                                         <a href="{{ url_for('admin.archive_teacher', utid=teacher.utid) }}" 
-                                            class="btn btn-warning" 
+
+                                         <a href="{{ url_for('admin.archive_teacher', utid=teacher.utid) }}"
+                                            class="btn btn-warning"
                                             style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;"
                                             onclick="return confirm('Are you sure you want to archive this teacher?')">
                                              <i class="fas fa-archive"></i> <span class="btn-text">Archive</span>
@@ -226,7 +226,7 @@
         <div class="glass-panel" style="width: 100%; max-width: 500px; padding: 2rem; position: relative;">
             <button onclick="closeModal('addTeacherModal')" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">&times;</button>
             <h3 style="margin-top: 0; margin-bottom: 1.5rem; color: var(--text-main);"><i class="fas fa-user-plus mr-2"></i> Add New Faculty</h3>
-            
+
             <form method="POST" action="{{ url_for('admin.manage_teachers') }}" onsubmit="return validateTeacherForm(this);">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="form-group">
@@ -249,7 +249,7 @@
                     <label class="form-label">Email Address <span class="text-danger">*</span></label>
                     <input type="email" name="email" class="form-control" required>
                 </div>
-                
+
                 <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                     <button type="submit" class="btn btn-primary" style="flex: 1;">Add Faculty</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('addTeacherModal')">Cancel</button>
@@ -277,7 +277,7 @@
             document.getElementById('addTeacherModal').classList.add('active');
         }
 
-        
+
 
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');

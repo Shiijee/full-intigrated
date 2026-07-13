@@ -88,7 +88,7 @@ DB_PASSWORD=
 DB_NAME=db_attendance
 DB_PORT=3306
 ```
-
+  
 ---
 
 ## Phone Access Setup
