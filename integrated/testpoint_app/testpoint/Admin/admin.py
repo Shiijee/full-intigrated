@@ -17,6 +17,60 @@ admin = Blueprint('admin', __name__, template_folder='templates', static_folder=
 UPLOAD_FOLDER = 'testpoint/static/uploads/verifications'
 ALLOWED_EXTENSIONS = {'pdf'}
 
+def sync_students_block_to_attendance(cursor, student_ids):
+    """
+    Synchronizes the block, program, year level, and college parameters
+    of a list of student_ids to Attendeez (db_attendance) in real time.
+    """
+    from testpoint.portal_sync import mirror_user_update_to_modules
+    for s_id in student_ids:
+        try:
+            # 1. Fetch current academic parameters for the student
+            cursor.execute("""
+                SELECT s.student_id, s.email, b.block_name, p.program_name, c.college_name
+                FROM students s
+                LEFT JOIN blocks b ON s.block_id = b.block_id
+                LEFT JOIN programs p ON b.program_id = p.program_id
+                LEFT JOIN colleges c ON p.college_id = c.college_id
+                WHERE s.student_id = %s
+            """, (s_id,))
+            info = cursor.fetchone()
+
+            extra_data = {
+                "program": "",
+                "college": "",
+                "year": "",
+                "block": ""
+            }
+
+            if info:
+                block_name = info.get('block_name')
+                program_name = info.get('program_name')
+                college_name = info.get('college_name')
+
+                extra_data["program"] = program_name or ""
+                extra_data["college"] = college_name or ""
+
+                if block_name:
+                    if "-" in block_name:
+                        parts = block_name.split("-")
+                        if len(parts) == 2 and len(parts[1]) >= 2:
+                            extra_data["year"] = parts[1][0]
+                            extra_data["block"] = parts[1][1:]
+                        else:
+                            extra_data["block"] = block_name
+                    else:
+                        extra_data["block"] = block_name
+                        # Fallback parsing
+                        if block_name[0].isdigit():
+                            extra_data["year"] = block_name[0]
+
+            # 2. Mirror update delta to downstream modules (Attendeez)
+            mirror_user_update_to_modules(s_id, "student", extra_data)
+
+        except Exception as e:
+            print(f"Error syncing academic block for student {s_id} to Attendance: {e}")
+
 @admin.route('/admin_dashboard')
 def admin_dashboard():
     if admin_logged_in():
@@ -96,6 +150,7 @@ def admin_dashboard():
                                watchlist=watchlist)
     return redirect(url_for('auth.login'))
 
+
 #! 1. MANAGE ACCOUNTS (Modified to handle Blocks)
 @admin.route('/manage_accounts')
 def manage_accounts():
@@ -111,7 +166,7 @@ def manage_accounts():
                             COALESCE(s.middlename, t.middlename, a.middlename) AS middlename,
                             COALESCE(s.lastname, t.lastname, a.lastname) AS lastname,
                             u.email, u.role, u.is_verified, u.created_at,
-                            b.block_name, p.program_name,
+                            s.block_id, b.block_name, p.program_name,
                             t.college_id, c.college_name
                             FROM users u
                             LEFT JOIN students s ON u.user_id = s.student_id
@@ -1082,6 +1137,10 @@ def assign_to_block():
             format_strings = ','.join(['%s'] * len(student_ids))
             cursor.execute(f"UPDATE students SET block_id = %s WHERE student_id IN ({format_strings})", [block_id] + student_ids)
             connection.commit()
+
+            # Sync academic block parameters to Attendeez
+            sync_students_block_to_attendance(cursor, student_ids)
+
             flash(f"Successfully assigned {len(student_ids)} students.", "success")
     finally:
         cursor.close(); connection.close()
@@ -1093,7 +1152,12 @@ def remove_from_block(student_id, block_id):
     if not admin_logged_in(): return redirect(url_for('auth.login'))
     connection = mysql.connector.connect(**db_config); cursor = connection.cursor()
     cursor.execute("UPDATE students SET block_id = NULL WHERE student_id = %s", (student_id,))
-    connection.commit(); cursor.close(); connection.close()
+    connection.commit()
+
+    # Sync block removal to Attendeez
+    sync_students_block_to_attendance(cursor, [student_id])
+
+    cursor.close(); connection.close()
     flash("Student removed from block.", "info")
     return redirect(url_for('admin.manage_block_students', block_id=block_id))
 
@@ -1113,6 +1177,10 @@ def bulk_remove_from_block():
         format_strings = ','.join(['%s'] * len(student_ids))
         cursor.execute(f"UPDATE students SET block_id = NULL WHERE student_id IN ({format_strings})", tuple(student_ids))
         connection.commit()
+
+        # Sync bulk block removal to Attendeez
+        sync_students_block_to_attendance(cursor, student_ids)
+
         flash(f"Removed {len(student_ids)} students from block.", "info")
     finally:
         cursor.close(); connection.close()
@@ -1778,7 +1846,6 @@ def enroll_student():
 
     return redirect(url_for('admin.manage_enrollments', class_code=class_code))
 
-
 @admin.route('/enroll_block', methods=['POST'])
 def enroll_block():
     if not admin_logged_in():
@@ -1822,6 +1889,26 @@ def enroll_block():
             """, (class_code, class_info['block_id'], class_info['course_code']))
 
             enrolled_count = cursor.rowcount
+
+            if enrolled_count > 0:
+                # ── Sync Bulk Enrollment to Attendeez ──
+                # Select all students in this block who now have active enrollments for this class
+                cursor.execute("""
+                    SELECT student_id FROM enrollments
+                    WHERE class_code = %s AND student_id IN (
+                        SELECT student_id FROM students WHERE block_id = %s
+                    )
+                """, (class_code, class_info['block_id']))
+                enrolled_students = cursor.fetchall()
+
+                from testpoint.portal_sync import sync_enrollment_to_attendance
+                for s_row in enrolled_students:
+                    s_id = s_row['student_id']
+                    try:
+                        sync_enrollment_to_attendance(s_id, class_code)
+                    except Exception as e:
+                        print(f"Error syncing bulk enrollment for {s_id} to Attendance: {e}")
+
             connection.commit()
 
             if enrolled_count > 0:

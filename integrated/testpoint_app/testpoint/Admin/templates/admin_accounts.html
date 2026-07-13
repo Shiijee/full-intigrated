@@ -317,7 +317,7 @@
                         <select class="form-control" name="block_id">
                             <option value="">-- No Block Assigned --</option>
                             {% for b in blocks %}
-                            <option value="{{ b.block_id }}" {% if b.block_name == user.block_name %}selected{% endif %}>
+                            <option value="{{ b.block_id }}" {% if b.block_id == user.block_id %}selected{% endif %}>
                                 {{ b.program_name }} - {{ b.block_name }}</option>
                             {% endfor %}
                         </select>
@@ -933,3 +933,4 @@
     })(jQuery);
 </script>
 {% endblock %}
+
